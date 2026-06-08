@@ -131,7 +131,20 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 
 ## 6. Remaining work (next, roughly in priority)
 
-**DONE — fusion / gravity / 任意长编号 session (latest; verified: build + 47/47 + DOM):**
+**DONE — 自由-merge / gravity-differential session (latest; verified: build + 47/47 + e2e DOM):**
+- ✅ **自由 ≡ ONE arbitrary-length catalog** — merged the former fixed-28 自由 AND 任意长 into a
+  single bijective base-(N+1) catalog over (字库 ∪ line-break) (`engine.anyRank/anyUnrank`). It now
+  backs 自由 generation (词-like via M+W sampling, breaks collapsed to the unified break so it
+  round-trips), 编号反查·自由 (any number → a poem; always in-range), 新诗/古体 自由编号 (PoetPanel),
+  and permalinks. The separate 任意长 UI is gone. e2e verified: 徐志摩《雪花的快乐》→ 764-digit
+  自由编号 → 编号反查·自由 → EXACT same poem. (`engineApi` ziyou paths; `freeRank/freeUnrank/...`
+  stay in `engine.ts` + tests but are no longer used by the app.)
+- ✅ **Backdrop differential + gravity illusion** — `galaxySpin.decorAngle` (DECOR_RATE 0.019)
+  turns the backdrop FASTER than the poet layer (`angle`, SPIN_RATE 0.012). With 引力 ON the camera
+  co-rotates with the POETS (frozen → clickable) while the diffuse haze keeps flowing past → the
+  galaxy still looks like it's spinning (no rigid freeze). Also a gentle differential when 引力 OFF.
+
+**DONE — fusion / gravity / 任意长编号 session (verified: build + 47/47 + DOM):**
 - ✅ **Star fusion** — the backdrop is now mostly diffuse haze (DUST 90k→120k) with few, dim,
   small decoration STARS (34k→9k); poets brightened (×1.9→×2.3). The bright DISCRETE points you
   fly past are predominantly clickable poets, not "invalid" decoration. `Galaxy.tsx`. *(Still
@@ -204,7 +217,13 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 11. ✅ **字号 alias table** expanded to ~250 entries (~120 poets) in `build-data.mjs GIFT_ALIAS` →
     4,849 赠诗 edges (少陵→杜甫, 子瞻→苏轼, 香山→白居易…).
 
-**Still TODO:**
+**Still TODO (recommended order for the NEXT agent):**
+0. **GPU picking — top priority** (unblocks two asks at once): `screenPick` is still an
+   O(29,808)/hover CPU loop, AND "complete star fusion" is currently faked by dimming the
+   decoration. Render poet IDs to an offscreen buffer (color-encode index) and read back the pixel
+   under the cursor → picking is O(1) and poets can sit in the SAME draw as the decoration while
+   staying individually clickable = true fusion. Replaces the apparent-size heuristic in
+   `FlyControls.screenPick` + the brightness juggling in `Galaxy`/`PoetStars`.
 12. **per-poet poem fetch (egress)** — clicking a poet still downloads its whole `poems/{bucket}.json`
     (~0.9 MB) to read a few KB. *Deliberately deferred this session* (it risks the just-restored
     loading + needs pipeline work). Recommended design, no backend: have `build-data.mjs` write each
