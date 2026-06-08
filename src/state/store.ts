@@ -5,8 +5,9 @@ import type { PoetRow, PoemRecord } from "../data/load";
 import { DYNASTIES } from "../data/dynasties";
 
 export interface Pull {
-  pos: [number, number, number];
+  pos: [number, number, number]; // LOCAL galaxy frame (rotated with the spin)
   valid: boolean;
+  t0: number; // birth time (performance.now()/1000) → drives the flare-then-fade glow
 }
 
 interface State {
@@ -80,7 +81,10 @@ export const useStore = create<State>((set) => ({
       selected: p,
       selectedPoet: null,
       poetPoems: null,
-      pulls: [...s.pulls, { pos: p.pos, valid: p.valid }].slice(-MAX_PULLS),
+      pulls: [
+        ...s.pulls,
+        { pos: p.pos, valid: p.valid, t0: performance.now() / 1000 },
+      ].slice(-MAX_PULLS),
     })),
   clearSelection: () => set({ selected: null }),
   setHover: (hoverPoetId) => set({ hoverPoetId }),

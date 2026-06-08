@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { discTexture } from "./disc";
-import { GALAXY, gauss3 } from "./galaxyParams";
+import { GALAXY, gauss3, advanceSpin, galaxySpin } from "./galaxyParams";
 
 function mulberry32(seed: number) {
   return () => {
@@ -81,18 +81,16 @@ export function Galaxy() {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uTime: { value: 0 }, uSize: { value: 3.2 } },
+      uniforms: { uSize: { value: 3.2 } },
+      // The whole spiral spins as a rigid pattern via the object's rotation.y
+      // (see useFrame below), shared with the poet layer — no in-shader spin here,
+      // so backdrop and poets wind the SAME way and turn in lockstep.
       vertexShader: /* glsl */ `
-        uniform float uTime; uniform float uSize;
+        uniform float uSize;
         attribute vec3 aColor; attribute float aScale;
         varying vec3 vColor;
         void main() {
-          vec4 mp = modelMatrix * vec4(position, 1.0);
-          float d = length(mp.xz);
-          float ang = atan(mp.x, mp.z);
-          ang += (240.0 / (d + 240.0)) * uTime * 0.05;   // differential rotation
-          mp.x = d * cos(ang); mp.z = d * sin(ang);
-          vec4 vp = viewMatrix * mp;
+          vec4 vp = viewMatrix * modelMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * vp;
           gl_PointSize = clamp(uSize * aScale * (900.0 / -vp.z), 0.6, 30.0);
           vColor = aColor;
@@ -168,11 +166,14 @@ export function Galaxy() {
       grp.add(dome);
     }
 
-    return { grp, mat: m };
+    return { grp, points };
   }, []);
 
   useFrame((_, dt) => {
-    built.mat.uniforms.uTime.value += dt;
+    // single owner of the shared spin clock (Galaxy mounts at boot, before the
+    // poet layer); everyone else just reads galaxySpin.angle.
+    advanceSpin(dt);
+    built.points.rotation.y = galaxySpin.angle; // bloom sprites + far dome stay fixed
   });
 
   return <primitive object={built.grp} />;

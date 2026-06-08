@@ -13,3 +13,35 @@ export const GALAXY = {
 export function gauss3(a: number, b: number, c: number): number {
   return a + b + c - 1.5;
 }
+
+// ── Shared rigid galaxy spin ────────────────────────────────────────────────
+// The decorative backdrop (Galaxy) and the 29k poet stars (PoetStars) used to
+// rotate by DIFFERENT rules — the backdrop spun in its shader, the poets not at
+// all — so they read as two layers turning against each other. Now BOTH rotate
+// by one shared angle, advanced once per frame (in Galaxy) and read everywhere:
+// the poet group, the pull markers, the floating labels and the CPU picker. The
+// rotation is a plain Y-rotation that EXACTLY matches three's Object3D.rotation.y,
+// so a group set to `rotation.y = galaxySpin.angle` and the CPU helpers below
+// agree to the float — picking stays pixel-accurate as the galaxy turns.
+export const galaxySpin = { angle: 0 };
+export const SPIN_RATE = 0.012; // rad/sec — gentle; a full turn ≈ 8.7 min
+
+export function advanceSpin(dt: number) {
+  // wrap to keep cos/sin precision over very long sessions (seamless — 2π ≡ 0).
+  galaxySpin.angle = (galaxySpin.angle + dt * SPIN_RATE) % (Math.PI * 2);
+}
+
+// LOCAL galaxy frame → WORLD (matches THREE.Matrix4.makeRotationY(angle)).
+export function spinXZ(x: number, z: number): [number, number] {
+  const a = galaxySpin.angle,
+    c = Math.cos(a),
+    s = Math.sin(a);
+  return [x * c + z * s, -x * s + z * c];
+}
+// WORLD → LOCAL galaxy frame (inverse rotation).
+export function unspinXZ(x: number, z: number): [number, number] {
+  const a = galaxySpin.angle,
+    c = Math.cos(a),
+    s = Math.sin(a);
+  return [x * c - z * s, x * s + z * c];
+}

@@ -1,28 +1,45 @@
 import * as THREE from "three";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { DYNASTY_BY_KEY, DYNASTIES, DYNASTY_COUNT, bandRadius, hashStr } from "../data/dynasties";
 import { getPoets, type PoetRow } from "../data/load";
 import { useStore } from "../state/store";
 import { pickTargets } from "./picking";
-import { GALAXY, gauss3 } from "./galaxyParams";
+import { GALAXY, gauss3, galaxySpin } from "./galaxyParams";
 
-// Deterministic galaxy position: radius = dynasty shell (time = depth), angle biased
-// onto the spiral arms so the poet layer winds into the same galaxy as the backdrop.
+// Deterministic galaxy position (LOCAL frame — the whole layer is rotated as one by
+// galaxySpin). radius = dynasty shell (time = depth); angle is wound onto the spiral
+// arms with the SAME recipe the decorative backdrop uses, so poets interleave with
+// the backdrop instead of sitting on a razor-thin sheet. We add (a) in-plane x/z
+// scatter and (b) gaussian disk thickness — without them the old layout read as a
+// flat "wall" (uniform y, zero x/z spread).
 export function poetPosition(p: PoetRow): [number, number, number] {
   const dyn = DYNASTY_BY_KEY[p.dynasty] ?? DYNASTIES[DYNASTY_COUNT - 1];
   const [inner, outer] = bandRadius(dyn.id);
+  // three decorrelated 32-bit hashes → full-range uniforms (bit-rotated streams).
   const h = hashStr(p.id + p.name);
-  const rr = inner + ((h % 997) / 997) * (outer - inner);
+  const h2 = hashStr(p.name + "#" + p.id);
+  const h3 = hashStr(p.id + "@" + p.dynasty);
+  const U = (k: number) => (k >>> 0) / 4294967296;
+  const rot = (k: number, n: number) => (((k >>> n) | (k << (32 - n))) >>> 0);
+  const r0 = U(h), r1 = U(rot(h, 11)), r2 = U(rot(h, 19));
+  const r3 = U(h2), r4 = U(rot(h2, 13)), r5 = U(rot(h2, 23));
+  const r6 = U(h3), r7 = U(rot(h3, 17));
+
+  const rr = inner + r0 * (outer - inner);
   const t = rr / GALAXY.RADIUS;
   const branch = ((h % GALAXY.BRANCHES) / GALAXY.BRANCHES) * Math.PI * 2;
   const twist = t * GALAXY.TWIST;
-  const a = ((h >>> 3) & 0xff) / 255, b = ((h >>> 11) & 0xff) / 255, cc = ((h >>> 19) & 0xff) / 255;
-  const armDev = gauss3(a, b, cc) * GALAXY.ARM_SPREAD;
+  const armDev = gauss3(r1, r2, r3) * GALAXY.ARM_SPREAD;
   const ang = branch + twist + armDev;
-  const yj = ((h >>> 24) & 0xff) / 255 - 0.5;
-  return [Math.cos(ang) * rr, yj * rr * GALAXY.THICKNESS * 1.4, Math.sin(ang) * rr];
+  // in-plane scatter (same `sc` shape as the backdrop): gives the arms x/z width.
+  const sc = (a: number, b: number) => Math.pow(a, 2.6) * (b < 0.5 ? -1 : 1) * 0.18 * rr;
+  const x = Math.cos(ang) * rr + sc(r4, r5);
+  const z = Math.sin(ang) * rr + sc(r6, r7);
+  // gaussian thickness, concentrated toward the disk plane (matches the backdrop).
+  const y = gauss3(r2, r4, r6) * rr * GALAXY.THICKNESS;
+  return [x, y, z];
 }
 
 export function PoetStars() {
@@ -107,8 +124,11 @@ export function PoetStars() {
     attr.needsUpdate = true;
   }, [hidden, built]);
 
+  const spinRef = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
     (built.points.material as THREE.ShaderMaterial).uniforms.uTime.value += dt;
+    // rotate the whole poet layer (stars + labels) by the shared galaxy spin.
+    if (spinRef.current) spinRef.current.rotation.y = galaxySpin.angle;
   });
 
   // labels ONLY for the hovered + selected poet (no names floating in empty void)
@@ -126,7 +146,7 @@ export function PoetStars() {
   }
 
   return (
-    <group>
+    <group ref={spinRef}>
       <primitive object={built.points} />
       {shown.map((p) => {
         const isFocus = p.id === hoverId || p.id === selId;

@@ -6,6 +6,7 @@
 // Search → take a b, unrank, fly to its canonical scattered point.
 import {
   FORMS,
+  FORM_LIST,
   type FormId,
   type FormDef,
   babelUnrank,
@@ -180,9 +181,47 @@ export function pullAt(
 }
 
 // Canonical scattered position of a known babel index (for search / permalink).
+// This is the universe's single "preset coordinate" map: index → a fixed point in
+// the void. Same map for fly-to, permalinks, and search-locate.
 export function pointForBabelIndex(formId: FormId, b: bigint, R = 1000): Vec3 {
   const form = FORMS[formId];
   return indexToPoint(scatter(babelCardinality(form), BABEL_KEY, b), R);
+}
+
+// Spread searched poems across the galaxy volume (vs the default tight R=1000 core).
+const LOCATE_R = 1800;
+
+// Fully describe a poem from a KNOWN catalog index, positioned at its canonical void
+// coordinate. This is what content/number search drops you onto: the exact star a
+// poem occupies in the void, with its real text + 全集编号 (round-trips with pullAt's
+// indexFromPoint is NOT implied — the index pins the poem and its canonical point).
+export function pullByIndex(formId: FormId, b: bigint, R = LOCATE_R): PulledPoem {
+  const form = FORMS[formId];
+  const pt = pointForBabelIndex(formId, b, R);
+  return describe(form, babelUnrank(form.L, N(), b), [pt.x, pt.y, pt.z]);
+}
+
+export type LocateResult = { form: FormId; index: bigint } | { error: string };
+
+// Resolve a free-text query to a locatable poem: a decimal string is a catalog index
+// under the active form; otherwise it's treated as poem text and matched to the form
+// whose length fits (20/28/40/56 字), then mapped to its index. Returns an error
+// string the UI can show verbatim.
+export function locateQuery(active: FormId, query: string): LocateResult {
+  const q = query.trim();
+  if (!q) return { error: "请输入诗句或编号" };
+  if (/^\d+$/.test(q)) {
+    const b = BigInt(q);
+    if (b < 0n || b >= babelCardinality(FORMS[active]))
+      return { error: "编号超出该诗体的目录范围" };
+    return { form: active, index: b };
+  }
+  const han = [...q].filter((c) => HAN.test(c));
+  const byLen = FORM_LIST.find((f) => f.L === han.length);
+  const form = byLen?.id ?? active;
+  const hit = textBabelIndex(form, q);
+  if (!hit) return { error: "需 20/28/40/56 字（五绝/七绝/五律/七律）且每字在字库内" };
+  return { form, index: BigInt(hit.index) };
 }
 
 // char → 字库 id, cached per dataset (cleared on swap above).

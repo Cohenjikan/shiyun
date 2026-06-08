@@ -347,6 +347,37 @@ canvas {
   z-index: 22;
   width: 280px;
 }
+.search-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+  justify-content: center;
+}
+.search-tabs .st {
+  background: rgba(8, 10, 18, 0.72);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.search-tabs .st.on {
+  border-color: rgba(255, 210, 122, 0.5);
+  color: var(--gold);
+  background: rgba(255, 210, 122, 0.12);
+}
+.search-err {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ff9a9a;
+  background: rgba(8, 10, 18, 0.92);
+  border: 1px solid rgba(255, 120, 120, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
 .search input {
   width: 100%;
   background: rgba(8, 10, 18, 0.72);
