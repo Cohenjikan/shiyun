@@ -57,10 +57,10 @@ export default function App() {
         {quality === "high" && (
           <EffectComposer>
             <Bloom
-              intensity={0.85}
-              luminanceThreshold={0.12}
-              luminanceSmoothing={0.32}
-              radius={0.7}
+              intensity={1.4}
+              luminanceThreshold={0.1}
+              luminanceSmoothing={0.28}
+              radius={0.85}
               mipmapBlur
             />
           </EffectComposer>

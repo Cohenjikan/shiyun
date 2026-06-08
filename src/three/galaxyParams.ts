@@ -6,7 +6,7 @@ export const GALAXY = {
   BRANCHES: 4, // grand-design arms (2 brighter feels MW-like; 4 reads fuller)
   TWIST: 5.2, // radians of winding from centre to edge
   ARM_SPREAD: 0.42, // gaussian angular σ of an arm
-  THICKNESS: 0.07, // thin disk (|y| fraction of radius)
+  THICKNESS: 0.11, // disk |y| fraction of radius — thicker → less razor-flat, more volumetric
 };
 
 // cheap Irwin–Hall gaussian ~ N(0, ~0.5) from three uniforms in [0,1)

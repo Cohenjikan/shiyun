@@ -37,7 +37,13 @@ export function poetPosition(p: PoetRow): [number, number, number] {
   const ya = ((h >>> 5) & 0xff) / 255, yb = ((h >>> 13) & 0xff) / 255, yc = ((h >>> 21) & 0xff) / 255;
   const bulge = 1 + Math.max(0, 0.45 - t) * 2.6; // taller near the centre, thin at the rim
   const y = gauss3(ya, yb, yc) * rr * GALAXY.THICKNESS * 2.1 * bulge;
-  return [Math.cos(ang) * rr, y, Math.sin(ang) * rr];
+  // in-plane x/z scatter (like the backdrop's `scatter`): gives each arm real width so the
+  // poet layer is a volumetric ribbon, NOT a thin sheet that reads as a wall edge-on.
+  const h2 = hashStr(p.name + "#" + p.id);
+  const sxu = ((h2 >>> 2) & 0xff) / 255, sxs = ((h2 >>> 10) & 0xff) / 255;
+  const szu = ((h2 >>> 18) & 0xff) / 255, szs = ((h2 >>> 26) & 0xff) / 255;
+  const scat = (u: number, sgn: number) => Math.pow(u, 2.2) * (sgn < 0.5 ? -1 : 1) * 0.22 * rr;
+  return [Math.cos(ang) * rr + scat(sxu, sxs), y, Math.sin(ang) * rr + scat(szu, szs)];
 }
 
 export function PoetStars() {
@@ -102,7 +108,7 @@ export function PoetStars() {
           float d = length(gl_PointCoord - 0.5);
           float a = smoothstep(0.5, 0.03, d);
           if (a < 0.02) discard;
-          gl_FragColor = vec4(vColor * 1.9, a * vTw);
+          gl_FragColor = vec4(vColor * 2.3, a * vTw); // poets are THE bright stars (fusion)
         }`,
     });
     const points = new THREE.Points(g, m);

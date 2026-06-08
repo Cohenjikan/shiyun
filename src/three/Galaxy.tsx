@@ -44,9 +44,12 @@ export function Galaxy() {
   const quality = useStore((s) => s.quality);
   const built = useMemo(() => {
     const hi = quality === "high";
-    const DUST = hi ? 90000 : 30000; // soft dim haze (the nebulosity)
-    const STARS = hi ? 34000 : 13000; // bright arm stars
-    const BULGE = hi ? 42000 : 16000; // dense core cloud
+    // FUSION: the bright DISCRETE points should read as the (clickable) poets, not decoration.
+    // So the backdrop is mostly diffuse haze + a soft core; few discrete decoration "stars" (and
+    // those are dimmer/smaller below) → flying through, the resolvable stars are real poets.
+    const DUST = hi ? 120000 : 42000; // soft dim haze (the nebulosity that fills the arms)
+    const STARS = hi ? 9000 : 3500; // few faint decoration stars (poets are THE arm stars now)
+    const BULGE = hi ? 42000 : 16000; // dense core cloud (diffuse, gaussian-falloff glow)
     const TOTAL = DUST + STARS + BULGE;
     const rnd = mulberry32(31337);
     const R = GALAXY.RADIUS;
@@ -91,7 +94,8 @@ export function Galaxy() {
         y = gauss3(rnd(), rnd(), rnd()) * rr * GALAXY.THICKNESS * (isStar ? 0.8 : 1.1);
         // clumping + dust gaps from value noise; brighter on-arm
         const nz = vnoise(x * NF, z * NF);
-        const armBoost = isStar ? 0.6 + armProx * 1.7 : 0.32 + armProx * 0.7;
+        // dimmer decoration stars (fusion): they no longer rival the poet stars in brightness
+        const armBoost = isStar ? 0.42 + armProx * 1.0 : 0.34 + armProx * 0.75;
         bright = armBoost * (0.45 + nz * 0.9) * (0.8 + rnd() * 0.4);
         if (isStar && armProx > 0.55 && rnd() < 0.04) hii = true; // sparse HII knots on arms
       }
@@ -114,8 +118,8 @@ export function Galaxy() {
       scale[i] = isBulge
         ? (0.7 + (0.25 - t) * 2.0) * (0.7 + rnd() * 0.6)
         : isStar
-          ? (1.0 + armProx * 1.3 + (hii ? 1.2 : 0)) * (0.7 + rnd() * 0.7)
-          : (0.42 + (1 - t) * 0.7) * (0.7 + rnd() * 0.5);
+          ? (0.7 + armProx * 0.8 + (hii ? 0.8 : 0)) * (0.7 + rnd() * 0.6) // smaller decoration stars
+          : (0.5 + (1 - t) * 0.8) * (0.7 + rnd() * 0.5); // dust a touch larger to keep the haze full
     }
 
     const g = new THREE.BufferGeometry();
