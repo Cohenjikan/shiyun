@@ -126,6 +126,31 @@ export function splitFree(N: number, ids: number[]): number[][] {
   return lines.length ? lines : [[]];
 }
 
+// ── Arbitrary-length 自由 catalog (bijective numeration) ─────────────────────
+// freeRank/freeUnrank above are FIXED length (28). REAL variable-length poems — 新诗 / 古体 —
+// are any length with any line structure, so they fit no fixed-form catalog and had no 编号.
+// This enumerates EVERY finite poem: symbols = 字库 ids 0..N-1 plus a LINE-BREAK symbol = N,
+// in a bijective base-(N+1) numeration: every non-empty symbol string ⇄ a unique positive
+// integer (empty ⇄ 0). Lossless — the number encodes the characters AND where each line breaks.
+//   anyUnrank(N, anyRank(N, s)) === s  for every s with each symbol in [0, N].
+export function anyRank(N: number, syms: number[]): bigint {
+  const B = big(N + 1);
+  let k = 0n;
+  for (const s of syms) k = k * B + big(s + 1); // digits 1..N+1 (bijective ⇒ no leading-zero clash)
+  return k;
+}
+export function anyUnrank(N: number, index: bigint): number[] {
+  const B = big(N + 1);
+  const out: number[] = [];
+  let k = index;
+  while (k > 0n) {
+    k -= 1n;
+    out.unshift(Number(k % B)); // symbol in 0..N (N = line break)
+    k /= B;
+  }
+  return out;
+}
+
 // ───────────────── Tone templates (4 基本律句 + 对/粘) ─────────────────
 // 五言 4 基本律句 keyed by (起式 head, 收式 tail):
 //  仄仄平平仄=ZZPPZ | 仄仄仄平平=ZZZPP | 平平平仄仄=PPPZZ | 平平仄仄平=PPZZP

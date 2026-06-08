@@ -1,6 +1,6 @@
 import { useStore } from "../state/store";
 import { DYNASTY_BY_KEY } from "../data/dynasties";
-import { textBabelIndex } from "../engine/engineApi";
+import { textBabelIndex, anyTextIndex } from "../engine/engineApi";
 import type { FormId } from "../engine/engine";
 import type { PoemRecord } from "../data/load";
 import { CopyButton, ShareButton } from "./CopyButton";
@@ -52,8 +52,10 @@ export function PoetPanel() {
       ) : (
         <div className="poem-list">
           {ordered.map(({ pm, hit }, i) => {
-            const idx =
-              pm.f !== "other" ? textBabelIndex(pm.f as FormId, pm.p.join("")) : null;
+            const isOther = pm.f === "other";
+            const idx = !isOther ? textBabelIndex(pm.f as FormId, pm.p.join("")) : null;
+            // 新诗/古体: variable length → arbitrary-length 任意长编号 (reversible in 编号反查·任意)
+            const anyIdx = isOther ? anyTextIndex(pm.p) : null;
             return (
               <div className={hit ? "poem-item hit" : "poem-item"} key={i}>
                 <div className="pi-title">
@@ -76,6 +78,20 @@ export function PoetPanel() {
                   ) : (
                     <div className="pi-idx" title={`全集编号 · ${idx.digits} 位`}>
                       编号 {idx.index.slice(0, 28)}… <CopyButton text={idx.index} label="复制全编号" />
+                    </div>
+                  ))}
+                {anyIdx &&
+                  (hit ? (
+                    <div className="pi-idx hit-idx" title={`任意长编号 · ${anyIdx.chars} 字 ${anyIdx.lines} 行 · ${anyIdx.digits} 位`}>
+                      <div className="pi-idx-head">
+                        诗云编号 · {anyIdx.chars} 字 {anyIdx.lines} 行 · {anyIdx.digits} 位{" "}
+                        <CopyButton text={anyIdx.index} />
+                      </div>
+                      <div className="pi-idx-full">{anyIdx.index}</div>
+                    </div>
+                  ) : (
+                    <div className="pi-idx" title={`任意长编号 · ${anyIdx.digits} 位`}>
+                      诗云编号 {anyIdx.index.slice(0, 28)}… <CopyButton text={anyIdx.index} label="复制全编号" />
                     </div>
                   ))}
               </div>

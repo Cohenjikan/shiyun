@@ -20,6 +20,8 @@ import {
   freeUnrank,
   freeRank,
   splitFree,
+  anyRank,
+  anyUnrank,
   randBig,
   hamming,
   type FormDef,
@@ -188,6 +190,34 @@ describe("自由 catalog (变长 词 / 自由诗)", () => {
 
   it("splitFree on an all-break sequence yields a single empty line (never zero lines)", () => {
     expect(splitFree(FN, [FN, FN, FN])).toEqual([[]]);
+  });
+});
+
+describe("任意长 catalog (bijective — gives 新诗/古体 a reversible 编号)", () => {
+  const FN = lex.N; // N=120; break symbol = N
+  const B = FN + 1;
+
+  it("anyUnrank(anyRank(syms)) === syms for arbitrary-length symbol strings", () => {
+    for (let t = 0; t < ITERS; t++) {
+      const len = 1 + (t % 40); // 1..40 symbols
+      const syms: number[] = [];
+      for (let i = 0; i < len; i++) syms.push(Number(randBig(BigInt(B)))); // each in [0, N]
+      expect(anyUnrank(FN, anyRank(FN, syms))).toEqual(syms);
+    }
+  });
+
+  it("is a true bijection on the index side: anyRank(anyUnrank(k)) === k", () => {
+    for (let t = 0; t < ITERS; t++) {
+      const k = randBig(10n ** 30n); // any positive index
+      expect(anyRank(FN, anyUnrank(FN, k))).toBe(k);
+    }
+  });
+
+  it("empty ⇄ 0; encodes line breaks (symbol N) distinctly from chars", () => {
+    expect(anyRank(FN, [])).toBe(0n);
+    expect(anyUnrank(FN, 0n)).toEqual([]);
+    // two one-char lines "a","b" = [0, break, 1] differs from one line "ab" = [0,1]
+    expect(anyRank(FN, [0, FN, 1])).not.toBe(anyRank(FN, [0, 1]));
   });
 });
 

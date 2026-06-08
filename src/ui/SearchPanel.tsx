@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { searchPoets, searchByLine, loadPoetPoems, type PoetRow, type LineHit } from "../data/load";
 import { DYNASTY_BY_KEY } from "../data/dynasties";
-import { halfIndexAuto, pullByIndex, pulledFromIndex, type HalfIndex, type IndexPoem, type PullForm } from "../engine/engineApi";
+import { halfIndexAuto, pullByIndex, pulledFromIndex, anyTextReverse, type HalfIndex, type IndexPoem, type PullForm } from "../engine/engineApi";
 import { useStore } from "../state/store";
 import { poetPosition } from "../three/PoetStars";
 import { CopyButton } from "./CopyButton";
@@ -12,9 +12,13 @@ const FORM_LABEL: Record<string, string> = {
   wulu: "五律",
   qilu: "七律",
   ziyou: "自由",
+  any: "任意长",
 };
-const REV_FORMS: PullForm[] = ["wujue", "qijue", "wulu", "qilu", "ziyou"];
+// 任意长 = the arbitrary-length 自由 catalog (新诗/古体 reversible 编号), not a fixed PullForm.
+type RevForm = PullForm | "any";
+const REV_FORMS: RevForm[] = ["wujue", "qijue", "wulu", "qilu", "ziyou", "any"];
 type Tab = "poet" | "line" | "index";
+type AnyRev = { lines: string[]; index: string; digits: number };
 
 export function SearchPanel() {
   const [tab, setTab] = useState<Tab>("poet");
@@ -23,9 +27,10 @@ export function SearchPanel() {
   const [hits, setHits] = useState<LineHit[]>([]);
   const [half, setHalf] = useState<HalfIndex | null>(null);
   // 编号 reverse-search tab
-  const [revForm, setRevForm] = useState<PullForm>("wujue");
+  const [revForm, setRevForm] = useState<RevForm>("wujue");
   const [idxInput, setIdxInput] = useState("");
   const [rev, setRev] = useState<IndexPoem | null>(null);
+  const [anyRev, setAnyRev] = useState<AnyRev | null>(null); // 任意长 reverse result
   const [revReal, setRevReal] = useState<{ name: string; title: string } | null>(null);
   const selectPoet = useStore((s) => s.selectPoet);
   const selectPoem = useStore((s) => s.selectPoem);
@@ -56,7 +61,15 @@ export function SearchPanel() {
     });
   }
   // unrank the index → poem, then check (async) whether it happens to be a REAL poem (loop closure)
-  function runReverse(form: PullForm, v: string) {
+  function runReverse(form: RevForm, v: string) {
+    if (form === "any") {
+      // 任意长 catalog: every positive integer ⇄ a poem of any length/line-structure.
+      setRev(null);
+      setRevReal(null);
+      setAnyRev(anyTextReverse(v));
+      return;
+    }
+    setAnyRev(null);
     const r = pullByIndex(form, v);
     setRev(r);
     setRevReal(null);
@@ -78,7 +91,7 @@ export function SearchPanel() {
     setIdxInput(v);
     runReverse(revForm, v);
   }
-  function pickRevForm(f: PullForm) {
+  function pickRevForm(f: RevForm) {
     setRevForm(f);
     if (idxInput) runReverse(f, idxInput);
   }
@@ -102,6 +115,7 @@ export function SearchPanel() {
     setHalf(null);
     setIdxInput("");
     setRev(null);
+    setAnyRev(null);
     setRevReal(null);
   }
 
@@ -205,7 +219,11 @@ export function SearchPanel() {
             <textarea
               className="idx-input"
               value={idxInput}
-              placeholder="粘贴一个全集编号（纯数字）…例如先在「诗句」里搜一句、复制其编号"
+              placeholder={
+                revForm === "any"
+                  ? "粘贴一个「任意长编号」（新诗/古体在诗人面板里可复制）…"
+                  : "粘贴一个全集编号（纯数字）…例如先在「诗句」里搜一句、复制其编号"
+              }
               onChange={(e) => onChangeIndex(e.target.value)}
               spellCheck={false}
               rows={3}
@@ -237,6 +255,21 @@ export function SearchPanel() {
                   此编号超出《{FORM_LABEL[rev.form]}》目录范围（该目录约 {rev.cardinalityDigits} 位数那么多首）。换个诗体试试。
                 </div>
               ))}
+            {revForm === "any" && anyRev && (
+              <div className="rev-poem">
+                <div className="poem-body" lang="zh">
+                  {anyRev.lines.map((l, i) => (
+                    <div className="poem-line wrap" key={i}>
+                      {l}
+                    </div>
+                  ))}
+                </div>
+                <div className="half-note dim">
+                  任意长目录：任何正整数都对应一首诗（含断行）。这串 {anyRev.digits} 位编号永远算出同一首
+                  —— 新诗 / 古体也由此有了可逆编号。
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

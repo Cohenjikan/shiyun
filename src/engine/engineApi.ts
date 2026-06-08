@@ -23,6 +23,8 @@ import {
   freeUnrank,
   freeRank,
   splitFree,
+  anyRank,
+  anyUnrank,
   type Vec3,
   type Lexicon,
 } from "./engine";
@@ -328,6 +330,61 @@ export function pullByIndex(formId: PullForm, indexInput: string): IndexPoem | n
   const inRange = b < size;
   const lines = inRange ? toLines(form, babelUnrank(form.L, N(), b)) : [];
   return { form: formId, lines, index: idx, digits: idx.length, inRange, cardinalityDigits: size.toString().length };
+}
+
+// ── 任意长编号 (arbitrary-length 自由 catalog) — gives REAL variable-length poems (新诗/古体)
+//    a reversible 全集编号 they otherwise had none. Encodes the poem's chars + line breaks into
+//    one big integer via the engine's bijective numeration. Han-only (the 字库 is Han); a poem
+//    with any glyph outside the 字库 returns null (like the 4-form index).
+export interface AnyIndex {
+  index: string;
+  digits: number;
+  chars: number; // real chars encoded
+  lines: number; // line count
+}
+export function anyTextIndex(lines: string[]): AnyIndex | null {
+  const map = charToId();
+  const N = getDataset().lexicon.N; // break symbol = N
+  const syms: number[] = [];
+  let chars = 0;
+  for (let li = 0; li < lines.length; li++) {
+    if (li > 0) syms.push(N); // line break between lines
+    for (const ch of lines[li]) {
+      const id = map.get(ch);
+      if (id === undefined) return null; // glyph not in 字库 → no fixed 编号
+      syms.push(id);
+      chars++;
+    }
+  }
+  if (chars === 0) return null;
+  const s = anyRank(N, syms).toString();
+  return { index: s, digits: s.length, chars, lines: lines.length };
+}
+
+// Reverse a 任意长编号 → the exact poem (chars + line structure). Any positive integer maps to
+// a poem (the catalog is ALL finite poems), so there is no "out of range".
+export function anyTextReverse(indexInput: string): { lines: string[]; index: string; digits: number } | null {
+  const digitsOnly = (indexInput || "").replace(/[^0-9]/g, "");
+  if (!digitsOnly) return null;
+  let b: bigint;
+  try {
+    b = BigInt(digitsOnly);
+  } catch {
+    return null;
+  }
+  const { charset, lexicon } = getDataset();
+  const N = lexicon.N;
+  const lines: string[] = [];
+  let cur = "";
+  for (const s of anyUnrank(N, b)) {
+    if (s === N) {
+      lines.push(cur);
+      cur = "";
+    } else cur += charset[s];
+  }
+  lines.push(cur);
+  const idx = b.toString();
+  return { lines, index: idx, digits: idx.length };
 }
 
 // Rebuild a full PulledPoem from a known index (for permalink restore). Places it at the
