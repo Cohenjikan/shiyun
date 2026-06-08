@@ -9,4 +9,4 @@ dist/
 #  first-line content-search index need regenerating.)
 # NOTE: no inline comments below — git treats trailing text as part of the path pattern.
 public/data/poems/
-public/data/firstline/
+public/data/lines/

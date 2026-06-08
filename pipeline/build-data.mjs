@@ -92,41 +92,75 @@ const GIFT_STOP = new Set([
   "太守","二首","三首","四首","其二","其三","同年","友人","内子","小儿","幼子","门生","座主",
 ]);
 
-console.log("reading CSVs from", SRC);
-const files = readdirSync(SRC).filter((f) => f.endsWith(".csv"));
 const freq = new Map(); // char -> count
 const poets = new Map(); // id -> {id,name,dynasty,dynastyRaw,count,poems:[]}
-const firstLines = new Map(); // firstLine -> [{p:poetId, i:poemIdx, t:title, f:form}]  (search index)
-const FL_CAP = 12; // max poems indexed per identical opening (avoid skew on ultra-common lines)
+const lineIndex = new Map(); // ANY line -> [{p:poetId, i:poemIdx, t:title, f:form}] (content search)
+const LINE_CAP = 6; // max poems indexed per identical line (avoid skew on ultra-common lines)
 let total = 0;
 
+// index every poem: charset freq, poet aggregation, and EVERY line (so any line is searchable —
+// 疑是地上霜 → 静夜思, not just the opening).
+function addPoem(title, author, dyn, dynRaw, lines) {
+  if (lines.length === 0) return;
+  for (const l of lines) for (const ch of l) freq.set(ch, (freq.get(ch) || 0) + 1);
+  const id = poetId(author, dyn);
+  let p = poets.get(id);
+  if (!p) { p = { id, name: author, dynasty: dyn, dynastyRaw: dynRaw, count: 0, poems: [] }; poets.set(id, p); }
+  p.count++;
+  const f = classifyForm(lines);
+  const poemIdx = p.poems.length;
+  p.poems.push({ t: title || "", f, p: lines });
+  total++;
+  const seen = new Set(); // dedupe repeated lines within one poem
+  for (const ln of lines) {
+    if ([...ln].length < 4 || seen.has(ln)) continue;
+    seen.add(ln);
+    let arr = lineIndex.get(ln);
+    if (!arr) { arr = []; lineIndex.set(ln, arr); }
+    if (arr.length < LINE_CAP) arr.push({ p: id, i: poemIdx, t: title || "", f });
+  }
+}
+
+console.log("reading CSVs from", SRC);
+const files = readdirSync(SRC).filter((f) => f.endsWith(".csv"));
 for (const file of files) {
   const rows = parseCSV(readFileSync(join(SRC, file), "utf8"));
   // header = 题目,朝代,作者,内容
   for (let r = 1; r < rows.length; r++) {
     const [title, dynRaw, author, content] = rows[r];
     if (!author || !content) continue;
-    const dyn = DYN[dynRaw] || "unknown";
-    const lines = splitLines(content);
-    if (lines.length === 0) continue;
-    for (const l of lines) for (const ch of l) freq.set(ch, (freq.get(ch) || 0) + 1);
-    const id = poetId(author, dyn);
-    let p = poets.get(id);
-    if (!p) { p = { id, name: author, dynasty: dyn, dynastyRaw: dynRaw, count: 0, poems: [] }; poets.set(id, p); }
-    p.count++;
-    const f = classifyForm(lines);
-    const poemIdx = p.poems.length;
-    p.poems.push({ t: title || "", f, p: lines });
-    total++;
-    // first-line search index (床前明月光 → this poem). Skip 1-char fragments.
-    const fl = lines[0];
-    if ([...fl].length >= 2) {
-      let arr = firstLines.get(fl);
-      if (!arr) { arr = []; firstLines.set(fl, arr); }
-      if (arr.length < FL_CAP) arr.push({ p: id, i: poemIdx, t: title || "", f });
-    }
+    addPoem(title, author, DYN[dynRaw] || "unknown", dynRaw, splitLines(content));
   }
   console.log(`  ${file}: poems=${total} poets=${poets.size}`);
+}
+
+// ── 现代/当代 自由诗 (新诗): yuxqiu/modern-poetry contemporary set (Apache-2.0) — adds 徐志摩/
+//    海子/北岛/顾城… that the classical corpus lacks. Free verse → form "other"; lines feed the
+//    content-search index. 民国-era poets → 近现代 (matches Werneror), the rest → 当代. ──
+const MODERN_JINXIANDAI = new Set([
+  "徐志摩","闻一多","郭沫若","戴望舒","朱自清","冯至","卞之琳","何其芳","臧克家","林徽因","废名",
+  "李金发","穆旦","郑敏","梁宗岱","刘半农","胡适","俞平伯","汪静之","冰心","宗白华","沈尹默",
+  "刘大白","王独清","穆木天","殷夫","蒋光慈","田间","袁可嘉","杜运燮","陈梦家","朱湘","邵洵美",
+  "鲁迅","周作人","艾青","纪弦","痖弦","郑愁予","周梦蝶","洛夫","余光中","覃子豪","方思",
+]);
+const MODERN = "C:/corpus/modern-poetry/China-modern-poetry/contemporary";
+try {
+  const mfiles = readdirSync(MODERN).filter((f) => /^\d/.test(f) && f.endsWith(".json"));
+  let mp = 0;
+  for (const file of mfiles) {
+    const arr = JSON.parse(readFileSync(join(MODERN, file), "utf8"));
+    for (const poem of arr) {
+      const author = (poem.author || "").trim();
+      if (!author || !Array.isArray(poem.paragraphs)) continue;
+      const lines = poem.paragraphs.map(onlyHan).filter(Boolean);
+      const dyn = MODERN_JINXIANDAI.has(author) ? "jinxiandai" : "dangdai";
+      addPoem((poem.title || "").trim(), author, dyn, "现代", lines);
+      mp++;
+    }
+  }
+  console.log(`  modern 新诗: poems=${mp} (total=${total} poets=${poets.size})`);
+} catch (e) {
+  console.warn("  modern corpus skipped (clone C:/corpus/modern-poetry?):", e.message);
 }
 
 // charset ordered by desc frequency (ties by codepoint)
@@ -164,17 +198,17 @@ const SKIP_HEAVY = !!process.env.SKIP_HEAVY;
 if (!SKIP_HEAVY)
   for (const [b, obj] of buckets) writeFileSync(join(OUT, "poems", `${b}.json`), JSON.stringify(obj));
 
-// ── first-line search index: firstline/{2-hex content bucket}.json -> {firstLine: [refs]} ──
-mkdirSync(join(OUT, "firstline"), { recursive: true });
+// ── content search index: lines/{2-hex content bucket}.json -> {line: [refs]} (ANY line) ──
+mkdirSync(join(OUT, "lines"), { recursive: true });
 const flBuckets = new Map();
-for (const [fl, refs] of firstLines) {
-  const b = lineBucket(fl);
+for (const [ln, refs] of lineIndex) {
+  const b = lineBucket(ln);
   let obj = flBuckets.get(b);
   if (!obj) { obj = {}; flBuckets.set(b, obj); }
-  obj[fl] = refs;
+  obj[ln] = refs;
 }
 if (!SKIP_HEAVY)
-  for (const [b, obj] of flBuckets) writeFileSync(join(OUT, "firstline", `${b}.json`), JSON.stringify(obj));
+  for (const [b, obj] of flBuckets) writeFileSync(join(OUT, "lines", `${b}.json`), JSON.stringify(obj));
 
 // ── 赠诗 network: parse titles for 寄/赠/和/次韵… + a known poet NAME → poet→poet edges ──
 // name -> poets with that name (each {id, dynId, count}).
@@ -191,15 +225,87 @@ for (const p of poets.values()) {
 // title names a poet by 号 (e.g. 晦庵 = 朱熹, 东坡 = 苏轼), redirect to the canonical poet —
 // otherwise the 号 either collides with a 1-poem namesake or misses the famous target entirely.
 const GIFT_ALIAS = {
-  东坡:"苏轼", 坡公:"苏轼", 苏长公:"苏轼", 子瞻:"苏轼",
-  半山:"王安石", 荆公:"王安石", 介甫:"王安石", 王介甫:"王安石",
-  山谷:"黄庭坚", 涪翁:"黄庭坚", 黄山谷:"黄庭坚",
-  晦庵:"朱熹", 紫阳:"朱熹", 朱晦庵:"朱熹",
-  遗山:"元好问", 元遗山:"元好问",
-  简斋:"陈与义", 后山:"陈师道", 诚斋:"杨万里", 石湖:"范成大", 淮海:"秦观",
-  少陵:"杜甫", 杜陵:"杜甫", 老杜:"杜甫", 香山:"白居易", 乐天:"白居易",
-  昌黎:"韩愈", 柳州:"柳宗元", 青莲:"李白", 谪仙:"李白", 醉翁:"欧阳修", 六一:"欧阳修",
-  易安:"李清照", 稼轩:"辛弃疾", 放翁:"陆游", 靖节:"陶渊明", 摩诘:"王维",
+  // 魏晋南北朝
+  靖节:"陶渊明", 五柳先生:"陶渊明", 渊明:"陶渊明", 陶潜:"陶渊明",
+  康乐:"谢灵运", 谢康乐:"谢灵运", 玄晖:"谢朓", 谢宣城:"谢朓",
+  嗣宗:"阮籍", 叔夜:"嵇康", 太冲:"左思", 明远:"鲍照", 子山:"庾信", 庾子山:"庾信",
+  // 唐
+  太白:"李白", 青莲居士:"李白", 谪仙:"李白",
+  少陵:"杜甫", 杜少陵:"杜甫", 杜工部:"杜甫", 老杜:"杜甫",
+  乐天:"白居易", 香山居士:"白居易", 白香山:"白居易", 醉吟先生:"白居易",
+  摩诘:"王维", 王右丞:"王维",
+  退之:"韩愈", 昌黎:"韩愈", 韩昌黎:"韩愈", 韩文公:"韩愈",
+  子厚:"柳宗元", 柳河东:"柳宗元", 柳柳州:"柳宗元",
+  梦得:"刘禹锡", 刘宾客:"刘禹锡",
+  义山:"李商隐", 玉谿生:"李商隐", 玉溪生:"李商隐", 樊南生:"李商隐",
+  牧之:"杜牧", 樊川:"杜牧", 杜樊川:"杜牧", 小杜:"杜牧",
+  长吉:"李贺", 昌谷:"李贺", 李长吉:"李贺",
+  孟襄阳:"孟浩然", 达夫:"高适", 高常侍:"高适", 季凌:"王之涣",
+  少伯:"王昌龄", 王江宁:"王昌龄", 岑嘉州:"岑参", 四明狂客:"贺知章",
+  伯玉:"陈子昂", 陈拾遗:"陈子昂", 浪仙:"贾岛", 阆仙:"贾岛",
+  东野:"孟郊", 孟东野:"孟郊", 飞卿:"温庭筠", 温八叉:"温庭筠", 仲初:"王建",
+  文房:"刘长卿", 刘随州:"刘长卿", 君虞:"李益", 懿孙:"张继", 表圣:"司空图",
+  韦苏州:"韦应物", 韦江州:"韦应物", 仲言:"何逊",
+  鲁望:"陆龟蒙", 甫里先生:"陆龟蒙", 天随子:"陆龟蒙",
+  // 五代
+  重光:"李煜", 李后主:"李煜", 南唐后主:"李煜", 正中:"冯延巳", 端己:"韦庄",
+  // 宋
+  子瞻:"苏轼", 东坡:"苏轼", 东坡居士:"苏轼", 苏东坡:"苏轼", 坡仙:"苏轼",
+  子由:"苏辙", 颍滨遗老:"苏辙", 苏栾城:"苏辙",
+  明允:"苏洵", 老泉:"苏洵", 苏老泉:"苏洵",
+  鲁直:"黄庭坚", 山谷:"黄庭坚", 山谷道人:"黄庭坚", 涪翁:"黄庭坚", 黄山谷:"黄庭坚",
+  介甫:"王安石", 半山:"王安石", 临川先生:"王安石", 王荆公:"王安石", 荆公:"王安石",
+  永叔:"欧阳修", 醉翁:"欧阳修", 六一居士:"欧阳修", 欧阳永叔:"欧阳修",
+  务观:"陆游", 放翁:"陆游", 陆放翁:"陆游",
+  幼安:"辛弃疾", 稼轩:"辛弃疾", 辛稼轩:"辛弃疾",
+  易安:"李清照", 易安居士:"李清照", 李易安:"李清照",
+  致能:"范成大", 石湖:"范成大", 石湖居士:"范成大", 范石湖:"范成大",
+  廷秀:"杨万里", 诚斋:"杨万里", 杨诚斋:"杨万里",
+  元晦:"朱熹", 晦庵:"朱熹", 晦翁:"朱熹", 紫阳:"朱熹", 考亭:"朱熹", 朱文公:"朱熹",
+  去非:"陈与义", 简斋:"陈与义", 陈简斋:"陈与义",
+  少游:"秦观", 淮海居士:"秦观", 秦淮海:"秦观",
+  美成:"周邦彦", 清真:"周邦彦", 清真居士:"周邦彦", 周清真:"周邦彦",
+  同叔:"晏殊", 晏元献:"晏殊", 叔原:"晏几道", 小山:"晏几道", 晏小山:"晏几道",
+  耆卿:"柳永", 柳屯田:"柳永", 柳三变:"柳永", 希文:"范仲淹", 范文正:"范仲淹",
+  尧夫:"邵雍", 康节:"邵雍", 安乐先生:"邵雍", 无咎:"晁补之", 归来子:"晁补之",
+  方回:"贺铸", 贺梅子:"贺铸", 庆湖遗老:"贺铸", 改之:"刘过", 龙洲道人:"刘过", 梅溪:"史达祖",
+  尧章:"姜夔", 白石:"姜夔", 白石道人:"姜夔", 姜白石:"姜夔",
+  梦窗:"吴文英", 吴梦窗:"吴文英", 碧山:"王沂孙",
+  公谨:"周密", 草窗:"周密", 周草窗:"周密",
+  履善:"文天祥", 文山:"文天祥", 文文山:"文天祥", 文信国:"文天祥",
+  圣俞:"梅尧臣", 宛陵:"梅尧臣", 梅宛陵:"梅尧臣",
+  贡父:"刘攽", 后山:"陈师道", 陈后山:"陈师道", 茶山:"曾几", 曾茶山:"曾几", 石屏:"戴复古",
+  // 金/元
+  裕之:"元好问", 遗山:"元好问", 元遗山:"元好问", 仁近:"仇远",
+  伯生:"虞集", 道园:"虞集", 邵庵先生:"虞集", 曼硕:"揭傒斯", 天锡:"萨都剌", 直斋:"萨都剌",
+  // 明
+  季迪:"高启", 青丘子:"高启", 青邱:"高启", 槎轩:"高启", 高青丘:"高启",
+  伯虎:"唐寅", 子畏:"唐寅", 六如居士:"唐寅", 桃花庵主:"唐寅", 唐伯虎:"唐寅",
+  元美:"王世贞", 凤洲:"王世贞", 弇州:"王世贞", 弇州山人:"王世贞",
+  于鳞:"李攀龙", 沧溟:"李攀龙", 李沧溟:"李攀龙",
+  徵仲:"文徵明", 衡山居士:"文徵明", 文衡山:"文徵明",
+  希哲:"祝允明", 枝山:"祝允明", 祝枝山:"祝允明",
+  献吉:"李梦阳", 空同:"李梦阳", 空同子:"李梦阳", 李空同:"李梦阳",
+  仲默:"何景明", 大复:"何景明", 何大复:"何景明",
+  阳明:"王守仁", 阳明子:"王守仁", 王阳明:"王守仁",
+  用修:"杨慎", 升庵:"杨慎", 杨升庵:"杨慎", 震川:"归有光", 归震川:"归有光",
+  中郎:"袁宏道", 石公:"袁宏道", 袁中郎:"袁宏道", 伯修:"袁宗道", 玉蟠:"袁宗道", 小修:"袁中道",
+  友夏:"谭元春", 伯敬:"钟惺", 卧子:"陈子龙", 大樽:"陈子龙", 陈大樽:"陈子龙",
+  景濂:"宋濂", 潜溪:"宋濂", 伯温:"刘基", 诚意伯:"刘基", 刘诚意:"刘基",
+  // 清
+  容若:"纳兰性德", 楞伽山人:"纳兰性德", 饮水词人:"纳兰性德", 纳兰容若:"纳兰性德",
+  子才:"袁枚", 随园:"袁枚", 随园老人:"袁枚", 仓山居士:"袁枚",
+  璱人:"龚自珍", 定盦:"龚自珍", 定庵:"龚自珍", 龚定庵:"龚自珍",
+  贻上:"王士禛", 阮亭:"王士禛", 渔洋:"王士禛", 渔洋山人:"王士禛", 王渔洋:"王士禛",
+  锡鬯:"朱彝尊", 竹垞:"朱彝尊", 朱竹垞:"朱彝尊",
+  其年:"陈维崧", 迦陵:"陈维崧", 陈迦陵:"陈维崧", 梁汾:"顾贞观",
+  牧斋:"钱谦益", 虞山:"钱谦益", 钱牧斋:"钱谦益", 梅村:"吴伟业", 骏公:"吴伟业", 吴梅村:"吴伟业",
+  舒章:"李雯", 钝翁:"汪琬", 尧峰:"汪琬", 秋谷:"赵执信", 饴山:"赵执信",
+  樊榭:"厉鹗", 厉樊榭:"厉鹗", 瓯北:"赵翼", 赵瓯北:"赵翼", 心余:"蒋士铨", 藏园:"蒋士铨",
+  仲则:"黄景仁", 鹿菲子:"黄景仁", 黄仲则:"黄景仁", 涤生:"曾国藩", 默深:"魏源",
+  伯严:"陈三立", 散原:"陈三立", 散原老人:"陈三立", 半塘:"王鹏运", 半塘老人:"王鹏运",
+  夔笙:"况周颐", 蕙风:"况周颐", 叔问:"郑文焯", 大鹤山人:"郑文焯",
+  彊村:"朱祖谋", 强村:"朱祖谋", 静安:"王国维", 观堂:"王国维",
 };
 const isKnown = (s) => byName.has(s) || s in GIFT_ALIAS;
 // chars that legitimately END / follow a complete 2-char name: relations, counters, and the
@@ -285,11 +391,11 @@ for (const p of poets.values()) dynCounts[p.dynasty] = (dynCounts[p.dynasty] || 
 writeFileSync(join(OUT, "manifest.json"), JSON.stringify({
   version: 2, n: N, poetCount: poets.size, poemCount: total,
   buckets: [...buckets.keys()].sort(),
-  firstlineBuckets: [...flBuckets.keys()].sort(),
+  lineBuckets: [...flBuckets.keys()].sort(),
   giftEdges: edges.length,
   dynCounts,
 }));
-console.log(`\n首句索引 buckets=${flBuckets.size}  赠诗 edges=${edges.length}`);
+console.log(`\n诗句索引 lines=${lineIndex.size} buckets=${flBuckets.size}  赠诗 edges=${edges.length}`);
 
 console.log(`\nDONE  poets=${poets.size}  poems=${total}  字库 N=${N}  buckets=${buckets.size}`);
 console.log("dynasty poet counts:", dynCounts);

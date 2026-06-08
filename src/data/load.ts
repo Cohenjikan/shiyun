@@ -114,15 +114,15 @@ export function searchPoets(q: string, limit = 40): PoetRow[] {
   return out;
 }
 
-// ── Content search (诗句 → 真实诗): first-line index, sharded by content hash (256 buckets,
-//    matching the pipeline's lineBucket). 床前明月光 → 李白《静夜思》. Lazy, like poems/. ──
+// ── Content search (诗句 → 真实诗): ANY-line index, sharded by content hash (256 buckets,
+//    matching the pipeline's lineBucket). 床前明月光 / 疑是地上霜 → 李白《静夜思》. Lazy, like poems/. ──
 const HAN = /\p{Script=Han}/u;
 const lineBucket = (s: string) => (hashStr(s) & 0xff).toString(16).padStart(2, "0");
 const _flShard = new Map<string, Record<string, FirstLineRef[]>>();
 async function loadFlShard(bucket: string, base: string): Promise<Record<string, FirstLineRef[]>> {
   let obj = _flShard.get(bucket);
   if (obj) return obj;
-  obj = await fetch(`${base}/firstline/${bucket}.json`)
+  obj = await fetch(`${base}/lines/${bucket}.json`)
     .then((r) => (r.ok ? r.json() : {}))
     .catch(() => ({}));
   _flShard.set(bucket, obj!);

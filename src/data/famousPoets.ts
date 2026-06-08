@@ -47,4 +47,13 @@ export const FAMOUS_POETS: Landmark[] = [
   { name: "秋瑾", dynasty: "jinxiandai" },
   { name: "黄遵宪", dynasty: "jinxiandai" },
   { name: "毛泽东", dynasty: "dangdai" },
+  // 现代/当代 新诗 (from the modern-poetry corpus)
+  { name: "徐志摩", dynasty: "jinxiandai" },
+  { name: "戴望舒", dynasty: "jinxiandai" },
+  { name: "闻一多", dynasty: "jinxiandai" },
+  { name: "艾青", dynasty: "jinxiandai" },
+  { name: "海子", dynasty: "dangdai" },
+  { name: "北岛", dynasty: "dangdai" },
+  { name: "顾城", dynasty: "dangdai" },
+  { name: "舒婷", dynasty: "dangdai" },
 ];
