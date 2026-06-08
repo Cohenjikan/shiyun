@@ -38,7 +38,7 @@ bundle at `C:\Users\Cohen\Desktop\shiyun-ALL-branches-backup.bundle` (restore: `
 ```bash
 npm install
 npm run dev        # vite → http://localhost:5173
-npm test           # vitest: 44 engine round-trip tests (must stay green)
+npm test           # vitest: 47 engine round-trip tests (must stay green)
 npm run build      # tsc --noEmit && vite build  (the real verify gate)
 npm run typecheck
 ```
@@ -117,7 +117,7 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 
 ## 5. Verifying changes (important gotchas)
 
-- **The verify gate is `npm run build` (tsc) + `npm test`.** Keep the 44 engine tests green.
+- **The verify gate is `npm run build` (tsc) + `npm test`.** Keep the 47 engine tests green.
 - **The headless preview GPU (swiftshader) CANNOT screenshot the dense additive galaxy** — it
   times out (not a crash; the page is alive). Verify visuals on a real GPU, or drive the DOM
   with the preview MCP's `preview_eval` (read `.poem-panel` / `.poet-panel` text, dispatch
@@ -131,7 +131,25 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 
 ## 6. Remaining work (next, roughly in priority)
 
-**DONE — rotation-merge + locate session (latest; verified: build + 44/44 + DOM):**
+**DONE — fusion / gravity / 任意长编号 session (latest; verified: build + 47/47 + DOM):**
+- ✅ **Star fusion** — the backdrop is now mostly diffuse haze (DUST 90k→120k) with few, dim,
+  small decoration STARS (34k→9k); poets brightened (×1.9→×2.3). The bright DISCRETE points you
+  fly past are predominantly clickable poets, not "invalid" decoration. `Galaxy.tsx`. *(Still
+  tunable — if it reads too sparse, raise STARS / DUST.)*
+- ✅ **No more wall** — `poetPosition` adds in-plane x/z scatter (pow 2.2 × 0.22·r). `PoetStars.tsx`.
+- ✅ **Heavier galaxy** — bloom 0.85→1.4 (intensity) + radius 0.85 (`App.tsx`); `GALAXY.THICKNESS`
+  0.07→0.11 (less razor-flat). *(Tradeoff: rotation is rigid/uniform — restoring differential spin
+  would re-introduce the layer mismatch; left rigid on purpose. Tune THICKNESS/bloom on a real GPU.)*
+- ✅ **引力 (gravity) toggle** (default ON) — inside the galaxy sphere (<1.15·R) FlyControls orbits
+  the camera WITH the spin (same Δ/frame) + turns the heading, so stars hold still on screen and
+  stay clickable. `store.gravity`, HUD 引力, `FlyControls`. Outside → watch it turn.
+- ✅ **任意长编号** — `engine.anyRank/anyUnrank`: a bijective base-(N+1) numeration over (字库 ∪
+  {line-break}) gives EVERY variable-length poem (新诗/古体) a reversible 全集编号 (they had none).
+  `engineApi.anyTextIndex`/`anyTextReverse`; PoetPanel shows a 诗云编号 for `other` poems; 编号反查
+  has a **任意长** mode. +3 tests.
+- ✅ **Long lines wrap** — 自由/词/任意长 poems wrap (`.poem-line.wrap`) instead of clipping.
+
+**DONE — rotation-merge + locate session (verified: build + 44/44 + DOM):**
 - ✅ **One unified galaxy spin** (`galaxyParams.galaxySpin` + `advanceSpin`/`spinXZ`/`unspinXZ`).
   The backdrop used to spin in its own shader (with an x/z reflection) while poets/arcs/markers
   never rotated → layers wound against each other. Now Galaxy points, the PoetStars group, the
