@@ -82,16 +82,16 @@ export function PoetPanel() {
                   ))}
                 {anyIdx &&
                   (hit ? (
-                    <div className="pi-idx hit-idx" title={`任意长编号 · ${anyIdx.chars} 字 ${anyIdx.lines} 行 · ${anyIdx.digits} 位`}>
+                    <div className="pi-idx hit-idx" title={`自由编号（任意长）· ${anyIdx.chars} 字 ${anyIdx.lines} 行 · ${anyIdx.digits} 位 · 可在「编号反查·自由」还原`}>
                       <div className="pi-idx-head">
-                        诗云编号 · {anyIdx.chars} 字 {anyIdx.lines} 行 · {anyIdx.digits} 位{" "}
+                        自由编号 · {anyIdx.chars} 字 {anyIdx.lines} 行 · {anyIdx.digits} 位{" "}
                         <CopyButton text={anyIdx.index} />
                       </div>
                       <div className="pi-idx-full">{anyIdx.index}</div>
                     </div>
                   ) : (
-                    <div className="pi-idx" title={`任意长编号 · ${anyIdx.digits} 位`}>
-                      诗云编号 {anyIdx.index.slice(0, 28)}… <CopyButton text={anyIdx.index} label="复制全编号" />
+                    <div className="pi-idx" title={`自由编号（任意长）· ${anyIdx.digits} 位 · 可在「编号反查·自由」还原`}>
+                      自由编号 {anyIdx.index.slice(0, 28)}… <CopyButton text={anyIdx.index} label="复制全编号" />
                     </div>
                   ))}
               </div>

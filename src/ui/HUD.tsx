@@ -7,7 +7,7 @@ const FORMS: { id: PullForm; label: string; title?: string }[] = [
   { id: "qijue", label: "七绝" },
   { id: "wulu", label: "五律" },
   { id: "qilu", label: "七律" },
-  { id: "ziyou", label: "自由", title: "词 / 自由诗:换行也由编号决定,行长不定" },
+  { id: "ziyou", label: "自由", title: "词 / 自由诗:任意长度、换行也由编号决定;新诗/古体的编号也在这套目录里" },
 ];
 
 export function HUD() {

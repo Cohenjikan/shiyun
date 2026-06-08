@@ -22,12 +22,20 @@ export function gauss3(a: number, b: number, c: number): number {
 // CPU picker. The rotation EXACTLY matches three's Object3D.rotation.y, so a group set to
 // `rotation.y = galaxySpin.angle` and the CPU helpers below agree to the float (picking
 // stays accurate as the galaxy turns).
-export const galaxySpin = { angle: 0 };
-export const SPIN_RATE = 0.012; // rad/sec — gentle; a full turn ≈ 8.7 min
+// `angle` drives the POET layer + 赠诗 + markers + the CPU picker (these must agree to the float).
+// `decorAngle` drives ONLY the decorative backdrop, and turns a bit FASTER — a gentle differential
+// so (a) the galaxy never looks like a rigid pinwheel, and (b) with 引力 ON the camera co-rotates
+// with the poets (frozen → clickable) while the diffuse haze keeps flowing past them ("still
+// spinning" illusion). Because the backdrop is mostly haze now, the drift reads as nebulosity, not
+// a mismatched second arm set.
+export const galaxySpin = { angle: 0, decorAngle: 0 };
+export const SPIN_RATE = 0.012; // poet layer rad/sec — gentle; a full turn ≈ 8.7 min
+export const DECOR_RATE = 0.019; // backdrop rad/sec — ~1.6× the poets → visible differential
 
 export function advanceSpin(dt: number) {
   // wrap to keep cos/sin precision over very long sessions (seamless — 2π ≡ 0).
   galaxySpin.angle = (galaxySpin.angle + dt * SPIN_RATE) % (Math.PI * 2);
+  galaxySpin.decorAngle = (galaxySpin.decorAngle + dt * DECOR_RATE) % (Math.PI * 2);
 }
 
 // LOCAL galaxy frame → WORLD (matches THREE.Matrix4.makeRotationY(angle)).

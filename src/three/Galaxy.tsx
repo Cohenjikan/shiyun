@@ -233,7 +233,7 @@ export function Galaxy() {
     // single owner of the shared spin clock (Galaxy mounts at boot, before the poet layer);
     // everyone else just reads galaxySpin.angle.
     advanceSpin(dt);
-    built.points.rotation.y = galaxySpin.angle; // halo + far dome stay fixed
+    built.points.rotation.y = galaxySpin.decorAngle; // backdrop spins FASTER than poets (differential)
   });
 
   return <primitive object={built.grp} />;

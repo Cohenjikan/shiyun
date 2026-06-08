@@ -19,10 +19,6 @@ import {
   regulatedRank,
   scatter,
   indexToPoint,
-  freeSize,
-  freeUnrank,
-  freeRank,
-  splitFree,
   anyRank,
   anyUnrank,
   type Vec3,
@@ -132,16 +128,27 @@ function describe(form: FormDef, chars: number[], pos: [number, number, number])
   };
 }
 
-// 自由格式 pull: variable-length 词/自由诗 from the radix-(realN+W) catalog (see engine.ts).
-// `realN` = the real-char count drawn from (= commonK in 常用字 mode, else the full 字库 N).
-// Its own catalog ⇒ the displayed 自由目录编号 is over that radix; lushi/valid never apply.
-function describeFree(realN: number, ids: number[], pos: [number, number, number]): PulledPoem {
-  const { charset } = getDataset();
-  const lines = splitFree(realN, ids).map((seg) => seg.map((id) => charset[id]).join(""));
-  const b = freeRank(realN, ids);
+// 自由格式 = the ARBITRARY-LENGTH catalog (the merged 自由 ≡ former 任意长). Symbols are 字库 ids
+// 0..N-1 plus a line-break = N, over the bijective base-(N+1) numeration (engine.anyRank/anyUnrank):
+// EVERY finite poem — any length, any line structure — has one reversible 自由目录编号. This is the
+// single catalog used for 自由 generation, 编号反查·自由, 新诗/古体's 编号, and permalinks. The break
+// symbol splits the symbol run into display lines. lushi/valid never apply.
+function describeAny(syms: number[], pos: [number, number, number]): PulledPoem {
+  const { charset, lexicon } = getDataset();
+  const N = lexicon.N; // break symbol
+  const lines: string[] = [];
+  let cur = "";
+  for (const s of syms) {
+    if (s === N) {
+      lines.push(cur);
+      cur = "";
+    } else cur += charset[s];
+  }
+  lines.push(cur);
+  const b = anyRank(N, syms);
   return {
     form: "ziyou",
-    lines,
+    lines: lines.length ? lines : [""],
     babelIndex: b.toString(),
     babelDigits: b === 0n ? 1 : b.toString().length,
     lushiIndex: null,
@@ -150,7 +157,13 @@ function describeFree(realN: number, ids: number[], pos: [number, number, number
   };
 }
 
+// Symbols for a known 自由 index (chars + breaks), and the lines it splits into.
+function anySyms(b: bigint): number[] {
+  return anyUnrank(getDataset().lexicon.N, b);
+}
+
 export const COMMON_K = 2500; // "常用字" = the top-K most-frequent chars (字库 is freq-ordered)
+const FREE_GEN_L = 30; // max symbols a 自由 void-pull generates (chars + breaks) — keeps 词 readable
 
 // A 格律 lexicon restricted to common chars (ids < K), so 格律 × 常用字 composes into
 // tone-valid poems that use only everyday characters. Shares the global tone/rhyme arrays;
@@ -200,10 +213,18 @@ export function pullAt(
   opts: { lushiOnly?: boolean; commonK?: number } = {},
 ): PulledPoem {
   if (formId === "ziyou") {
-    const fullN = getDataset().lexicon.N;
-    const realN = opts.commonK ? Math.min(opts.commonK, fullN) : fullN;
-    const k = indexFromPoint(pos, freeSize(realN));
-    return describeFree(realN, freeUnrank(realN, k), pos);
+    // generate a 词-like variable-length poem, then express it in the unified 自由 catalog.
+    // Sampling uses a base-(M+W) alphabet (M chars drawn from + W "break" glyphs, W≈M/5 ⇒ break
+    // prob ≈ 1/6 ⇒ ~5-char lines); 常用字 shrinks M. EVERY break glyph collapses to the single
+    // unified break (= N), so the displayed 自由编号 (and its 编号反查) live in the one full-N
+    // catalog and round-trip exactly. A bounded length keeps a click readable, not a 500-char wall.
+    const N = getDataset().lexicon.N;
+    const M = opts.commonK ? Math.min(opts.commonK, N) : N;
+    const W = Math.max(1, Math.round(M / 5));
+    const radix = BigInt(M + W);
+    const k = indexFromPoint(pos, radix ** BigInt(FREE_GEN_L));
+    const syms = babelUnrank(FREE_GEN_L, radix, k).map((id) => (id >= M ? N : id)); // break → N
+    return describeAny(syms, pos);
   }
   const form = FORMS[formId];
   if (opts.lushiOnly) {
@@ -315,15 +336,8 @@ export function pullByIndex(formId: PullForm, indexInput: string): IndexPoem | n
   }
   const idx = b.toString(); // normalize (drops leading zeros)
   if (formId === "ziyou") {
-    const fullN = getDataset().lexicon.N;
-    const size = freeSize(fullN);
-    const inRange = b < size;
-    const lines = inRange
-      ? splitFree(fullN, freeUnrank(fullN, b)).map((seg) =>
-          seg.map((id) => getDataset().charset[id]).join(""),
-        )
-      : [];
-    return { form: "ziyou", lines, index: idx, digits: idx.length, inRange, cardinalityDigits: size.toString().length };
+    // 自由 = the arbitrary catalog: EVERY positive integer maps to a poem, so it's always inRange.
+    return { form: "ziyou", lines: describeAny(anySyms(b), [0, 0, 0]).lines, index: idx, digits: idx.length, inRange: true, cardinalityDigits: 0 };
   }
   const form = FORMS[formId];
   const size = babelSize(form.L, N());
@@ -399,10 +413,9 @@ export function pulledFromIndex(formId: PullForm, indexStr: string): PulledPoem 
     return null;
   }
   if (formId === "ziyou") {
-    const fullN = getDataset().lexicon.N;
-    if (b >= freeSize(fullN)) return null;
+    // arbitrary catalog: any index is valid; place it at a canonical scattered point.
     const p = indexToPoint(b);
-    return describeFree(fullN, freeUnrank(fullN, b), [p.x, p.y, p.z]);
+    return describeAny(anySyms(b), [p.x, p.y, p.z]);
   }
   const form = FORMS[formId];
   if (b >= babelSize(form.L, N())) return null;
