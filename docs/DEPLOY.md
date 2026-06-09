@@ -8,16 +8,64 @@ The **only** optional server touchpoint is **feedback collection** (§5): if you
 inbox instead of per-browser localStorage, point one env var at a write-only endpoint. Leave it unset and the
 build is fully static, exactly as before.
 
+## ▶ Quickstart for the deploy / 运维 AI
+
+Latest code is on **`main`** (`origin/main`). The heavy poem data is **git-ignored (~1.1 GB)** and lives,
+complete + verified, in the **main worktree** at `C:\Users\Cohen\Desktop\shiyun\public\data`. Fastest correct
+deploy — build there, where both the latest code (after pull) and the data already exist:
+
+```bash
+cd C:\Users\Cohen\Desktop\shiyun     # the main worktree — already has the complete public/data
+git pull                             # fast-forward to the latest merged code
+npm ci
+npm run deploy:build                 # tsc + vite build → dist/ (heavy data baked in) + precompress
+#  → serve dist/ per §2–§3.  Optional: wire feedback collection per §5.
+```
+
+> ⚠ **If a poet shows a poem COUNT but "载入作品…" never finishes, the data is missing — see §1.** That count
+> comes from the git-tracked `poets.index.json`; the actual poems live in the git-ignored `poems/` buckets. A
+> fresh clone has none. **Do not** "fix" it by running `build-data.mjs` unless you have the corpora cloned (§1
+> Option B) — provision the existing data instead (§1 Option A).
+
 ## 1. Build
+
+### 1.0 Provision the git-ignored data FIRST (the #1 deploy gotcha)
+
+`public/data/{poems,lines,search,linesf}` are **git-ignored** (too large for git). Everything else
+(`charset.json`, `poets.index.json`, `lexicon.json`, `gifts.json`, `manifest.json`) is tracked, so a fresh
+checkout boots the galaxy + author list but **cannot load any poem** until you provide the buckets.
+
+- **Option A — use the existing complete copy (recommended; no corpora needed).** The canonical, verified set
+  (poems 236 MB · lines 792 MB · search 130 MB) is in the main worktree's `public/data`. Either **build from
+  the main worktree** (the Quickstart above), or copy those dirs into your build tree:
+  ```bash
+  # from a fresh clone's repo root, on the same machine:
+  cp -r "C:/Users/Cohen/Desktop/shiyun/public/data/poems"  public/data/
+  cp -r "C:/Users/Cohen/Desktop/shiyun/public/data/lines"  public/data/   # only if you want 诗句 search
+  cp -r "C:/Users/Cohen/Desktop/shiyun/public/data/search" public/data/   # only if you want 寻诗/探诗 search
+  ```
+  (On Windows you can junction instead of copy: `New-Item -ItemType Junction -Path public\data\poems -Target "C:\Users\Cohen\Desktop\shiyun\public\data\poems"` — vite follows junctions when copying into `dist/`.)
+- **Option B — regenerate (only if you have the corpora).** Needs `C:/corpus/Werneror-Poetry` **and**
+  `C:/corpus/modern-poetry` cloned. **This OVERWRITES `public/data`.** A missing modern corpus now **fails
+  loud** (it used to silently drop the 508 modern 新诗 poets and desync the index): set `ALLOW_NO_MODERN=1`
+  only for an intentional Werneror-only build.
+  ```bash
+  node --max-old-space-size=4096 pipeline/build-data.mjs            # poems + lines + sidecars
+  npm run build:search                                             # 寻诗/诗名 prefix index (search/)
+  # npm run build:fuzzy                                            # optional 异文 fuzzy index (linesf/, ~4.4 GB)
+  ```
+
+`linesf/` (fuzzy 异文 search) is an **optional fallback** — `load.ts` no-ops if it's absent, so you can skip
+it. The minimum for "poems load + 诗句/寻诗 search work" is `poems/` + `lines/` + `search/`.
+
+### 1.1 Build the static bundle
 
 ```bash
 npm ci
-node --max-old-space-size=4096 pipeline/build-data.mjs   # regenerate public/data (poems + lines + sidecars)
-npm run deploy:build                                     # = npm run build && npm run precompress
+npm run deploy:build   # = npm run build (tsc --noEmit + vite build → dist/) && npm run precompress
 ```
 
-- `npm run build` runs `tsc --noEmit` then `vite build` → `dist/`. Vite copies `public/` (incl.
-  `public/data/`) into `dist/data/`, so the heavy corpora ship as static files.
+- Vite copies `public/` (incl. `public/data/`) into `dist/data/`, so the heavy corpora ship as static files.
 - `npm run precompress` ([deploy/precompress.mjs](../deploy/precompress.mjs)) writes `.br` + `.gz`
   next to every text asset **except `dist/data/poems/*.json`** (those stay raw — see §3).
 
