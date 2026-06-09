@@ -3,6 +3,11 @@ dist/
 *.log
 .DS_Store
 
+# Local build-time env (secrets/endpoints); .env.example IS tracked as the template.
+.env
+.env.local
+.env.*.local
+
 # Generated heavy buckets — regenerate with `node pipeline/build-data.mjs`.
 # (charset/poets.index/lexicon/manifest/gifts ARE tracked so the galaxy + author search +
 #  格律 + 半编号 + 赠诗网络 work in a fresh worktree; only the per-poet poem TEXT and the

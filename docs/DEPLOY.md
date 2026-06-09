@@ -1,8 +1,12 @@
-# Deploy — 诗云 / Poetry Cloud (static, no backend)
+# Deploy — 诗云 / Poetry Cloud (static, with one optional feedback endpoint)
 
-The whole app is a static build. **Never add a backend** — all index math + rendering run in the
-browser. You ship `dist/` to any static host that supports **HTTP Range** on `poems/*.json`
-(nginx, Caddy, most CDNs do).
+The whole app is a static build. **The corpus, all index math, and rendering stay 100% client-side —
+never add a backend for those.** You ship `dist/` to any static host that supports **HTTP Range** on
+`poems/*.json` (nginx, Caddy, most CDNs do).
+
+The **only** optional server touchpoint is **feedback collection** (§5): if you want a shared, cross-device
+inbox instead of per-browser localStorage, point one env var at a write-only endpoint. Leave it unset and the
+build is fully static, exactly as before.
 
 ## 1. Build
 
@@ -53,3 +57,85 @@ curl -s -D- -o /dev/null -H 'Range: bytes=0-99' https://shiyun.example.com/data/
 `npm run preview` serves `dist/` locally (vite preview = sirv, which supports Range) — click a poet,
 confirm a `206` in the network panel, and that a shared `#a=<poetId>` / `#p=<form>.<index>` link
 restores the right poem on load.
+
+## 5. Optional: collect feedback on a server (the one allowed backend)
+
+In-page feedback (设置 → 更多 → 💬 反馈) is **always** saved to the visitor's `localStorage`; the owner reads it
+on-device via the hidden gesture (5 taps on the 诗云 logo within 10 s → FeedbackViewer). That's per-browser
+only. To gather feedback across all visitors/devices, set **one build-time env var** to a write-only endpoint;
+each submission is then **also** POSTed there as fire-and-forget JSON. The POST never blocks or fails the
+submit — `localStorage` stays the source of truth, the network is best-effort
+([src/state/feedback.ts](../src/state/feedback.ts)).
+
+**Contract.** On submit, the client sends:
+
+```http
+POST <VITE_FEEDBACK_ENDPOINT>
+Content-Type: application/json
+
+{ "source": "shiyun", "message": "<the feedback text>", "ts": 1781000000000 }
+```
+
+The endpoint URL is inlined into the client bundle by Vite → it is **public**. Point it at a *write-only*
+collector, never anything needing a secret. The endpoint must send permissive **CORS** headers (it's called
+cross-origin from the static host).
+
+### 5a. Wire it
+
+```bash
+cp .env.example .env.local
+# edit .env.local:  VITE_FEEDBACK_ENDPOINT="https://shiyun-feedback.<you>.workers.dev"
+npm run deploy:build      # the URL is baked into dist/ at build time
+```
+
+`.env.local` is git-ignored; `.env.example` is the tracked template. Unset/blank ⇒ 100% static (no network).
+
+### 5b. Drop-in Cloudflare Worker (free tier; stores to KV)
+
+`wrangler init shiyun-feedback`, bind a KV namespace as `FEEDBACK`, then:
+
+```js
+export default {
+  async fetch(req, env) {
+    const cors = {
+      "Access-Control-Allow-Origin": "*",            // or lock to your site's origin
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+    if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+    if (req.method !== "POST") return new Response("method", { status: 405, headers: cors });
+    let body;
+    try { body = await req.json(); } catch { return new Response("bad json", { status: 400, headers: cors }); }
+    const msg = String(body?.message ?? "").slice(0, 5000).trim();
+    if (!msg) return new Response("empty", { status: 400, headers: cors });
+    // key by time so listing is chronological; store msg + a little request metadata
+    const key = `${Date.now()}-${crypto.randomUUID()}`;
+    await env.FEEDBACK.put(key, JSON.stringify({
+      message: msg,
+      ts: Number(body?.ts) || Date.now(),
+      ip: req.headers.get("cf-connecting-ip") || null,
+      ua: req.headers.get("user-agent") || null,
+    }));
+    return new Response("ok", { headers: cors });
+  },
+};
+```
+
+`wrangler deploy` → copy the `*.workers.dev` URL into `VITE_FEEDBACK_ENDPOINT`. Read submissions with
+`wrangler kv key list --binding=FEEDBACK` / `wrangler kv key get --binding=FEEDBACK <key>`. (Add basic rate
+limiting / a turnstile check before sharing the URL widely if abuse is a concern.)
+
+> Prefer no-code? Any JSON-accepting form backend works the same way — e.g. a **Formspree** form URL as
+> `VITE_FEEDBACK_ENDPOINT` (it accepts `{message, ...}` JSON and shows submissions in its dashboard). The
+> client contract above is all the endpoint has to honor.
+
+### 5c. Verify after deploy
+
+```bash
+curl -s -X POST "$VITE_FEEDBACK_ENDPOINT" -H 'Content-Type: application/json' \
+  -d '{"source":"shiyun","message":"部署冒烟测试 ✅","ts":1781000000000}' -i | head -1
+# want: HTTP/.. 200 (and the message shows up in your KV / Formspree inbox)
+```
+
+In the live app, submit a test message and confirm a `POST` to your endpoint in the browser Network panel
+(it should be `200`; a failure is silently tolerated and the message still lands in localStorage).

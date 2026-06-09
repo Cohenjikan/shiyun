@@ -7,11 +7,23 @@ Inspired by 刘慈欣《诗云》 + 博尔赫斯《巴别图书馆》: a roamabl
 is a star and the void between them is **every possible poem**, pulled out on click — *computed,
 never stored* (every poem ⇄ a big-integer index, bijectively).
 
+> **▶ Status (2026-06-09, after the 8th agent — pre-launch review):** all prior features + this round's
+> polish are DONE + verified (typecheck · 89 tests · production build). This round:
+> **(1) 奇迹时刻** — removed the 画框 (it collided with 退出); the tagline no longer orphans its last char
+> (`text-wrap: balance` + full-width centering); the centred poem card is now **drag-to-move + pinch/wheel/±
+> zoom** (`src/ui/Cinema.tsx`). **(2) Data audit** (multi-agent + web): verdict **SHIP AS-IS** — Werneror+yuxqiu
+> is the *optimal fit* (only broad+Simplified+permissive+parseable corpus), *not* the most comprehensive
+> (ORCHESTRA +28% but Traditional/encumbered) and *not* complete (明/清 ceiling — no 全清诗 exists); see
+> **`docs/DATA_AUDIT.md`**. Corrected stale `chinese-poetry`-overlay copy in README + DATA_CONTRACT.
+> **(3) Feedback backend** — `submitFeedback` now ALSO POSTs to `VITE_FEEDBACK_ENDPOINT` if set (else stays
+> 100% static); deploy guide + Cloudflare Worker in **`docs/DEPLOY.md §5`**. **(4) Fixed the latent foot-gun
+> below** — the modern-corpus read now **fails loud** on a missing clone (opt out: `ALLOW_NO_MODERN=1`).
+>
 > **▶ Status (2026-06-09, after the 7th agent):** engine · data · galaxy · search · 赠诗网络 · **移动端/触控
 > · 性能(自适应画质+dpr) · 手机面板折叠 · 奇迹时刻分享卡 · 寻路修复** are all DONE + verified (build + 89 tests).
-> Feature work is effectively complete. **Your job, next agent, is DEPLOY** — ship it to a static host so
-> the永久链接/分享 features come alive. See §6 「⏭ Next — deploy」: **decide the fuzzy-index (`linesf/`)
-> hosting strategy FIRST** (simplest: drop it on deploy — it's a fallback and `load.ts` no-ops if absent).
+> Feature work is effectively complete. **Next: DEPLOY** — ship it to a static host so the 永久链接/分享 features
+> come alive. See §6 「⏭ Next — deploy」 + `docs/DEPLOY.md`: **decide the fuzzy-index (`linesf/`) hosting
+> strategy FIRST** (simplest: drop it on deploy — it's a fallback and `load.ts` no-ops if absent).
 
 ---
 
@@ -42,8 +54,9 @@ hand-off is broken — fix `main` first.** Check with `git log --oneline --all -
 > 29,808`**, 徐志摩 loads 19 poems, 寻诗 works. **So a fresh worktree should junction its data from `main`'s
 > `public/data`** (`poems/` `lines/` `search/` are all good there). `linesf/` (the ~4.4 GB fuzzy) is NOT in main
 > — junction it from `inspiring-bhabha-081900/public/data/linesf` or rebuild (`npm run build:fuzzy`); fuzzy is a
-> fallback, so it's optional. (The build-data WARN-only modern read is still a latent foot-gun — fix it if you
-> rebuild from corpus.)
+> fallback, so it's optional. (✅ **FIXED 2026-06-09 (8th agent):** the build-data modern read is no longer
+> WARN-only — a missing `C:/corpus/modern-poetry` now **throws** so a rebuild can't silently drop the 508 modern
+> poets again; set `ALLOW_NO_MODERN=1` for an intentional Werneror-only build.)
 
 **Backups:** private GitHub repo `github.com/Cohenjikan/shiyun` (all branches); local all-branches
 bundle at `C:\Users\Cohen\Desktop\shiyun-ALL-branches-backup.bundle` (restore: `git clone <bundle>`).

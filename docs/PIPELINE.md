@@ -19,7 +19,9 @@ contemporary set cloned to `C:\corpus\modern-poetry` (Apache-2.0) — adds the m
 classical corpus lacks (徐志摩《再别康桥》, 海子, 北岛, 顾城, 戴望舒, 闻一多…): **+4,494 poems /
 +508 poets**. Free verse has no 格律, so every modern poem → form `"other"`; a 民国-era name set
 → dynasty `近现代` (matches Werneror), all others → `当代`. Their lines feed the content-search
-index, so 新诗 is searchable too. Skipped gracefully if the corpus isn't cloned.
+index, so 新诗 is searchable too. **A missing clone now FAILS the build loudly** (the git-tracked
+`poets.index.json` already includes the 508 modern poets, so a Werneror-only rebuild would desync
+`poems/`+`lines/` from the index). To intentionally build Werneror-only, set `ALLOW_NO_MODERN=1`.
 
 **Simplified is kept as-is — no OpenCC, no chinese-poetry overlay, no 平水韵.** Rationale:
 the user direction is default-random generation (not self-built 平仄), and users search/type in

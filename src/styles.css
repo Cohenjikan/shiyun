@@ -1714,47 +1714,21 @@ canvas {
   z-index: 70;
   pointer-events: none;
 }
-.cinema-frame {
-  position: absolute;
-  inset: calc(14px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right))
-    calc(14px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
-  border: 1px solid rgba(255, 210, 122, 0.55);
-  border-radius: 10px;
-  /* a thin gold rule + a soft vignette that draws the eye to the centre */
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4) inset, 0 0 140px rgba(0, 0, 0, 0.6) inset;
-}
-.cinema-frame::before,
-.cinema-frame::after {
-  content: "";
-  position: absolute;
-  width: 26px;
-  height: 26px;
-  border: 2px solid var(--gold);
-  opacity: 0.85;
-}
-.cinema-frame::before {
-  top: -1px;
-  left: -1px;
-  border-right: none;
-  border-bottom: none;
-  border-radius: 10px 0 0 0;
-}
-.cinema-frame::after {
-  bottom: -1px;
-  right: -1px;
-  border-left: none;
-  border-top: none;
-  border-radius: 0 0 10px 0;
-}
+/* 画框 (gold rule + corner brackets) removed — it collided with the top-left 退出 button and boxed in the
+   shot. The frozen starfield is the backdrop now; only the centred poem card carries the composition. */
 .cinema-tag {
   position: absolute;
   top: calc(34px + env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
+  /* centre via auto-margins (left/right:0) instead of left:50%+translateX, so the shrink-to-fit box can
+     use the FULL viewport width — left:50% capped it at half the screen and forced needless wrapping. */
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: min(880px, 92vw);
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: min(760px, 86vw);
   padding: 8px 14px;
   pointer-events: auto;
 }
@@ -1764,6 +1738,8 @@ canvas {
   line-height: 1.7;
   letter-spacing: 0.04em;
   text-align: center;
+  /* balance the lines so the tagline never orphans its last character (首。) onto a line of its own */
+  text-wrap: balance;
   color: var(--gold-soft);
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.9);
 }
@@ -1782,6 +1758,42 @@ canvas {
 .cinema-arrow:hover {
   background: rgba(255, 210, 122, 0.16);
 }
+/* resize / reset controls — top-right, mirror of the top-left 退出. Drag the poem itself to move it. */
+.cinema-tools {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  right: calc(10px + env(safe-area-inset-right));
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+.cinema-tool {
+  width: 34px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(8, 10, 18, 0.55);
+  border: 1px solid rgba(255, 210, 122, 0.4);
+  color: var(--gold);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cinema-tool:hover {
+  background: rgba(255, 210, 122, 0.16);
+}
+/* one-time hint, fades out of the way after the first drag/zoom (touched=true) */
+.cinema-hint {
+  position: absolute;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  white-space: nowrap;
+}
 .cinema-card {
   position: absolute;
   left: 50%;
@@ -1793,7 +1805,14 @@ canvas {
   align-items: center;
   gap: 14px;
   text-align: center;
-  pointer-events: none;
+  /* draggable to reposition + pinch/wheel/±-zoomable to resize — the user composes where the poem sits in
+     the shot (item 3). transform/cursor are set inline from Cinema.tsx. */
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  cursor: grab;
+  will-change: transform;
 }
 /* classical 竖排: each line is an upright column; columns flow right→left (so a long poem spreads
    sideways and is never clipped at the bottom — fixes the truncation of long poems). */

@@ -144,10 +144,30 @@ const MODERN_JINXIANDAI = new Set([
   "鲁迅","周作人","艾青","纪弦","痖弦","郑愁予","周梦蝶","洛夫","余光中","覃子豪","方思",
 ]);
 const MODERN = "C:/corpus/modern-poetry/China-modern-poetry/contemporary";
+const ALLOW_NO_MODERN = process.env.ALLOW_NO_MODERN === "1";
+// Resolve the modern file list FIRST. A missing clone is the dangerous case: the git-tracked
+// poets.index.json already contains the 508 modern poets, so rebuilding WITHOUT them silently desyncs
+// poems/+lines/ from the index (a modern poet then resolves to zero poems — the bug that hit a prior
+// agent). Fail loud unless explicitly opted into a Werneror-only build via ALLOW_NO_MODERN=1.
+let mfiles = [];
 try {
-  const mfiles = readdirSync(MODERN).filter((f) => /^\d/.test(f) && f.endsWith(".json"));
+  mfiles = readdirSync(MODERN).filter((f) => /^\d/.test(f) && f.endsWith(".json"));
+} catch (e) {
+  if (ALLOW_NO_MODERN) {
+    console.warn("  modern corpus skipped (ALLOW_NO_MODERN=1):", e.message);
+  } else {
+    throw new Error(
+      `modern corpus not found at ${MODERN} (${e.code || e.message}).\n` +
+        `  → clone yuxqiu/modern-poetry there, OR set ALLOW_NO_MODERN=1 to build Werneror-only.\n` +
+        `  Building without it would DESYNC poems/+lines/ from the git-tracked poets.index.json (+508 modern poets).`,
+    );
+  }
+}
+if (mfiles.length) {
   let mp = 0;
   for (const file of mfiles) {
+    // JSON-parse errors here now propagate (fail loud on a corrupt modern file) instead of silently
+    // dropping the whole modern set, as the old broad try/catch did.
     const arr = JSON.parse(readFileSync(join(MODERN, file), "utf8"));
     for (const poem of arr) {
       const author = (poem.author || "").trim();
@@ -159,8 +179,6 @@ try {
     }
   }
   console.log(`  modern 新诗: poems=${mp} (total=${total} poets=${poets.size})`);
-} catch (e) {
-  console.warn("  modern corpus skipped (clone C:/corpus/modern-poetry?):", e.message);
 }
 
 // charset ordered by desc frequency (ties by codepoint)

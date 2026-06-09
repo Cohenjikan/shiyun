@@ -51,14 +51,22 @@ bytes) — see `src/data/dynasties.ts` (`bandRadius`, `hashStr`, `spherePoint`).
 ## Corpus (all dynasties)
 
 Locked sources (verified 2026-06-08). Combined: **857,877 poems / 29,808 poets** (字库 N = 12,877).
+This is a **raw upstream count** (no formal cross-source dedup; 互见/重出 and 无名氏 collapse inflate it by a
+low-single-digit %). It is the broadest permissively-licensed Simplified all-dynasties **open** corpus — near
+complete on 唐/宋 poet rosters, thinner on 明/清 (no 全明诗/全清诗 exists anywhere). Full audit + alternatives:
+[docs/DATA_AUDIT.md](DATA_AUDIT.md).
 
 - **Backbone — [`Werneror/Poetry`](https://github.com/Werneror/Poetry)** — ~853k poems /
   ~29.3k authors (Werneror alone, before the modern merge), **先秦 → 当代**, MIT, CSV, columns
   `题目, 朝代, 作者, 内容`, **Simplified**, split by dynasty. The only large open corpus covering
   the full sweep. Author = string only; **no structured 生卒 dates**; dynasty is per-poem (`朝代`).
-- **Quality overlay (唐宋) — [`chinese-poetry`](https://github.com/chinese-poetry/chinese-poetry)**
-  — Traditional 唐/宋 text (`{author,title,paragraphs[],id}`), used where it overlaps
-  Werneror's 唐/宋 rows (cleaner 繁体, better line segmentation).
+- **`chinese-poetry` — EVALUATED, NOT SHIPPED.** [`chinese-poetry`](https://github.com/chinese-poetry/chinese-poetry)
+  was considered as a 唐宋 quality overlay but is **not read by the build** ([build-data.mjs](../pipeline/build-data.mjs)
+  reads only Werneror + yuxqiu — verify: `grep -i chinese-poetry pipeline/` is empty). Its Tang/Song-shi bulk
+  (~317k poems) is **Traditional**, so merging it would force a lossy OpenCC pass that perturbs the distinct-Han
+  charset N = 12,877 and the 平水韵→格律 mapping; it is also narrower (no 明, no 近现代/当代). Simplified-only is
+  canonical (corpus = index = search). See [docs/DATA_AUDIT.md](DATA_AUDIT.md). (Optional future supplement: its
+  Simplified 词/曲 + 诗经/楚辞, after OpenCC + dedup.)
 - **新诗 (现当代自由诗) — [`yuxqiu/modern-poetry`](https://github.com/yuxqiu/modern-poetry)**
   — Apache-2.0, cloned to `C:/corpus/modern-poetry`; **+4,494 free-verse poems / +508 poets**
   (徐志摩《再别康桥》, 海子, 北岛, 顾城, 戴望舒…). `{author,title,paragraphs[]}`; free verse → form
