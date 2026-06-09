@@ -38,7 +38,9 @@ export function poetPosition(p: PoetRow): [number, number, number] {
   // (strong at the core, gone by t≈0.42) so the centre reads as a ROUND bulge blended into the
   // diffuse galaxy core — not a stark cross of dots. Keeps the spiral arms intact further out.
   const az = ((h >>> 24) & 0xff) / 255;
-  const centerBlur = Math.max(0, 0.42 - t) / 0.42; // 1 at core → 0 by t=0.42
+  // Wider, stronger azimuthal dissolve: full random angle over the whole core out to t≈0.5
+  // (was 0.42) so the 4-arm X is gone and the centre reads as a filled round disc, not a cross.
+  const centerBlur = Math.max(0, 0.5 - t) / 0.5; // 1 at core → 0 by t=0.5
   const ang = branch + twist + armDev + (az - 0.5) * Math.PI * 2 * centerBlur;
   const ya = ((h >>> 5) & 0xff) / 255, yb = ((h >>> 13) & 0xff) / 255, yc = ((h >>> 21) & 0xff) / 255;
   const bulge = 1 + Math.max(0, 0.45 - t) * 2.6; // taller near the centre, thin at the rim
@@ -50,10 +52,11 @@ export function poetPosition(p: PoetRow): [number, number, number] {
   const szu = ((h2 >>> 18) & 0xff) / 255, szs = ((h2 >>> 26) & 0xff) / 255;
   const scat = (u: number, sgn: number) => Math.pow(u, 2.2) * (sgn < 0.5 ? -1 : 1) * 0.22 * rr;
   // The rr-scaled scatter shrinks to ~0 near the centre, so the core stays a tight concentrated
-  // shape. Add a strong ABSOLUTE in-plane x/z scatter that peaks at the core and fades by t≈0.4,
-  // dissolving the centre into a diffuse round cloud (per feedback — strengthen centre x scatter).
-  const cs = Math.max(0, 0.4 - t) / 0.4; // 1 at core → 0 by t=0.4
-  const coreScat = cs * cs * GALAXY.RADIUS * 0.15;
+  // shape. Add a strong ABSOLUTE in-plane x/z scatter that peaks at the core and fades by t≈0.5,
+  // dissolving the centre into a diffuse round cloud (round-5 feedback — push it HARD: fill the
+  // whole central region, no inter-arm dark wedges). Tune `0.22` on a real GPU if it over/under-fills.
+  const cs = Math.max(0, 0.5 - t) / 0.5; // 1 at core → 0 by t=0.5 (wider band)
+  const coreScat = cs * cs * GALAXY.RADIUS * 0.22; // ~1.5× the round-4 fill radius
   const cjx = (((h2 >>> 5) & 0xff) / 255 - 0.5) * 2;
   const cjz = (((h2 >>> 13) & 0xff) / 255 - 0.5) * 2;
   return [

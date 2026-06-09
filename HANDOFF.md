@@ -134,7 +134,26 @@ node pipeline/build-lexicon.mjs                            # lexicon.json (needs
 
 ## 6. Remaining work (next, roughly in priority)
 
-**DONE — UX iteration round 4 (latest; verified: build + 57/57 + e2e DOM, GPU-pick after a clean restart):**
+**DONE — UX iteration round 5 (latest; verified: build + 57/57 + DOM mount; centre confirmed 够散/漂亮 by the user on a real GPU):**
+- ✅ **造诗 placeholder simplified** — the long hint clipped in the 320px panel; placeholder is now 「粘贴整首诗…」 and the
+  拼音/标点 detail moved to the (wrapping) dim helper line so no info is lost. (`SearchPanel`.)
+- ✅ **Centre cross dissolved HARDER (rounds 3–4 were still "太保守")** — `poetPosition` centreBlur range 0.42→0.5 and
+  coreScat 0.15→**0.22** (range 0.4→0.5): the bright POET cross (poets are the ×2.3 stars → the dominant shape) fills into
+  a round disc. Galaxy backdrop disk also gets full azimuthal randomisation + absolute in-plane core scatter + a
+  noise-floor lift toward the core (kills the inter-arm dark wedges); BULGE 42k→**64k**, wider (cap 0.34R→0.42R), modest
+  brightness-floor lift. *(Knobs: `PoetStars.tsx` coreScat `0.22` + centreBlur `0.5`; `Galaxy.tsx` disk `cb`/`coreFill` + BULGE.)*
+- ✅ **Fixed dev port** — `vite.config` `server.port:5199 strictPort` so a sibling worktree's stale server can't silently
+  shadow the preview (`.claude/launch.json` already has shiyun-gpupick on 5199).
+
+### ⚠ KNOWN ISSUE surfaced this round — Range egress is DORMANT (fix next)
+`manifest.poemSidecar:true` but `public/data/poems/*.idx.json` sidecars are **ABSENT** in the committed/regenerated data
+(verified: `/data/poems/00.idx.json` → index.html fallback, not JSON). So `loadPoetPoems` falls through to a whole-bucket
+(~0.9 MB) fetch on **every** poet click, NOT a few-KB Range slice. The #12 "egress already optimized" claim is therefore
+dormant code until the sidecars exist. Fix: rebuild data emitting them (`build-data.mjs` already does), OR a standalone
+`pipeline/build-sidecars.mjs` that re-emits each `poems/{bucket}.json` canonically + its byte-offset sidecar (no corpus
+needed). Matters for deploy egress AND is the prerequisite for the orbiting-poems "cheap per-poet" claim.
+
+**DONE — UX iteration round 4 (verified: build + 57/57 + e2e DOM, GPU-pick after a clean restart):**
 - ✅ **造诗 grid input fixed (was the big bug)** — the fixed-form grid was per-cell `<input maxLength=2>`
   that kept only the last char → IME (拼音) and multi-char paste were impossible. Now ONE normal input
   drives the grid; it keeps only 汉字 (`hanChars`, drops pinyin/标点/latin) and the grid cells are

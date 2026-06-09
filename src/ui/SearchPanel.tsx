@@ -291,7 +291,7 @@ export function SearchPanel() {
                   <input
                     className="idx-input compose-text"
                     value={gridText}
-                    placeholder="输入或粘贴整首诗(拼音 / 标点都行,自动只取汉字)…"
+                    placeholder="粘贴整首诗…"
                     onChange={(e) => onGridText(e.target.value)}
                     spellCheck={false}
                   />
@@ -345,8 +345,8 @@ export function SearchPanel() {
               ) : (
                 <div className="half-note dim">
                   {composeForm === "ziyou"
-                    ? "输入至少一句中文,即算出它的自由编号。"
-                    : "把格子填满中文字(都在字库内),就会算出这首诗的全集编号。"}
+                    ? "输入至少一句中文,即算出它的自由编号。拼音 / 标点都行,自动只取汉字。"
+                    : "把格子填满中文字(都在字库内),即算出全集编号。拼音 / 标点都行,自动只取汉字。"}
                 </div>
               )}
             </div>

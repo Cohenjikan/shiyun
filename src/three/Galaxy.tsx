@@ -49,7 +49,7 @@ export function Galaxy() {
     // those are dimmer/smaller below) → flying through, the resolvable stars are real poets.
     const DUST = hi ? 120000 : 42000; // soft dim haze (the nebulosity that fills the arms)
     const STARS = hi ? 9000 : 3500; // few faint decoration stars (poets are THE arm stars now)
-    const BULGE = hi ? 42000 : 16000; // dense core cloud (diffuse, gaussian-falloff glow)
+    const BULGE = hi ? 64000 : 24000; // dense core cloud — denser + wider (round-5) → fills the centre
     const TOTAL = DUST + STARS + BULGE;
     const rnd = mulberry32(31337);
     const R = GALAXY.RADIUS;
@@ -72,7 +72,7 @@ export function Galaxy() {
         // cloud + jitter + noise-driven density so the centre reads as blurred, disordered nebulosity
         // (like a real galaxy's core) rather than a structured grid of white dots. The ORDERED poet
         // + arm layer outside is what should carry the map's "logic"; the core is just a white haze.
-        const rr = expR(R * 0.085, R * 0.34); // less steep + larger cap → spread out, not a hard ball
+        const rr = expR(R * 0.10, R * 0.42); // wider spread + larger cap → covers more of the centre
         t = rr / R;
         const phi = rnd() * Math.PI * 2;
         const ct = 2 * rnd() - 1; // cos(theta) for a (flattened) sphere
@@ -84,7 +84,7 @@ export function Galaxy() {
         // dimmer per-particle so additive overlap accumulates into SMOOTH haze (no grainy bright
         // dots), with value-noise clumping so the density is uneven/disordered.
         const nz = vnoise(x * NF * 1.6, z * NF * 1.6);
-        bright = (0.72 - t * 0.85) * (0.55 + rnd() * 0.5) * (0.65 + nz * 0.8);
+        bright = (0.80 - t * 0.75) * (0.55 + rnd() * 0.5) * (0.7 + nz * 0.75); // modest floor lift → no dark patches
       } else {
         // disk: spiral arm population on an exponential radius
         const rr = expR(R * 0.27, R) + R * 0.015;
@@ -93,16 +93,23 @@ export function Galaxy() {
         const twist = t * GALAXY.TWIST;
         const armDev = gauss3(rnd(), rnd(), rnd()) * GALAXY.ARM_SPREAD;
         armProx = Math.exp(-((armDev / GALAXY.ARM_SPREAD) ** 2) * 2.2);
-        const ang = branch + twist + armDev;
+        // Near the core the 4 arms converge into a bright X with dark wedges between. Randomise the
+        // angle FULLY there (strong at the centre → gone by t≈0.45) so the inner backdrop fills into
+        // a round disc — no inter-arm dark zones (round-5 feedback). Arms stay intact further out.
+        const cb = Math.max(0, 0.45 - t) / 0.45;
+        const ang = branch + twist + armDev + (rnd() - 0.5) * Math.PI * 2 * cb * cb;
         const scatter = (v: number) => Math.pow(rnd(), 2.6) * (rnd() < 0.5 ? -1 : 1) * v * rr;
-        x = Math.cos(ang) * rr + scatter(0.16);
-        z = Math.sin(ang) * rr + scatter(0.16);
+        // extra absolute in-plane scatter peaking at the core → fills the central region uniformly
+        const coreFill = cb * cb * R * 0.07;
+        x = Math.cos(ang) * rr + scatter(0.16) + (rnd() - 0.5) * 2 * coreFill;
+        z = Math.sin(ang) * rr + scatter(0.16) + (rnd() - 0.5) * 2 * coreFill;
         y = gauss3(rnd(), rnd(), rnd()) * rr * GALAXY.THICKNESS * (isStar ? 0.8 : 1.1);
         // clumping + dust gaps from value noise; brighter on-arm
         const nz = vnoise(x * NF, z * NF);
         // dimmer decoration stars (fusion): they no longer rival the poet stars in brightness
         const armBoost = isStar ? 0.42 + armProx * 1.0 : 0.34 + armProx * 0.75;
-        bright = armBoost * (0.45 + nz * 0.9) * (0.8 + rnd() * 0.4);
+        // lift the inter-arm + noise floor toward the core so the filled centre has no black gaps
+        bright = (armBoost + cb * 0.4) * (0.45 + cb * 0.25 + nz * 0.8) * (0.8 + rnd() * 0.4);
         if (isStar && armProx > 0.55 && rnd() < 0.04) hii = true; // sparse HII knots on arms
       }
 
