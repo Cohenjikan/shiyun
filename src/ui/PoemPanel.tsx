@@ -81,7 +81,7 @@ export function PoemPanel() {
         <div className="poem-share">
           <ShareButton />
           <button className="cinema-btn" onClick={openCinema} title="把这首诗框成一张可截图分享的卡片（时间暂停）">
-            📷 奇迹时刻
+            奇迹时刻
           </button>
         </div>
       </div>

@@ -548,6 +548,10 @@ canvas {
   background: rgba(130, 180, 255, 0.14);
   border-color: rgba(130, 180, 255, 0.42);
   color: #bcd4ff;
+  /* same size as .cinema-btn so 分享 / 奇迹时刻 sit as a uniform pair */
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 6px;
 }
 .copy-btn.share:hover {
   background: rgba(130, 180, 255, 0.24);
@@ -712,12 +716,15 @@ canvas {
   margin: -2px 0 4px;
 }
 .pi-hit {
+  /* on its OWN line under the title, so even a 1-char title (e.g. 秋) is never squeezed/truncated by it */
+  display: block;
+  width: fit-content;
   font-size: 10px;
   color: var(--ink);
   background: var(--gold);
   border-radius: 4px;
   padding: 0 5px;
-  margin-left: 6px;
+  margin: 3px 0 0;
 }
 .pi-title {
   font-size: 13px;
@@ -1886,17 +1893,18 @@ canvas {
   background: rgba(255, 84, 84, 0.18);
   color: #ff9a9a;
 }
-/* 📷 奇迹时刻 entry button (poem / poet panels) */
+/* 奇迹时刻 entry button (poem / poet panels) — same size as .copy-btn.share so the pair is uniform */
 .cinema-btn {
   background: rgba(255, 210, 122, 0.12);
   border: 1px solid rgba(255, 210, 122, 0.42);
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--gold);
-  font-size: 12px;
-  padding: 4px 11px;
+  font-size: 11px;
+  padding: 3px 10px;
   margin-left: 8px;
   cursor: pointer;
   white-space: nowrap;
+  vertical-align: middle;
 }
 .cinema-btn:hover {
   background: rgba(255, 210, 122, 0.22);

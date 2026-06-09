@@ -289,7 +289,7 @@ export function SearchPanel() {
             </div>
             <div className="half-idx full">{half.index}</div>
             <button className="locate-btn" onClick={() => locateInVoid("ziyou", half.index)}>
-              🛸 飞到这条高位街区 · 点亮代表星
+              飞到这条高位街区 · 点亮代表星
             </button>
           </div>
         </div>
@@ -376,18 +376,18 @@ export function SearchPanel() {
                   <div className="half-idx full">{made.index}</div>
                   {madeReal ? (
                     <button className="locate-btn real" onClick={() => goReal(madeReal)}>
-                      🛸 飞到 {madeReal.name}《{madeReal.title}》的真实行星{madeReal.approx ? "（近似）" : ""}
+                      飞到 {madeReal.name}《{madeReal.title}》的真实行星{madeReal.approx ? "（近似）" : ""}
                     </button>
                   ) : (
                     <button className="locate-btn" onClick={() => locateInVoid(composeForm, made.index)}>
-                      🛸 定位虚空 · 飞过去点亮这首诗
+                      定位虚空 · 飞过去点亮这首诗
                     </button>
                   )}
                   {madeReal && (
                     <div className="rev-real">
                       {madeReal.approx
-                        ? `🎯 这几乎就是一首真实的诗(用字略有异文):${madeReal.name}《${madeReal.title}》`
-                        : `🎯 这正好是一首真实存在的诗:${madeReal.name}《${madeReal.title}》`}
+                        ? `这几乎就是一首真实的诗(用字略有异文):${madeReal.name}《${madeReal.title}》`
+                        : `这正好是一首真实存在的诗:${madeReal.name}《${madeReal.title}》`}
                     </div>
                   )}
                 </div>
@@ -422,18 +422,18 @@ export function SearchPanel() {
                   <div className="half-note dim">推断诗体 · {FORM_LABEL[rev.form] ?? "古体/自由"}</div>
                   {revReal ? (
                     <button className="locate-btn real" onClick={() => goReal(revReal)}>
-                      🛸 飞到 {revReal.name}《{revReal.title}》的真实行星{revReal.approx ? "（近似）" : ""}
+                      飞到 {revReal.name}《{revReal.title}》的真实行星{revReal.approx ? "（近似）" : ""}
                     </button>
                   ) : (
                     <button className="locate-btn" onClick={() => locateInVoid(rev.form, rev.index)}>
-                      🛸 定位虚空 · 飞过去点亮这首诗
+                      定位虚空 · 飞过去点亮这首诗
                     </button>
                   )}
                   {revReal && (
                     <div className="rev-real">
                       {revReal.approx
-                        ? `🎯 这串编号几乎对应一首真实的诗(用字略有异文):${revReal.name}《${revReal.title}》`
-                        : `🎯 这串编号正好对应一首真实存在的诗:${revReal.name}《${revReal.title}》`}
+                        ? `这串编号几乎对应一首真实的诗(用字略有异文):${revReal.name}《${revReal.title}》`
+                        : `这串编号正好对应一首真实存在的诗:${revReal.name}《${revReal.title}》`}
                     </div>
                   )}
                 </div>

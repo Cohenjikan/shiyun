@@ -11,7 +11,7 @@ function FeedbackBox() {
   const [sent, setSent] = useState(false);
   if (!open) {
     return (
-      <button className="set-feedback-open" onClick={() => setOpen(true)}>💬 反馈 · 提个建议或报个 bug</button>
+      <button className="set-feedback-open" onClick={() => setOpen(true)}>反馈 · 提个建议或报个 bug</button>
     );
   }
   return (
@@ -41,13 +41,13 @@ function FeedbackBox() {
           {sent ? "已提交 ✓ 谢谢" : "提交反馈"}
         </button>
       </div>
-      {sent && <div className="set-feedback-ok">收到啦 —— 感谢你的反馈 🌟</div>}
+      {sent && <div className="set-feedback-ok">收到啦 —— 感谢你的反馈</div>}
     </div>
   );
 }
 
 // 诗云设置 menu — collects the 指引 / 行星 / 赠诗 / 引力 controls (moved out of the HUD top bar). Opened by
-// the HUD ⚙设置 button. 赠诗漫游 stays a separate panel (it only shows when 赠诗 is on). 恢复默认 = the
+// the HUD 更多 button. 赠诗漫游 stays a separate panel (it only shows when 赠诗 is on). 恢复默认 = the
 // app defaults (指引 一次性·优化·10s; 行星 关; 赠诗 关; 引力 开).
 const GUIDE_MODES = [
   ["off", "不显示"],

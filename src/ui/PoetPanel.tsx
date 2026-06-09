@@ -125,7 +125,7 @@ export function PoetPanel() {
         <span className="poet-sub">
           {dyn?.label ?? poet.dynasty} · {poet.poemCount} 首真实作品 <ShareButton />
           <button className="cinema-btn" onClick={openCinema} title="框成一张可截图分享的卡片（时间暂停;展开一首诗后可框住那首）">
-            📷 奇迹时刻
+            奇迹时刻
           </button>
         </span>
       </div>
@@ -151,7 +151,7 @@ export function PoetPanel() {
                     title="飞到这首诗的行星 · 点亮"
                     onClick={(e) => { e.stopPropagation(); locatePoem(i); }}
                   >
-                    🛸定位
+                    定位
                   </button>
                   <LazyCopy compute={() => indexFor(i)?.index ?? null} label="复制编号" />
                 </div>

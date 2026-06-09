@@ -130,8 +130,8 @@ export function Cinema() {
 
       {/* resize / reset controls (top-right, opposite the exit). Drag the poem itself to move it. */}
       <div className="cinema-tools">
-        <button className="cinema-tool" onClick={() => zoom(1 / 1.15)} aria-label="缩小" title="缩小">－</button>
-        <button className="cinema-tool" onClick={() => zoom(1.15)} aria-label="放大" title="放大">＋</button>
+        <button className="cinema-tool" onClick={() => zoom(1 / 1.15)} aria-label="缩小" title="缩小">−</button>
+        <button className="cinema-tool" onClick={() => zoom(1.15)} aria-label="放大" title="放大">+</button>
         <button className="cinema-tool" onClick={reset} aria-label="复位" title="复位居中">⟲</button>
       </div>
 

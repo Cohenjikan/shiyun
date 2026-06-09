@@ -36,7 +36,7 @@ export function ShareButton() {
         });
       }}
     >
-      {done ? "链接已复制 ✓" : "🔗 分享"}
+      {done ? "链接已复制 ✓" : "分享"}
     </button>
   );
 }

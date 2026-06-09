@@ -94,7 +94,7 @@ export function HUD() {
           onClick={toggleSettings}
           title="更多：指引 / 行星 / 赠诗 / 引力 / 关于 / 反馈"
         >
-          ⚙ 更多
+          更多
         </button>
         <button
           className="filter"
@@ -113,7 +113,7 @@ export function HUD() {
           onClick={toggleUI}
           title="隐藏全部界面以便截图 · 快捷键 H 恢复"
         >
-          隐藏界面 ⌨H
+          隐藏界面 · H
         </button>
       </div>
 
