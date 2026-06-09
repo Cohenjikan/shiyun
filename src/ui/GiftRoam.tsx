@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../state/store";
-import { getPoet, loadPoetPoems, searchPoets, type PoetRow } from "../data/load";
+import { getPoet, searchPoets, type PoetRow } from "../data/load";
+import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { ensureGiftGraph, giftLinks, giftPath, dedicationPoemIdx, giftGraphReady } from "../data/giftGraph";
 import { poemPosition } from "../three/positions";
 
@@ -13,7 +14,7 @@ const MAX_HOPS = 100;
 // travel to a poet along a 赠诗 edge: append to the trail + lock-follow, then load its poems.
 function hop(poet: PoetRow) {
   useStore.getState().hopToPoet(poet);
-  loadPoetPoems(poet.id).then((poems) => useStore.getState().setPoetPoems(poet.id, poems));
+  fetchPoetPoems(poet.id);
 }
 
 export function GiftRoam() {

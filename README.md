@@ -17,7 +17,7 @@ via an index↔poem bijection that is **computed, never stored**.
 
 一张可在其中飞行的三维星图:**每位历史诗人是一团真实星**(他真实写过的诗),星团之间的**虚空是一切可能的近体诗**。点击虚空,就从噪声里 `unrank` 出一首诗,并显示它在"全集目录"里那个长达 82–229 位的编号——地址几乎和诗本身一样长(目录即图书馆)。
 
-- **全朝代 + 新诗**:先秦 → 当代,15 个朝代同心壳,可按朝代筛选;并收入 **现代新诗**(徐志摩《再别康桥》、海子、北岛、顾城、戴望舒…,自由体归入"其它")。语料以 [Werneror/Poetry](https://github.com/Werneror/Poetry)(MIT,先秦→当代,简体)全历代为骨,叠加 [yuxqiu/modern-poetry](https://github.com/yuxqiu/modern-poetry) 的现代新诗。共 **29,808 位诗人 / 857,877 首诗 / 字库 N = 12,877**(上游原始计数)。这是现有体量最大的"全朝代 · 简体 · 宽松许可 · 可机读"开放语料;唐宋诗人名录近乎齐备,明清因无《全明诗》《全清诗》而偏薄。数据审计与替代方案见 [docs/DATA_AUDIT.md](docs/DATA_AUDIT.md)。
+- **全朝代 + 新诗**:先秦 → 当代,15 个朝代同心壳,可按朝代筛选;并收入 **现代新诗**(徐志摩《再别康桥》、海子、北岛、顾城、戴望舒…,自由体归入"其它")。语料以 [Werneror/Poetry](https://github.com/Werneror/Poetry)(MIT,先秦→当代,简体)全历代为骨,叠加 [sheepzh/poetry](https://github.com/sheepzh/poetry) 与 [yuxqiu/modern-poetry](https://github.com/yuxqiu/modern-poetry) 的现当代新诗(余秀华/海子/顾城/食指…)。共 **32,657 位诗人 / 933,857 首诗 / 字库 N = 12,877(冻结)**。这是现有体量最大的"全朝代 · 简体 · 宽松许可 · 可机读"开放语料;唐宋诗人名录近乎齐备,明清因无《全明诗》《全清诗》而偏薄。数据审计与替代方案见 [docs/DATA_AUDIT.md](docs/DATA_AUDIT.md)。
 - **五种诗体**:五绝/七绝/五律/七律,外加 **自由格式 / 词**(变长断句,换行也由编号决定);**格律开关**:在"合律子目录"里漫游(嵌套于纯随机目录内)。
 - **逐句搜索**:输入任意一句(不限开头) →「真实诗人」里它属于谁(疑是地上霜 → 李白《静夜思》,非首句也能命中),同时给出「纯随机」目录里那个被诗句锁定的 **半编号**(诗的全集编号正以这串高位开头)。
 - **编号反查**:把一个长编号 `unrank` 回它的诗,核对行索引与全文,告诉你这串数字是否对应一首**真实存在**的诗——目录↔诗的闭环。全程显示未截断的完整编号,附一键复制。
@@ -47,10 +47,11 @@ in the "complete catalog" — the address is nearly as long as the poem itself (
 
 - **All dynasties + modern verse** 先秦→当代, 15 concentric shells, filterable; now including
   **modern free verse** (徐志摩's 《再别康桥》, 海子, 北岛, 顾城, 戴望舒… — free forms folded
-  into "other"). Corpus = Werneror (full history, MIT, Simplified) backbone + yuxqiu/modern-poetry
-  modern overlay. **29,808 poets / 857,877 poems / charset N = 12,877** (raw upstream count) — the
-  broadest permissively-licensed Simplified all-dynasties *open* corpus; near-complete on Tang/Song
-  poet rosters, thinner on 明/清 (no complete 全明诗/全清诗 exists). Audit: [docs/DATA_AUDIT.md](docs/DATA_AUDIT.md).
+  into "other"). Corpus = Werneror (full history, MIT, Simplified) backbone + sheepzh/poetry +
+  yuxqiu/modern-poetry modern layers (余秀华, 海子, 顾城, 食指…). **32,657 poets / 933,857 poems /
+  charset N = 12,877 (frozen)** — the broadest permissively-licensed Simplified all-dynasties *open*
+  corpus; near-complete on Tang/Song poet rosters, thinner on 明/清 (no complete 全明诗/全清诗
+  exists). Audit: [docs/DATA_AUDIT.md](docs/DATA_AUDIT.md).
 - **Five forms** (5/7-char quatrains & regulated verse) **+ free-verse / 词** (variable line
   lengths — the line breaks are part of the index too) + a 格律 toggle that roams only the
   valid sub-catalog (nested inside the random one).

@@ -3,7 +3,8 @@ import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import { useStore } from "../state/store";
 import { pullAt, COMMON_K } from "../engine/engineApi";
-import { loadPoetPoems, getPoet, type PoetRow } from "../data/load";
+import { getPoet, type PoetRow } from "../data/load";
+import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { giftLinks, giftGraphReady } from "../data/giftGraph";
 import { pickTargets } from "./picking";
 import { spinXZ, unspinXZ, SPIN_RATE, GALAXY } from "./galaxyParams";
@@ -262,18 +263,18 @@ export function FlyControls() {
       if (hit?.kind === "poet") {
         st().selectPoet(hit.poet);
         st().lockPoet(hit.poet.id); // lock the star in the centre + follow it
-        loadPoetPoems(hit.poet.id).then((poems) => useStore.getState().setPoetPoems(hit.poet.id, poems));
+        fetchPoetPoems(hit.poet.id);
       } else if (hit?.kind === "poem") {
         // clicked a poem-planet → open its poet panel focused on that poem + light + lock the planet.
         const { poet, poemIdx } = hit;
         st().selectPoet(poet, { poemIdx, title: "", firstLine: "" });
         st().lockPoem(poet.id, poemIdx);
-        loadPoetPoems(poet.id).then((poems) => useStore.getState().setPoetPoems(poet.id, poems));
+        fetchPoetPoems(poet.id);
         st().pulseAt(poemPosition(poet, poemIdx), true);
       } else if (giftHop) {
         // clicked a 赠诗 arc of the selected poet → fly across it to the other poet (hop + trail)
         st().hopToPoet(giftHop);
-        loadPoetPoems(giftHop.id).then((poems) => useStore.getState().setPoetPoems(giftHop.id, poems));
+        fetchPoetPoems(giftHop.id);
       } else {
         const v = ndc(e.clientX, e.clientY);
         ray.current.setFromCamera(v, camera);

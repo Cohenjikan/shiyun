@@ -4,7 +4,8 @@
 // The hash is kept in sync with the current selection (App effect); panels copy location.href.
 import { useStore } from "./store";
 import { pulledFromIndex } from "../engine/engineApi";
-import { getPoet, loadPoetPoems } from "../data/load";
+import { getPoet } from "../data/load";
+import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { poetPosition } from "../three/PoetStars";
 
 /** The hash that represents the current selection (empty if nothing selected). */
@@ -36,7 +37,7 @@ export function applyHash(): void {
     if (poet) {
       st.selectPoet(poet);
       st.setFlyTarget(poetPosition(poet));
-      loadPoetPoems(poet.id).then((poems) => useStore.getState().setPoetPoems(poet.id, poems));
+      fetchPoetPoems(poet.id);
     }
   } else if (k === "p") {
     // universal: `#p=<index>`. Tolerate a legacy `form.index` by taking the part after the dot.

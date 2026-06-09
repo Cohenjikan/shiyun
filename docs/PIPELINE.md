@@ -1,12 +1,18 @@
-# Step-3 Data Pipeline (SHIPPED)
+# Step-3 Data Pipeline (SHIPPED · v2)
 
 `pipeline/build-data.mjs` — a one-shot build-time Node script (runs on the dev machine,
-never the server). **DONE 2026-06-08.** Output → `public/data/`: the small index files are
-tracked in git, the heavy `poems/` + `lines/` sets are git-ignored (rebuild locally). See
-[Data model](#output-actual).
+never the server). **v1 2026-06-08 · v2 (sheepzh modern layer + 字库 freeze) 2026-06-10.**
+Output → `public/data/`: the small index files are tracked in git, the heavy `poems/` +
+`lines/` + `search/` sets are git-ignored (rebuild locally / restore from the GitHub data
+backup). See [Data model](#output-actual).
 
-> Run: clone the corpus to **C: (fast NVMe)**, then
-> `node --max-old-space-size=4096 pipeline/build-data.mjs`
+> Run: clone the corpora to **C: (fast NVMe)**, then
+> `node --max-old-space-size=4096 pipeline/build-data.mjs && npm run build:lines && npm run build:sidecars && npm run build:search`
+
+> ⚠ **字库 FROZEN by default** (production permalink contract): the script reads the existing
+> `public/data/charset.json`, re-emits it byte-identical, and SKIPS any poem containing an
+> out-of-字库 char. `REFLOW_CHARSET=1` re-derives the charset — that remaps every 编号 and
+> breaks all shared links; only for a deliberate major version.
 
 ## Input
 
@@ -14,14 +20,25 @@ tracked in git, the heavy `poems/` + `lines/` sets are git-ignored (rebuild loca
 `C:\corpus\Werneror-Poetry` — all-dynasties CSV (`"题目","朝代","作者","内容"`, **Simplified**,
 MIT), split into per-dynasty files (宋_1..4, 明_1..4, 清_1..2, + transition buckets).
 
-**现代 新诗 (free verse):** [`yuxqiu/modern-poetry`](https://github.com/yuxqiu/modern-poetry)
-contemporary set cloned to `C:\corpus\modern-poetry` (Apache-2.0) — adds the modern poets the
-classical corpus lacks (徐志摩《再别康桥》, 海子, 北岛, 顾城, 戴望舒, 闻一多…): **+4,494 poems /
-+508 poets**. Free verse has no 格律, so every modern poem → form `"other"`; a 民国-era name set
-→ dynasty `近现代` (matches Werneror), all others → `当代`. Their lines feed the content-search
-index, so 新诗 is searchable too. **A missing clone now FAILS the build loudly** (the git-tracked
-`poets.index.json` already includes the 508 modern poets, so a Werneror-only rebuild would desync
-`poems/`+`lines/` from the index). To intentionally build Werneror-only, set `ALLOW_NO_MODERN=1`.
+**现代 新诗 (free verse):** TWO sources, ingested in order with cross-source content dedup:
+
+1. [`yuxqiu/modern-poetry`](https://github.com/yuxqiu/modern-poetry) contemporary set cloned to
+   `C:\corpus\modern-poetry` (Apache-2.0): **+4,494 poems / +508 poets** — preserved verbatim
+   (poem order/idx unchanged from v1).
+2. **v2:** [`sheepzh/poetry`](https://github.com/sheepzh/poetry) 汉语现代诗歌语料库 cloned to
+   `C:\corpus\sheepzh-poetry` (tooling MIT; poem texts author-copyrighted, 非商用):
+   **+75,980 poems / +2,849 poets** after (a) content-dedup vs yuxqiu (3,016 dropped),
+   (b) junk-folder filter — author must match `^[Han·]{1,8}$` (125 handle/test folders like
+   `666_666` dropped), (c) the charset-frozen gate (1,597 poems w/ out-of-字库 chars skipped).
+   Layout `data/<作者>_<拼音>/<诗名>.pt`; format `title:`/`date:` headers + blank line + body.
+   On Windows, clone needs `core.longpaths` + a `git restore` retry (~10 files with NTFS-invalid
+   names like `…?.pt` stay missing — acceptable).
+
+Free verse has no 格律, so every modern poem → form `"other"`; a 民国-era name set → dynasty
+`近现代` (matches Werneror), all others → `当代`. Their lines feed the content-search index, so
+新诗 is searchable too. **A missing clone FAILS the build loudly** (the git-tracked
+`poets.index.json` includes these poets, so rebuilding without them would desync `poems/`+`lines/`
+from the index). Intentional opt-outs: `ALLOW_NO_MODERN=1` / `ALLOW_NO_SHEEPZH=1`.
 
 **Simplified is kept as-is — no OpenCC, no chinese-poetry overlay, no 平水韵.** Rationale:
 the user direction is default-random generation (not self-built 平仄), and users search/type in

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../state/store";
 import { DYNASTY_BY_KEY } from "../data/dynasties";
+import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { anyTextIndex } from "../engine/engineApi";
 import { poemPosition } from "../three/positions";
 import { ShareButton } from "./CopyButton";
@@ -43,6 +44,7 @@ function LazyCopy({ compute, label }: { compute: () => string | null; label: str
 export function PoetPanel() {
   const poet = useStore((s) => s.selectedPoet);
   const poems = useStore((s) => s.poetPoems);
+  const poemsError = useStore((s) => s.poetPoemsError);
   const focus = useStore((s) => s.poetFocus);
   const close = useStore((s) => s.clearPoet);
   const pulseAt = useStore((s) => s.pulseAt);
@@ -129,7 +131,12 @@ export function PoetPanel() {
           </button>
         </span>
       </div>
-      {poems === null ? (
+      {poems === null && poemsError === poet.id ? (
+        <div className="loading-row error">
+          作品载入失败,可能是网络波动。
+          <button className="retry-btn" onClick={() => fetchPoetPoems(poet.id)}>重试</button>
+        </div>
+      ) : poems === null ? (
         <div className="loading-row">载入作品…</div>
       ) : (
         <div className="poem-list">

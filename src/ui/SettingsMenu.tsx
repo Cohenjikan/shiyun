@@ -73,6 +73,7 @@ const CREDITS: { group: string; items: { name: string; url: string; note: string
     group: "语料 · 数据",
     items: [
       { name: "Werneror/Poetry", url: "https://github.com/Werneror/Poetry", note: "全历代语料骨架 · 先秦→当代", lic: "MIT" },
+      { name: "sheepzh/poetry", url: "https://github.com/sheepzh/poetry", note: "汉语现代诗歌语料库 · 现当代主层", lic: "MIT*" },
       { name: "yuxqiu/modern-poetry", url: "https://github.com/yuxqiu/modern-poetry", note: "现代新诗", lic: "Apache-2.0" },
       { name: "chinese_word_rhyme", url: "https://github.com/charlesix59/chinese_word_rhyme", note: "平水韵 · 声调 / 韵部", lic: "MIT" },
       { name: "chinese-poetry", url: "https://github.com/chinese-poetry/chinese-poetry", note: "唐宋语料 · 评估参考", lic: "MIT" },
@@ -107,7 +108,9 @@ function Credits() {
                 </ul>
               </div>
             ))}
-            <p className="credits-foot">灵感 · 刘慈欣《诗云》 · 博尔赫斯《巴别图书馆》</p>
+            <p className="credits-foot">
+              * 现当代诗歌文本著作权归原作者所有,本站为非商业使用 · 灵感 · 刘慈欣《诗云》 · 博尔赫斯《巴别图书馆》
+            </p>
           </div>
         </div>
       )}

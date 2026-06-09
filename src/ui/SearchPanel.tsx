@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
-import { searchPoets, searchByLine, searchPoems, loadPoetPoems, getPoet, type PoetRow, type LineHit } from "../data/load";
+import { searchByLine, searchPoems, loadPoetPoems, getPoet, type PoetRow, type LineHit } from "../data/load";
+import { searchPoetsSmart } from "../data/poetAliases";
+import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { DYNASTY_BY_KEY, DYNASTIES } from "../data/dynasties";
 import {
   halfIndexAuto,
@@ -54,17 +56,23 @@ function nearMatch(a: string, b: string): boolean {
 }
 
 // Does the typed poem happen to be a REAL corpus poem (exactly, or a near variant)? (loop closure.)
+// Network-tolerant: a failed bucket fetch just means the real-poem detector stays silent — it must
+// never surface an error (it's a bonus check) nor leave an unhandled rejection.
 async function findReal(lines: string[]): Promise<RealHit> {
   if (!lines.length || !lines[0]) return null;
-  const text = lines.join("");
-  const hits = await searchByLine(lines[0]);
-  for (const h of hits.slice(0, 6)) {
-    const poems = await loadPoetPoems(h.poetId);
-    const corpus = poems[h.poemIdx]?.p.join("") ?? "";
-    if (!corpus) continue;
-    const base = { name: h.poet?.name ?? "佚名", title: h.title || "无题", poetId: h.poetId, poemIdx: h.poemIdx, firstLine: h.firstLine };
-    if (corpus === text) return base;
-    if (nearMatch(corpus, text)) return { ...base, approx: true };
+  try {
+    const text = lines.join("");
+    const hits = await searchByLine(lines[0]);
+    for (const h of hits.slice(0, 6)) {
+      const poems = await loadPoetPoems(h.poetId);
+      const corpus = poems[h.poemIdx]?.p.join("") ?? "";
+      if (!corpus) continue;
+      const base = { name: h.poet?.name ?? "佚名", title: h.title || "无题", poetId: h.poetId, poemIdx: h.poemIdx, firstLine: h.firstLine };
+      if (corpus === text) return base;
+      if (nearMatch(corpus, text)) return { ...base, approx: true };
+    }
+  } catch {
+    /* offline / CDN hiccup — skip the detector */
   }
   return null;
 }
@@ -75,6 +83,7 @@ export function SearchPanel() {
   const [collapsed, setCollapsed] = useState(COARSE);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PoetRow[]>([]);
+  const [poetNote, setPoetNote] = useState<string | null>(null); // alias redirect / graceful-miss line
   const [hits, setHits] = useState<LineHit[]>([]);
   const [half, setHalf] = useState<HalfIndex | null>(null);
 
@@ -115,7 +124,9 @@ export function SearchPanel() {
 
   function onChangePoet(v: string) {
     setQ(v);
-    setResults(searchPoets(v, 24));
+    const smart = searchPoetsSmart(v, 24);
+    setResults(smart.results);
+    setPoetNote(smart.note);
   }
   function onChangeLine(v: string) {
     setQ(v);
@@ -128,7 +139,7 @@ export function SearchPanel() {
   function goPoet(p: PoetRow, focus?: { poemIdx: number; title: string; firstLine: string }) {
     selectPoet(p, focus ?? null);
     lockPoet(p.id); // lock + follow the poet (camera glides in and tracks it)
-    loadPoetPoems(p.id).then((poems) => useStore.getState().setPoetPoems(p.id, poems));
+    fetchPoetPoems(p.id);
     setResults([]);
   }
   function goHit(h: LineHit) {
@@ -248,6 +259,11 @@ export function SearchPanel() {
           }}
           spellCheck={false}
         />
+      )}
+
+      {/* alias redirect (「陶渊明」即「陶潜」) or the graceful-miss explanation (庄子是文非诗…) */}
+      {!collapsed && tab === "poet" && q.trim() && poetNote && (
+        <div className={results.length ? "search-note" : "search-note miss"}>{poetNote}</div>
       )}
 
       {!collapsed && tab === "poet" && results.length > 0 && (
@@ -456,6 +472,16 @@ export function SearchPanel() {
             </div>
             <div className="legend-list">
               {DYNASTIES.map((d) => {
+                // 五代十国 shell is EMPTY by data design (语料把五代诗人归入唐,如李煜) — render it as a
+                // non-interactive note instead of a dead toggle.
+                if (d.key === "wudai") {
+                  return (
+                    <div key={d.key} className="legend-row note" title="语料中五代诗人(如李煜)归入唐">
+                      <span className="dot" style={{ background: d.color, opacity: 0.4 }} />
+                      <span className="legend-label">{d.label} · 已并入唐</span>
+                    </div>
+                  );
+                }
                 const off = hidden.has(d.key);
                 return (
                   <button

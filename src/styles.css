@@ -198,6 +198,11 @@ canvas {
   font-size: 13px;
   text-align: left;
 }
+/* 五代十国 — empty shell by data design (its poets live under 唐); informational, not clickable */
+.legend-row.note {
+  cursor: default;
+  color: var(--muted);
+}
 .legend-row:hover {
   background: rgba(255, 255, 255, 0.05);
 }
@@ -414,6 +419,22 @@ canvas {
 }
 .search input:focus {
   border-color: rgba(255, 210, 122, 0.5);
+}
+/* alias redirect (「陶渊明」即「陶潜」) / graceful-miss explanation under the poet search input */
+.search-note {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(255, 210, 122, 0.08);
+  border: 1px solid rgba(255, 210, 122, 0.25);
+  border-radius: 8px;
+  color: var(--gold-soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.search-note.miss {
+  background: rgba(8, 10, 18, 0.92);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--muted);
 }
 .search-results {
   margin-top: 6px;
@@ -695,6 +716,28 @@ canvas {
   font-size: 13px;
   padding: 20px 0;
   text-align: center;
+}
+.loading-row.error {
+  color: #e8a0a0;
+}
+/* 重试 — poem-fetch / boot-data failure recovery */
+.retry-btn {
+  margin-left: 10px;
+  background: rgba(255, 210, 122, 0.12);
+  border: 1px solid rgba(255, 210, 122, 0.42);
+  border-radius: 6px;
+  color: var(--gold);
+  font-size: 12px;
+  padding: 3px 12px;
+  cursor: pointer;
+}
+.retry-btn:hover {
+  background: rgba(255, 210, 122, 0.22);
+}
+.retry-btn.big {
+  margin: 14px 0 0;
+  font-size: 14px;
+  padding: 8px 26px;
 }
 .poem-list {
   display: flex;

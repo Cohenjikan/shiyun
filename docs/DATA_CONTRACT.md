@@ -50,11 +50,17 @@ bytes) — see `src/data/dynasties.ts` (`bandRadius`, `hashStr`, `spherePoint`).
 
 ## Corpus (all dynasties)
 
-Locked sources (verified 2026-06-08). Combined: **857,877 poems / 29,808 poets** (字库 N = 12,877).
-This is a **raw upstream count** (no formal cross-source dedup; 互见/重出 and 无名氏 collapse inflate it by a
-low-single-digit %). It is the broadest permissively-licensed Simplified all-dynasties **open** corpus — near
-complete on 唐/宋 poet rosters, thinner on 明/清 (no 全明诗/全清诗 exists anywhere). Full audit + alternatives:
-[docs/DATA_AUDIT.md](DATA_AUDIT.md).
+Locked sources (v2, verified 2026-06-10). Combined: **933,857 poems / 32,657 poets** (字库 N = 12,877,
+**FROZEN** — see below). Classical layer is a raw upstream count (互见/重出 and 无名氏 collapse inflate it by a
+low-single-digit %); the modern layer is content-deduped across its two sources. It is the broadest
+permissively-licensed Simplified all-dynasties **open** corpus — near complete on 唐/宋 poet rosters, thinner
+on 明/清 (no 全明诗/全清诗 exists anywhere). Full audit + alternatives: [docs/DATA_AUDIT.md](DATA_AUDIT.md).
+
+> ⚠ **字库 FREEZE (production contract).** Every shared 编号 permalink encodes a poem in radix N+1 over the
+> shipped charset, whose ORDER defines each char's symbol id. Changing the charset's content or order remaps
+> the whole bijection and silently breaks every shared link. `build-data.mjs` therefore re-emits the existing
+> `charset.json` **byte-identical** and SKIPS any poem containing an out-of-字库 char (v2 import: 1,597 sheepzh
+> poems skipped). Re-deriving requires an explicit `REFLOW_CHARSET=1` and is a major, link-breaking version.
 
 - **Backbone — [`Werneror/Poetry`](https://github.com/Werneror/Poetry)** — ~853k poems /
   ~29.3k authors (Werneror alone, before the modern merge), **先秦 → 当代**, MIT, CSV, columns
@@ -71,6 +77,13 @@ complete on 唐/宋 poet rosters, thinner on 明/清 (no 全明诗/全清诗 exi
   — Apache-2.0, cloned to `C:/corpus/modern-poetry`; **+4,494 free-verse poems / +508 poets**
   (徐志摩《再别康桥》, 海子, 北岛, 顾城, 戴望舒…). `{author,title,paragraphs[]}`; free verse → form
   `other`; 民国 poets → **近现代** else **当代**. Their lines join the all-lines search index.
+- **新诗 v2 主层 — [`sheepzh/poetry`](https://github.com/sheepzh/poetry) 汉语现代诗歌语料库** — tooling
+  MIT (poem TEXTS remain author-copyrighted, repo states 非商用 — same exposure class as yuxqiu; noted in
+  the in-app credits), cloned to `C:/corpus/sheepzh-poetry`; **+75,980 poems / +2,849 poets** after
+  content-dedup vs yuxqiu (3,016 dups dropped), junk-folder filter (125 non-Han author handles dropped) and
+  the charset-frozen gate (1,597 poems with out-of-字库 chars skipped). Layout `data/<作者>_<拼音>/<诗名>.pt`;
+  `.pt` = `title:`/`date:` headers + body lines. 余秀华(249) 顾城(489) 海子(323) 食指(43) 北岛(226)…
+  Same 民国→近现代/else 当代 mapping (hand-set expanded by ~20 names).
 
 Per-poet record `{name, dynasty, poemCount}` = `GROUP BY 作者, 朝代`. Dates need an external
 Wikidata join (out of scope for v1).

@@ -10,6 +10,69 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
 
 ---
 
+## 2026-06-10 — Session: 8th agent · round 5 (post-launch P0/P1/P2 — alias search, error fallbacks, data v2, 自建反馈后端)
+
+Post-launch hardening per the owner's prioritized list. Verify gate green: tsc · **93 tests** (4 new) ·
+vite build; every UI path also exercised live in the preview browser.
+
+**P0-1 — 诗人别名搜索 + 落空文案** (`src/data/poetAliases.ts` NEW + test, `SearchPanel`)
+- ~230-entry 字号/别称→语料本名 alias layer over poet search: 搜「陶渊明」→ 陶潜 (语料本名!), 李太白→李白,
+  苏东坡→苏轼, with a 「X」即「Y」 note. `NOT_POETS` explains prose-master misses (庄子/诸葛亮/三字经…) and
+  points 探诗 at their 虚空编号; generic miss line otherwise.
+- **The integrity test caught real corpus traps**: 王右丞/李义山/晦庵/柳三变/元遗山/元美/文衡山/祝枝山/天随子
+  exist as their own duplicate-attribution rows, **方回 is a real distinct 元代 poet** (alias→贺铸 would have
+  hidden him), and **王羲之 has real 兰亭诗** (removed from NOT_POETS). Runtime rule: a real row always wins.
+- Fixed the SAME dead-target bug in the pipeline: `GIFT_ALIAS` mapped 渊明-family → "陶渊明" (no such row) →
+  those dedication edges never resolved. Now → 陶潜; gift edges 4,849 → **4,976**. build-search FAMOUS also
+  fixed (陶渊明→陶潜) + modern famous added (食指/余秀华/西川…).
+
+**P0-2 — 加载失败兜底 + 浏览器守门** (`load.ts`, `poetPoemsLoader.ts` NEW, `store`, `PoetPanel`, `App`, `index.html`)
+- **Found + fixed a real production bug while verifying**: `loadPoetPoems` CACHED FAILURES as successes —
+  `.catch(() => ({}))` latched an empty bucket on any network hiccup, so the poet rendered "0 poems" forever
+  (no error, retry impossible). Failures now THROW and are never cached; 404 vs network-failure are
+  distinguished for the sidecar cache.
+- Central `fetchPoetPoems` (replaces 5 copy-pasted call sites) reports failure → PoetPanel shows
+  作品载入失败 + 重试 (verified: simulated offline → error row; healed + retry → 李白 1107 首 render).
+- Boot failure → loading screen shows 星图数据载入失败 + 重新载入 (was an eternal spinner).
+- `index.html` gains a plain-ES5 capability gate: no BigInt / no WebGL → a human message instead of a black screen.
+
+**Data v2 — sheepzh/poetry modern layer, charset-FROZEN** (`pipeline/build-data.mjs`)
+- 字库 freeze is now the DEFAULT build behavior (production contract): existing `charset.json` re-emitted
+  **byte-identical**, any poem with an out-of-字库 char is skipped → N=12,877 unchanged → **every existing
+  编号 permalink survives**. `REFLOW_CHARSET=1` for a deliberate breaking rebuild.
+- Imported [sheepzh/poetry](https://github.com/sheepzh/poetry) (汉语现代诗歌语料库, `data/作者_拼音/诗名.pt`):
+  **+75,980 poems / +2,849 poets** after content-dedup vs yuxqiu (3,016), junk-folder filter (125 non-Han
+  handles), charset gate (1,597 skipped). New totals **32,657 poets / 933,857 poems**. 余秀华 249 · 顾城 489 ·
+  海子 323 · 徐志摩 19→65 · 食指 43. Full chain rebuilt (poems/lines/sidecars/search); git-tracked
+  charset/lexicon byte-identical (verified via git diff), poets.index/gifts/manifest updated.
+- Modern poem TEXTS remain author-copyrighted (repo: 非商用) — same exposure class as yuxqiu; noted in
+  credits (* footnote) + DATA_CONTRACT.
+
+**自建反馈后端** (`deploy/feedback-server.mjs` NEW + DEPLOY §5 rewrite)
+- Owner's direction: **our own backend, no third-party**. Zero-dep node collector (~100 lines): POST
+  /api/feedback → JSONL append; token-protected GET inbox; coarse rate limit; **no IP stored** (privacy by
+  design). Smoke-tested (POST ok / empty 400 / no-token 403 / token list / health).
+- DEPLOY §5 rewritten to lead with self-hosted (systemd unit + nginx same-origin location → no CORS) +
+  client wiring `VITE_FEEDBACK_ENDPOINT="/api/feedback"`. Worker/Formspree demoted to no-server fallback.
+  The 🟡 ACTION-FOR-运维 callout updated accordingly.
+
+**P1 — LICENSE / OG 卡 / favicon / 五代十国**
+- `LICENSE` (MIT + data-rights note) — README claimed MIT but the file was missing.
+- Share preview: full og/twitter meta in `index.html`; `public/og.jpg` (1200×630 星海 wordmark card,
+  canvas-generated) + `public/favicon.png`; `__OG_ORIGIN__` build-time replacement from `VITE_SITE_ORIGIN`
+  (vite.config inline plugin; unset → root-relative).
+- 五代十国 dynasty chip → non-interactive 「已并入唐」 note (the shell is empty by data design; 李煜 lives
+  under 唐).
+
+**P2 — dev vulns / chunk**
+- `npm audit` (prod deps): **0 vulnerabilities**. The 5 install-time vulns (1 critical) are ALL dev-chain
+  (esbuild dev-server GHSA via vite≤6/vitest); the fix is vite 8 — a breaking major NOT taken pre-launch.
+  Revisit post-launch. Production static output is unaffected.
+- three.js chunk warning resolved via `chunkSizeWarningLimit: 700` + rationale comment (the app IS the
+  canvas; splitting three out of the critical path buys nothing).
+
+---
+
 ## 2026-06-09 — Session: 8th agent (pre-launch review — UI polish, data audit, feedback backend, deploy)
 
 Final pre-launch pass. Verify gate green every round: `tsc --noEmit` + `vite build` + **89 tests**; UI

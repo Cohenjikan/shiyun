@@ -97,15 +97,19 @@ export async function loadData(base = "/data"): Promise<DataManifest> {
   return manifest;
 }
 
+// Failures THROW and are NEVER cached. The old `.catch(() => ({}))` silently latched an empty
+// object into the cache on any transient network hiccup — that poet then rendered as "0 poems"
+// forever (no error, no retry could help). A thrown rejection instead reaches fetchPoetPoems's
+// catch → the PoetPanel error + 重试 row.
 async function loadBucketWhole(bucket: string, base: string): Promise<Record<string, PoemRecord[]>> {
   let obj = _bucketCache.get(bucket);
   if (!obj) {
-    obj = await fetch(`${base}/poems/${bucket}.json`)
-      .then((r) => (r.ok ? r.json() : {}))
-      .catch(() => ({}));
-    _bucketCache.set(bucket, obj!);
+    const r = await fetch(`${base}/poems/${bucket}.json`);
+    if (!r.ok) throw new Error(`poems bucket ${bucket} → HTTP ${r.status}`);
+    obj = (await r.json()) as Record<string, PoemRecord[]>;
+    _bucketCache.set(bucket, obj); // only SUCCESS is cached
   }
-  return obj!;
+  return obj;
 }
 
 // Egress saver (#12): a poet's poems are a few KB, but a bucket is ~0.9 MB. With the byte-offset
@@ -120,11 +124,16 @@ export async function loadPoetPoems(id: string, base = "/data"): Promise<PoemRec
   if (_manifest?.poemSidecar && !_rangeUnsupported) {
     let idx = _idxCache.get(bucket);
     if (idx === undefined) {
-      const fetched: Record<string, [number, number]> | null = await fetch(`${base}/poems/${bucket}.idx.json`)
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null);
-      _idxCache.set(bucket, fetched);
-      idx = fetched;
+      try {
+        const r = await fetch(`${base}/poems/${bucket}.idx.json`);
+        // 404 genuinely means "no sidecar in this dataset" → latch null (whole-bucket from now on).
+        // A NETWORK failure must NOT be latched — next attempt should try the sidecar again.
+        const fetched: Record<string, [number, number]> | null = r.ok ? await r.json() : null;
+        _idxCache.set(bucket, fetched);
+        idx = fetched;
+      } catch {
+        idx = null; // transient — skip Range this attempt, don't poison the cache
+      }
     }
     const ent = idx?.[id];
     if (ent) {
@@ -162,6 +171,8 @@ export async function loadPoetPoems(id: string, base = "/data"): Promise<PoemRec
 
   const obj = await loadBucketWhole(bucket, base);
   const poems = obj[id] || [];
+  // a VALID bucket without this id = index↔buckets desync (the data-provisioning bug class)
+  if (!poems.length) console.warn(`poet ${id}: bucket ${bucket} loaded but has no entry (data desync?)`);
   _poemCache.set(id, poems);
   return poems;
 }

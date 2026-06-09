@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { Galaxy } from "./three/Galaxy";
@@ -38,6 +38,8 @@ export default function App() {
   const selectedPoet = useStore((s) => s.selectedPoet);
   const uiHidden = useStore((s) => s.uiHidden);
   const cinema = useStore((s) => s.cinema);
+  // boot-data failure (network/CDN) — without this the user faces an eternal 正在点亮… spinner
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     loadData()
@@ -45,7 +47,10 @@ export default function App() {
         setLoaded(true);
         applyHash(); // restore a shared #a=poet / #p=poem link
       })
-      .catch((e) => console.error("数据载入失败", e));
+      .catch((e) => {
+        console.error("数据载入失败", e);
+        setLoadError(true);
+      });
   }, [setLoaded]);
 
   // H = hide / show ALL overlay UI (screenshot mode). Ignored while typing in a field.
@@ -124,7 +129,14 @@ export default function App() {
       {!loaded && (
         <div className="loading-screen">
           <div className="ls-title">诗云</div>
-          <div className="ls-sub">正在点亮 29,808 位诗人…</div>
+          {loadError ? (
+            <>
+              <div className="ls-sub">星图数据载入失败 —— 可能是网络波动。</div>
+              <button className="retry-btn big" onClick={() => location.reload()}>重新载入</button>
+            </>
+          ) : (
+            <div className="ls-sub">正在点亮 32,657 位诗人…</div>
+          )}
         </div>
       )}
     </div>

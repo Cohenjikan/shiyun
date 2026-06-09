@@ -7,6 +7,16 @@ Inspired by 刘慈欣《诗云》 + 博尔赫斯《巴别图书馆》: a roamabl
 is a star and the void between them is **every possible poem**, pulled out on click — *computed,
 never stored* (every poem ⇄ a big-integer index, bijectively).
 
+> **▶ Status (2026-06-10, 8th agent · round 5 — post-launch P0/P1/P2):** **(1) 别名搜索** — 搜「陶渊明/李太白/
+> 苏东坡」命中本名行;庄子/诸葛亮/三字经 落空时给体面解释 (`src/data/poetAliases.ts` + integrity test)。
+> **(2) 加载兜底** — 修了 loadPoetPoems 把网络失败缓存成"0 首"的真 bug;诗人面板/启动屏都有 错误+重试;
+> index.html 加 ES5 守门(无 BigInt/WebGL → 文案而非黑屏)。**(3) 数据 v2** — sheepzh/poetry 现代层并入,
+> **字库逐字节冻结**(N=12,877 不变 → 所有已分享编号链接稳定):**32,657 诗人 / 933,857 首**(余秀华249/顾城489/
+> 海子323/食指43);重建管线默认 FROZEN,`REFLOW_CHARSET=1` 才重排(会废掉全部旧链接,慎用)。数据三目录已
+> 同步回 main worktree(旧版保留为 `*_v1_backup`),并备份到 GitHub(见 DEPLOY §1.0)。**(4) 自建反馈后端** —
+> `deploy/feedback-server.mjs`(零依赖/JSONL/不存IP/token 收件箱),DEPLOY §5 重写为自建优先,运维照抄即可。
+> **(5) P1** — LICENSE/OG 分享卡(public/og.jpg)/favicon/五代十国标注「已并入唐」。93 tests 全绿。
+>
 > **▶ Status (2026-06-09, after the 8th agent — pre-launch review):** all prior features + this round's
 > polish are DONE + verified (typecheck · 89 tests · production build). This round:
 > **(1) 奇迹时刻** — removed the 画框 (it collided with 退出); the tagline no longer orphans its last char

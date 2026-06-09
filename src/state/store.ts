@@ -27,6 +27,8 @@ interface State {
   hoverPoem: { title: string; x: number; y: number } | null; // 诗名指引: hovered planet's title near cursor
   selectedPoet: PoetRow | null;
   poetPoems: PoemRecord[] | null;
+  // poetId whose poem fetch FAILED (network) — PoetPanel turns the eternal 载入作品… into an error + 重试
+  poetPoemsError: string | null;
   poetFocus: { poemIdx: number; title: string; firstLine: string } | null; // poem to surface (诗句 search)
   // 赠诗 network
   showGifts: boolean;
@@ -87,6 +89,7 @@ interface State {
   setHoverPoem: (h: { title: string; x: number; y: number } | null) => void;
   selectPoet: (p: PoetRow, focus?: { poemIdx: number; title: string; firstLine: string } | null) => void;
   setPoetPoems: (id: string, poems: PoemRecord[]) => void;
+  setPoetPoemsError: (id: string | null) => void;
   clearPoet: () => void;
   hopToPoet: (p: PoetRow) => void; // travel along a 赠诗 edge: select + lock + APPEND to the trail (or
   //   trim back to it if already on the trail). Backed by GiftTrail's persistent return lines.
@@ -131,6 +134,7 @@ export const useStore = create<State>((set) => ({
   hoverPoem: null,
   selectedPoet: null,
   poetPoems: null,
+  poetPoemsError: null,
   poetFocus: null,
   showGifts: false,
   guideMode: "flash",
@@ -187,17 +191,19 @@ export const useStore = create<State>((set) => ({
   setHoverPoem: (hoverPoem) => set({ hoverPoem }),
   selectPoet: (selectedPoet, focus = null) =>
     // a NORMAL selection (3D star / search / planet) starts a FRESH trail at this poet (点无关诗人清除)
-    set({ selectedPoet, poetPoems: null, poetFocus: focus, selected: null, giftTrail: [selectedPoet.id] }),
+    set({ selectedPoet, poetPoems: null, poetPoemsError: null, poetFocus: focus, selected: null, giftTrail: [selectedPoet.id] }),
   setPoetPoems: (id, poems) =>
-    set((s) => (s.selectedPoet?.id === id ? { poetPoems: poems } : {})),
-  clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetFocus: null, lockPoetId: null, lockPoemIdx: null, giftTrail: [], hoverPoem: null }),
+    set((s) => (s.selectedPoet?.id === id ? { poetPoems: poems, poetPoemsError: null } : {})),
+  setPoetPoemsError: (id) =>
+    set((s) => (id === null || s.selectedPoet?.id === id ? { poetPoemsError: id } : {})),
+  clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetPoemsError: null, poetFocus: null, lockPoetId: null, lockPoemIdx: null, giftTrail: [], hoverPoem: null }),
   hopToPoet: (poet) =>
     set((s) => {
       const id = poet.id;
       const i = s.giftTrail.indexOf(id);
       // already on the trail → trim back to it (返回); else append, capping at 11 nodes (= 10 return lines)
       const giftTrail = i >= 0 ? s.giftTrail.slice(0, i + 1) : [...s.giftTrail, id].slice(-11);
-      return { selectedPoet: poet, poetPoems: null, poetFocus: null, selected: null, lockPoetId: id, lockPoemIdx: null, giftTrail };
+      return { selectedPoet: poet, poetPoems: null, poetPoemsError: null, poetFocus: null, selected: null, lockPoetId: id, lockPoemIdx: null, giftTrail };
     }),
   clearTrail: () => set((s) => ({ giftTrail: s.selectedPoet ? [s.selectedPoet.id] : [], pathResult: null })),
   setPath: (pathStart, pathEnd, pathResult) => set({ pathStart, pathEnd, pathResult }),

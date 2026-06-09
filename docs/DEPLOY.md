@@ -27,13 +27,13 @@ npm run deploy:build                 # tsc + vite build → dist/ (heavy data ba
 > fresh clone has none. **Do not** "fix" it by running `build-data.mjs` unless you have the corpora cloned (§1
 > Option B) — provision the existing data instead (§1 Option A).
 
-> 🟡 **ACTION FOR 运维 — the feedback backend is NOT set up yet (by design).** The app ships with in-page
-> feedback that saves to each visitor's `localStorage` only (per-browser; the in-app inbox says so). There is
-> **no server-side feedback store yet** — no table/KV exists. If the owner wants a shared, cross-device feedback
-> inbox, **you must stand one up** (a ~30-line Cloudflare Worker + KV, or a Formspree form) and set
-> `VITE_FEEDBACK_ENDPOINT` before building. Full steps + paste-ready Worker in **§5**. If cross-device feedback
-> isn't wanted, do nothing — leaving the env var unset keeps the build 100% static. The rest of the app never
-> needs a backend.
+> 🟡 **ACTION FOR 运维 — stand up the feedback backend (owner's explicit request).** The app ships with
+> in-page feedback that saves to each visitor's `localStorage` only; there is **no server-side store until
+> you start one**. The owner wants it **self-hosted on our own server — NOT a third-party form service**.
+> Everything you need is in this repo: run [deploy/feedback-server.mjs](../deploy/feedback-server.mjs)
+> (zero-dep node, JSONL file, no IPs stored) behind an nginx `location /api/feedback`, then build with
+> `VITE_FEEDBACK_ENDPOINT="/api/feedback"`. Complete copy-paste steps (systemd unit + nginx block + verify)
+> in **§5**. This is the ONLY backend 诗云 has — the corpus/index/render stack stays fully static.
 
 ## 1. Build
 
@@ -133,65 +133,86 @@ Content-Type: application/json
 ```
 
 The endpoint URL is inlined into the client bundle by Vite → it is **public**. Point it at a *write-only*
-collector, never anything needing a secret. The endpoint must send permissive **CORS** headers (it's called
-cross-origin from the static host).
+collector, never anything needing a secret.
 
-### 5a. Wire it
+### 5a. RECOMMENDED — self-hosted collector on your own server (无第三方)
+
+**Owner's explicit direction: store feedback on OUR backend, not a third-party service.** The complete,
+zero-dependency collector ships in this repo: [deploy/feedback-server.mjs](../deploy/feedback-server.mjs)
+(~100 lines, `node:http` only — tested). It appends each message as one JSON line to a JSONL file, stores
+**no IP address** (privacy by design), has a coarse built-in rate limit, and offers a token-protected GET
+for the owner to read the inbox.
+
+On the server (same box that runs nginx):
+
+```bash
+sudo mkdir -p /opt/shiyun /var/lib/shiyun
+sudo cp deploy/feedback-server.mjs /opt/shiyun/
+# generate the owner token once:  openssl rand -hex 24
+sudo tee /etc/systemd/system/shiyun-feedback.service >/dev/null <<'EOF'
+[Unit]
+Description=shiyun feedback collector
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /opt/shiyun/feedback-server.mjs
+Environment=PORT=8787
+Environment=HOST=127.0.0.1
+Environment=FEEDBACK_FILE=/var/lib/shiyun/feedback.jsonl
+Environment=FEEDBACK_TOKEN=<paste the openssl token here>
+Restart=on-failure
+DynamicUser=yes
+StateDirectory=shiyun
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable --now shiyun-feedback
+curl -s localhost:8787/api/feedback/health   # → {"ok":true}
+```
+
+Then add ONE location to the existing nginx server block ([deploy/nginx.conf](../deploy/nginx.conf)) —
+same-origin, so **no CORS is needed at all**:
+
+```nginx
+location /api/feedback {
+    proxy_pass http://127.0.0.1:8787;
+    proxy_set_header Host $host;
+    # optional belt-and-braces rate limit (define the zone in the http{} block):
+    # limit_req zone=fb burst=5 nodelay;
+}
+```
+
+**Reading the inbox (owner):**
+
+```bash
+curl -s "https://你的域名/api/feedback?token=<FEEDBACK_TOKEN>"   # newest last, one JSON per line
+# or directly on the server:  tail -n 50 /var/lib/shiyun/feedback.jsonl
+```
+
+### 5b. Wire the client
 
 ```bash
 cp .env.example .env.local
-# edit .env.local:  VITE_FEEDBACK_ENDPOINT="https://shiyun-feedback.<you>.workers.dev"
-npm run deploy:build      # the URL is baked into dist/ at build time
+# .env.local:  VITE_FEEDBACK_ENDPOINT="/api/feedback"     ← same-origin relative path
+npm run deploy:build      # baked into dist/ at build time
 ```
 
 `.env.local` is git-ignored; `.env.example` is the tracked template. Unset/blank ⇒ 100% static (no network).
 
-### 5b. Drop-in Cloudflare Worker (free tier; stores to KV)
-
-`wrangler init shiyun-feedback`, bind a KV namespace as `FEEDBACK`, then:
-
-```js
-export default {
-  async fetch(req, env) {
-    const cors = {
-      "Access-Control-Allow-Origin": "*",            // or lock to your site's origin
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    };
-    if (req.method === "OPTIONS") return new Response(null, { headers: cors });
-    if (req.method !== "POST") return new Response("method", { status: 405, headers: cors });
-    let body;
-    try { body = await req.json(); } catch { return new Response("bad json", { status: 400, headers: cors }); }
-    const msg = String(body?.message ?? "").slice(0, 5000).trim();
-    if (!msg) return new Response("empty", { status: 400, headers: cors });
-    // key by time so listing is chronological; store msg + a little request metadata
-    const key = `${Date.now()}-${crypto.randomUUID()}`;
-    await env.FEEDBACK.put(key, JSON.stringify({
-      message: msg,
-      ts: Number(body?.ts) || Date.now(),
-      ip: req.headers.get("cf-connecting-ip") || null,
-      ua: req.headers.get("user-agent") || null,
-    }));
-    return new Response("ok", { headers: cors });
-  },
-};
-```
-
-`wrangler deploy` → copy the `*.workers.dev` URL into `VITE_FEEDBACK_ENDPOINT`. Read submissions with
-`wrangler kv key list --binding=FEEDBACK` / `wrangler kv key get --binding=FEEDBACK <key>`. (Add basic rate
-limiting / a turnstile check before sharing the URL widely if abuse is a concern.)
-
-> Prefer no-code? Any JSON-accepting form backend works the same way — e.g. a **Formspree** form URL as
-> `VITE_FEEDBACK_ENDPOINT` (it accepts `{message, ...}` JSON and shows submissions in its dashboard). The
-> client contract above is all the endpoint has to honor.
-
 ### 5c. Verify after deploy
 
 ```bash
-curl -s -X POST "$VITE_FEEDBACK_ENDPOINT" -H 'Content-Type: application/json' \
-  -d '{"source":"shiyun","message":"部署冒烟测试 ✅","ts":1781000000000}' -i | head -1
-# want: HTTP/.. 200 (and the message shows up in your KV / Formspree inbox)
+curl -s -X POST "https://你的域名/api/feedback" -H 'Content-Type: application/json' \
+  -d '{"source":"shiyun","message":"部署冒烟测试","ts":1781000000000}'
+# want: {"ok":true}, and the line shows up in /var/lib/shiyun/feedback.jsonl
 ```
 
-In the live app, submit a test message and confirm a `POST` to your endpoint in the browser Network panel
-(it should be `200`; a failure is silently tolerated and the message still lands in localStorage).
+In the live app, submit a test message and confirm a `POST /api/feedback → 200` in the browser Network
+panel (a failure is silently tolerated and the message still lands in localStorage).
+
+> Fallback only if there is NO server at all (e.g. the site moves to a pure CDN): any JSON-accepting
+> endpoint satisfies the same client contract — a Cloudflare Worker+KV or Formspree URL in
+> `VITE_FEEDBACK_ENDPOINT` works (those are third-party: get the owner's sign-off first, send permissive
+> CORS, and do NOT store IPs).

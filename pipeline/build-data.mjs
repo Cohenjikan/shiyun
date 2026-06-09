@@ -8,6 +8,30 @@ import { fileURLToPath } from "node:url";
 const SRC = "C:/corpus/Werneror-Poetry"; // external corpus clone (persists on this machine)
 const OUT = fileURLToPath(new URL("../public/data", import.meta.url)); // this project's data dir
 
+// ── 字库 FREEZE (production contract) ──────────────────────────────────────────────────────────
+// 诗云 is LIVE: every shared 编号 permalink encodes a poem in radix N+1 over the SHIPPED charset,
+// and the charset's ORDER defines each char's symbol id. ANY change to the charset's content or
+// order remaps the whole poem↔number bijection and silently breaks every link users have shared.
+// So by default the charset is FROZEN: we read the existing public/data/charset.json, re-emit it
+// BYTE-IDENTICAL, and SKIP any poem that contains a char outside it (only newly added sources can
+// trigger skips — the original sources are what defined the set; a skip from a legacy source means
+// upstream drifted and is loudly warned). To intentionally re-derive the charset (a deliberate,
+// permalink-breaking major version), run with REFLOW_CHARSET=1.
+const REFLOW_CHARSET = process.env.REFLOW_CHARSET === "1";
+let frozenRaw = null; // exact bytes of the existing charset.json (re-emitted verbatim)
+let frozenSet = null; // Set<char> for the skip filter
+if (!REFLOW_CHARSET) {
+  try {
+    frozenRaw = readFileSync(join(OUT, "charset.json"), "utf8");
+    frozenSet = new Set(JSON.parse(frozenRaw).chars);
+    console.log(`charset FROZEN: N=${frozenSet.size} (REFLOW_CHARSET=1 to re-derive — breaks all permalinks)`);
+  } catch {
+    console.warn("no existing charset.json — deriving fresh (first build)");
+  }
+}
+let currentSource = "werneror"; // tag for per-source skip stats
+const skippedByCharset = new Map(); // source -> count
+
 // raw 朝代 string → canonical dynasty key (must match src/data/dynasties.ts)
 const DYN = {
   先秦: "xianqin",
@@ -102,6 +126,18 @@ let total = 0;
 // 疑是地上霜 → 静夜思, not just the opening).
 function addPoem(title, author, dyn, dynRaw, lines) {
   if (lines.length === 0) return;
+  if (frozenSet) {
+    // frozen-charset gate: a poem with ANY out-of-字库 char is skipped whole (dropping single chars
+    // would corrupt the poem text; skipping keeps N + every existing 编号 permalink stable).
+    for (const l of lines) {
+      for (const ch of l) {
+        if (!frozenSet.has(ch)) {
+          skippedByCharset.set(currentSource, (skippedByCharset.get(currentSource) || 0) + 1);
+          return;
+        }
+      }
+    }
+  }
   for (const l of lines) for (const ch of l) freq.set(ch, (freq.get(ch) || 0) + 1);
   const id = poetId(author, dyn);
   let p = poets.get(id);
@@ -142,7 +178,19 @@ const MODERN_JINXIANDAI = new Set([
   "李金发","穆旦","郑敏","梁宗岱","刘半农","胡适","俞平伯","汪静之","冰心","宗白华","沈尹默",
   "刘大白","王独清","穆木天","殷夫","蒋光慈","田间","袁可嘉","杜运燮","陈梦家","朱湘","邵洵美",
   "鲁迅","周作人","艾青","纪弦","痖弦","郑愁予","周梦蝶","洛夫","余光中","覃子豪","方思",
+  // expanded for the sheepzh import (民国-era poets the original hand-set missed)
+  "徐玉诺","应修人","潘漠华","冯雪峰","朱英诞","辛笛","陈敬容","杭约赫","唐祈","唐湜",
+  "绿原","牛汉","曾卓","苏金伞","鲁藜","王统照","刘延陵","康白情","蒲风","王亚平",
 ]);
+// modern-poem dedup across sources (yuxqiu ships first and is PRESERVED verbatim — its poems keep
+// their existing per-poet order/idx; sheepzh then adds only poems whose CONTENT wasn't seen).
+const modernSeen = new Map(); // poetId -> Set<content key>
+const modernKey = (lines) => lines.join("\n");
+const recordModern = (id, lines) => {
+  let s = modernSeen.get(id);
+  if (!s) { s = new Set(); modernSeen.set(id, s); }
+  s.add(modernKey(lines));
+};
 const MODERN = "C:/corpus/modern-poetry/China-modern-poetry/contemporary";
 const ALLOW_NO_MODERN = process.env.ALLOW_NO_MODERN === "1";
 // Resolve the modern file list FIRST. A missing clone is the dangerous case: the git-tracked
@@ -164,6 +212,7 @@ try {
   }
 }
 if (mfiles.length) {
+  currentSource = "yuxqiu";
   let mp = 0;
   for (const file of mfiles) {
     // JSON-parse errors here now propagate (fail loud on a corrupt modern file) instead of silently
@@ -175,25 +224,99 @@ if (mfiles.length) {
       const lines = poem.paragraphs.map(onlyHan).filter(Boolean);
       const dyn = MODERN_JINXIANDAI.has(author) ? "jinxiandai" : "dangdai";
       addPoem((poem.title || "").trim(), author, dyn, "现代", lines);
+      recordModern(poetId(author, dyn), lines); // so sheepzh below won't re-add the same poem
       mp++;
     }
   }
-  console.log(`  modern 新诗: poems=${mp} (total=${total} poets=${poets.size})`);
+  console.log(`  modern 新诗 (yuxqiu): poems=${mp} (total=${total} poets=${poets.size})`);
 }
 
-// charset ordered by desc frequency (ties by codepoint)
-const chars = [...freq.entries()]
-  .sort((a, b) => b[1] - a[1] || a[0].codePointAt(0) - b[0].codePointAt(0))
-  .map(([c]) => c);
-const N = chars.length;
+// ── 现代诗 v2: sheepzh/poetry 汉语现代诗歌语料库 (~3.5k poets / ~82k poems). Layout:
+//    data/<作者>_<拼音>/<诗名>.pt ; .pt = "title:…\ndate:…\n\n<body lines>" (UTF-8).
+//    Tooling MIT; the poem TEXTS remain author-copyrighted, repo README: 非商用 — same exposure
+//    class as the existing yuxqiu modern layer; recorded in DATA_CONTRACT/credits.
+//    Charset-frozen gate above guarantees this import cannot change N or any existing 编号. ──
+const SHEEPZH = "C:/corpus/sheepzh-poetry/data";
+const ALLOW_NO_SHEEPZH = process.env.ALLOW_NO_SHEEPZH === "1";
+// author folders are community-contributed; keep only plain Han names (+ ethnic-name middle dot)
+// to drop handle/junk folders like 666_666, Apple_apple, AT_at.
+const HAN_AUTHOR = /^[㐀-䶿一-鿿·]{1,8}$/;
+let sdirs = [];
+try {
+  sdirs = readdirSync(SHEEPZH, { withFileTypes: true }).filter((d) => d.isDirectory());
+} catch (e) {
+  if (ALLOW_NO_SHEEPZH) {
+    console.warn("  sheepzh corpus skipped (ALLOW_NO_SHEEPZH=1):", e.message);
+  } else {
+    throw new Error(
+      `sheepzh corpus not found at ${SHEEPZH} (${e.code || e.message}).\n` +
+        `  → git clone https://github.com/sheepzh/poetry C:/corpus/sheepzh-poetry\n` +
+        `    (on Windows: git -C C:/corpus/sheepzh-poetry config core.longpaths true && git restore --source=HEAD :/ )\n` +
+        `  OR set ALLOW_NO_SHEEPZH=1 to build without it (DESYNCS poems/ from a v2 poets.index.json).`,
+    );
+  }
+}
+if (sdirs.length) {
+  currentSource = "sheepzh";
+  let sp = 0, sDup = 0, sBadName = 0, sNoBody = 0;
+  for (const d of sdirs) {
+    const cut = d.name.lastIndexOf("_"); // 诗人名_拼音 — names may themselves contain none
+    const author = cut > 0 ? d.name.slice(0, cut) : d.name;
+    if (!HAN_AUTHOR.test(author)) { sBadName++; continue; }
+    const dyn = MODERN_JINXIANDAI.has(author) ? "jinxiandai" : "dangdai";
+    const id = poetId(author, dyn);
+    let pts;
+    try { pts = readdirSync(join(SHEEPZH, d.name)).filter((f) => f.endsWith(".pt")); } catch { continue; }
+    for (const f of pts) {
+      let raw;
+      try { raw = readFileSync(join(SHEEPZH, d.name, f), "utf8"); } catch { continue; } // odd-name files
+      const rows = raw.split(/\r?\n/);
+      let title = f.slice(0, -3);
+      let bodyStart = 0;
+      if (rows[0]?.startsWith("title:")) { title = rows[0].slice(6).trim() || title; bodyStart = 1; }
+      if (rows[bodyStart]?.startsWith("date:")) bodyStart++;
+      const lines = rows.slice(bodyStart).map(onlyHan).filter(Boolean);
+      if (!lines.length) { sNoBody++; continue; }
+      const key = modernKey(lines);
+      const seen = modernSeen.get(id);
+      if (seen && seen.has(key)) { sDup++; continue; } // already shipped via yuxqiu (or an earlier file)
+      const before = total;
+      addPoem(title, author, dyn, "现代", lines);
+      if (total > before) { recordModern(id, lines); sp++; } // not skipped by the charset gate
+    }
+  }
+  console.log(
+    `  modern 新诗 v2 (sheepzh): poems=+${sp} dup=${sDup} junk-folders=${sBadName} empty=${sNoBody} ` +
+      `charset-skipped=${skippedByCharset.get("sheepzh") || 0} (total=${total} poets=${poets.size})`,
+  );
+}
+// loud per-source charset-skip report — legacy sources skipping ANYTHING means upstream drifted.
+for (const [src, n] of skippedByCharset) {
+  const legacy = src === "werneror" || src === "yuxqiu";
+  (legacy ? console.error : console.log)(
+    `  charset-frozen skips from ${src}: ${n}${legacy ? "  ⚠ LEGACY SOURCE DRIFTED — investigate!" : ""}`,
+  );
+}
 
 mkdirSync(join(OUT, "poems"), { recursive: true });
 
-// charset.json
-const charsStr = chars.join("");
-let hh = 0x811c9dc5;
-for (let i = 0; i < charsStr.length; i++) { hh ^= charsStr.charCodeAt(i); hh = Math.imul(hh, 0x01000193); }
-writeFileSync(join(OUT, "charset.json"), JSON.stringify({ version: 1, n: N, hash: (hh >>> 0).toString(16), chars: charsStr }));
+// charset.json — FROZEN: re-emit the existing file byte-identical (the bijection contract).
+// Fresh/REFLOW build: derive by desc frequency (ties by codepoint) as before.
+let N;
+if (frozenSet) {
+  N = frozenSet.size;
+  writeFileSync(join(OUT, "charset.json"), frozenRaw);
+  console.log(`charset.json re-emitted FROZEN (N=${N}, byte-identical)`);
+} else {
+  const chars = [...freq.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].codePointAt(0) - b[0].codePointAt(0))
+    .map(([c]) => c);
+  N = chars.length;
+  const charsStr = chars.join("");
+  let hh = 0x811c9dc5;
+  for (let i = 0; i < charsStr.length; i++) { hh ^= charsStr.charCodeAt(i); hh = Math.imul(hh, 0x01000193); }
+  writeFileSync(join(OUT, "charset.json"), JSON.stringify({ version: 1, n: N, hash: (hh >>> 0).toString(16), chars: charsStr }));
+}
 
 // poets.index.json (sorted by poemCount desc)
 const clusterSize = (n) => Math.min(60, Math.max(2, +(2 + 1.4 * Math.sqrt(n)).toFixed(2)));
@@ -269,8 +392,9 @@ for (const p of poets.values()) {
 // title names a poet by 号 (e.g. 晦庵 = 朱熹, 东坡 = 苏轼), redirect to the canonical poet —
 // otherwise the 号 either collides with a 1-poem namesake or misses the famous target entirely.
 const GIFT_ALIAS = {
-  // 魏晋南北朝
-  靖节:"陶渊明", 五柳先生:"陶渊明", 渊明:"陶渊明", 陶潜:"陶渊明",
+  // 魏晋南北朝 — corpus canonical name is 陶潜 (陶渊明 does NOT exist as a poet row; the old
+  // mapping → "陶渊明" made every 渊明-family alias resolve to nothing).
+  靖节:"陶潜", 五柳先生:"陶潜", 渊明:"陶潜", 陶渊明:"陶潜",
   康乐:"谢灵运", 谢康乐:"谢灵运", 玄晖:"谢朓", 谢宣城:"谢朓",
   嗣宗:"阮籍", 叔夜:"嵇康", 太冲:"左思", 明远:"鲍照", 子山:"庾信", 庾子山:"庾信",
   // 唐
@@ -351,6 +475,12 @@ const GIFT_ALIAS = {
   夔笙:"况周颐", 蕙风:"况周颐", 叔问:"郑文焯", 大鹤山人:"郑文焯",
   彊村:"朱祖谋", 强村:"朱祖谋", 静安:"王国维", 观堂:"王国维",
 };
+// validate alias TARGETS against actual corpus names — a target that isn't a poet row makes every
+// alias pointing at it resolve to nothing (the 陶渊明 bug). Dead targets are loudly listed.
+{
+  const dead = [...new Set(Object.values(GIFT_ALIAS))].filter((t) => !byName.has(t));
+  if (dead.length) console.warn(`  ⚠ GIFT_ALIAS dead targets (not poet rows): ${dead.join(" ")}`);
+}
 const isKnown = (s) => byName.has(s) || s in GIFT_ALIAS;
 // chars that legitimately END / follow a complete 2-char name: relations, counters, and the
 // leading char of an official title/role. So 王巩(end) / 张籍水部 / 王巩二首 are accepted, but a
