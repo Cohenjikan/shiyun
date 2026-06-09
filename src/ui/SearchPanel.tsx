@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { searchPoets, searchByLine, loadPoetPoems, type PoetRow, type LineHit } from "../data/load";
+import { searchPoets, searchByLine, searchPoems, loadPoetPoems, type PoetRow, type LineHit } from "../data/load";
 import { DYNASTY_BY_KEY, DYNASTIES } from "../data/dynasties";
 import {
   halfIndexAuto,
@@ -118,7 +118,8 @@ export function SearchPanel() {
     setQ(v);
     setHalf(halfIndexAuto(v));
     const token = ++reqRef.current;
-    searchByLine(v).then((h) => reqRef.current === token && setHits(h));
+    // 寻诗: 诗句(整句/中段) + 诗名 + 单字 增量搜索, all merged + ranked. (findReal still uses searchByLine.)
+    searchPoems(v).then((h) => reqRef.current === token && setHits(h));
   }
 
   function goPoet(p: PoetRow, focus?: { poemIdx: number; title: string; firstLine: string }) {
@@ -212,8 +213,8 @@ export function SearchPanel() {
     <div className={collapsed ? "search collapsed" : "search"}>
       <div className="search-tabs">
         <button className={tab === "poet" ? "stab on" : "stab"} onClick={() => switchTab("poet")}>诗人</button>
-        <button className={tab === "line" ? "stab on" : "stab"} onClick={() => switchTab("line")}>诗句</button>
-        <button className={tab === "compose" ? "stab on" : "stab"} onClick={() => switchTab("compose")}>造诗</button>
+        <button className={tab === "line" ? "stab on" : "stab"} onClick={() => switchTab("line")}>寻诗</button>
+        <button className={tab === "compose" ? "stab on" : "stab"} onClick={() => switchTab("compose")}>探诗</button>
         <button className={tab === "dynasty" ? "stab on" : "stab"} onClick={() => switchTab("dynasty")}>朝代</button>
         <button className="stab collapse" onClick={() => setCollapsed((c) => !c)} title={collapsed ? "展开" : "收起"}>
           {collapsed ? "▾" : "▴"}
@@ -223,7 +224,7 @@ export function SearchPanel() {
       {!collapsed && (tab === "poet" || tab === "line") && (
         <input
           value={q}
-          placeholder={tab === "poet" ? "搜索诗人…（回车飞到第一个）" : "输入一句诗,如 床前明月光（回车定位）"}
+          placeholder={tab === "poet" ? "搜索诗人…（回车飞到第一个）" : "诗句 / 诗名 / 单字,如 静夜思 或 举头望（回车定位）"}
           onChange={(e) => (tab === "poet" ? onChangePoet(e.target.value) : onChangeLine(e.target.value))}
           onKeyDown={(e) => {
             if (e.key !== "Enter") return;
@@ -252,7 +253,7 @@ export function SearchPanel() {
         <div className="line-results">
           {hits.length > 0 && (
             <div className="lr-section">
-              <div className="lr-head">真实诗人 · 这是谁的诗</div>
+              <div className="lr-head">真实的诗 · 诗句 / 诗名 / 单字</div>
               {hits.map((h, i) => {
                 const dyn = h.poet ? DYNASTY_BY_KEY[h.poet.dynasty] : undefined;
                 return (

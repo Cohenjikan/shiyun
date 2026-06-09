@@ -21,12 +21,21 @@ from the stale `main` (8 commits behind) and silently lost 赠诗 / 自由格式
 新诗诗人 …, and poem loading was dead. **If `main`'s tip is not the latest verified work, the
 hand-off is broken — fix `main` first.** Check with `git log --oneline --all --graph`.
 
-**Heavy data is git-ignored** — `public/data/poems/` (235 MB) and `public/data/lines/` (791 MB).
-A fresh worktree has NEITHER, so "click a poet → 载入作品…" hangs and 诗句 search finds nothing.
-Provision before you start, one of two ways:
-- regenerate: `node --max-old-space-size=4096 pipeline/build-data.mjs` (needs the corpora), **or**
-- (fast, same machine) junction them from a worktree that already has them — PowerShell:
-  `cmd /c mklink /J "<new>\public\data\poems" "<existing>\public\data\poems"` (and `…\lines`).
+**Heavy data is git-ignored** — `public/data/poems/` (235 MB), `lines/` (791 MB), `linesf/` (~4.4 GB fuzzy),
+`search/` (~129 MB 寻诗 prefix/诗名 index). A fresh worktree has NONE, so "click a poet → 载入作品…" hangs and
+诗句/寻诗 search finds nothing. Provision before you start, one of two ways:
+- regenerate: `node --max-old-space-size=4096 pipeline/build-data.mjs` (needs the corpora), then
+  `npm run build:lines && npm run build:sidecars && npm run build:search` (+ `npm run build:fuzzy` for 异文), **or**
+- (fast, same machine) junction them from a worktree that already has them (New-Item -ItemType Junction, or
+  `cmd /c mklink /J "<new>\public\data\poems" "<existing>\public\data\poems"`, and `…\lines` `…\linesf` `…\search`).
+
+> ⚠ **2026-06-09 — main's `poems/`/`lines/` are MISSING the 508 modern 新诗 poets** (徐志摩/海子/北岛/顾城…): a
+> `build-data.mjs` run dropped the modern corpus (the modern read is a WARN-only `try/catch`, `build-data.mjs:163`)
+> while git's `poets.index.json` kept them → divergence; clicking those poets loads nothing. The 6th-agent session
+> recovered them in ITS worktree by junctioning from the COMPLETE `epic-sinoussi` copy, but **main was left
+> untouched**. If you cut from main: provision `poems/`/`lines/`/`search/` from a GOOD source (e.g. `epic-sinoussi`)
+> OR rerun `build-data.mjs` with the modern corpus present, then verify `徐志摩 (id 91c14d18)` loads 19 poems. See
+> [docs/DEVLOG.md](docs/DEVLOG.md) 6th-agent entry for the full diagnosis + scope check (`missing === 0 / 29,808`).
 
 **Backups:** private GitHub repo `github.com/Cohenjikan/shiyun` (all branches); local all-branches
 bundle at `C:\Users\Cohen\Desktop\shiyun-ALL-branches-backup.bundle` (restore: `git clone <bundle>`).
@@ -64,7 +73,8 @@ thing that breaks the hosting model; all index math + render is client-side).
 | **编号反查 (reverse)** | Paste a 全集编号 + 诗体 → `pullByIndex` reconstructs the exact poem (full numbers, copy buttons), and reports if it's a **real** poem (loop closure: 静夜思's 编号 → "正好对应李白《静夜思》"). |
 | **Permalinks** | Address bar stays shareable: `#a=<poetId>` / `#p=<form>.<index>` (`state/permalink.ts`); 🔗 分享 buttons; restore on load. |
 | **Product-grade UI** | Elegant 楷/宋 serif (`--serif`) for poem text; gradient cards + gold accent rules. |
-| **诗句 content search** | ANY line (not just openings) — `疑是地上霜 → 静夜思` — via an all-lines inverted index (`lines/`, 256 shards). |
+| **寻诗 search** (was 诗句) | Renamed tab. ANY line (not just openings) via the all-lines index (`lines/`, 256 shards) + **incremental prefix/诗名** via `search/` (`build-search.mjs`, 256 shards, ~129 MB): a single 字, a half line, or a TITLE matches as you type — `举头望 → 静夜思` (mid-line), `静夜思`/`春江花月夜` (诗名). `load.ts::searchPoems` merges prefix+title (`searchByHead`) with exact-line+fuzzy (`searchByLine`), ranks famous-first, ≤2/poet. |
+| **探诗** (was 造诗) | Renamed tab (compute a poem from a fill-grid / 编号; logic unchanged). |
 | **Interaction** | 6-DOF fly cam + speed HUD; **O(1) GPU colour-ID pick** (`three/gpuPick.ts` — poet index → offscreen buffer, read the cursor pixel; replaced the old O(29,808)/hover CPU scan): click a star → poet, click void → random poem; names only on hover/select. |
 | **Per-poet egress (#12)** | Clicking a poet HTTP **Range**-fetches just that poet's slice of its `poems/{bucket}.json` (a few KB) via the byte-offset sidecar `poems/{bucket}.idx.json`, not the whole ~0.9 MB bucket. Whole-file stays valid JSON → transparent fallback when the sidecar is absent or the host ignores Range (200 not 206). `load.ts::loadPoetPoems`. |
 | **Search** | Author search → fly-to → poet's real poems + each poem's 全集编号. |
@@ -113,6 +123,9 @@ Regenerate (scripts now write into *this* project's `public/data` via relative p
 ```bash
 node --max-old-space-size=4096 pipeline/build-data.mjs     # charset + poets.index + poems + lines/ + gifts
 node pipeline/build-lexicon.mjs                            # lexicon.json (needs opencc-js, pinyin-pro — devDeps)
+npm run build:search                                      # search/ — 寻诗 prefix + 诗名 index (from poems/, no corpus)
+npm run build:sidecars                                    # poems/*.idx.json Range sidecars (from poems/, no corpus)
+npm run build:fuzzy                                       # linesf/ — 异文 fuzzy line index (large; LOCAL only)
 ```
 `build-data.mjs` now also reads the modern corpus + carries the expanded ~250-entry `GIFT_ALIAS`
 字号 table. When 字库 N changes, `lexicon.json` must be rebuilt too (it indexes 平/仄 by glyph).

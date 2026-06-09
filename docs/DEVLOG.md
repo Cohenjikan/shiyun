@@ -10,7 +10,60 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
 
 ---
 
-## 2026-06-09 — Session: 5th agent (UX5 → 行星/planets → 群星 → lock-follow → fuzzy search)
+## 2026-06-09 — Session: 6th agent (徐志摩 data recovery + 寻诗/探诗 rename + 寻诗 prefix/title search + cluster-centering + guide-line coverage)
+
+Cut from `main` @ `27d3ec5`. A fresh worktree has no heavy data; provisioned poems/lines via junction to the
+known-good `epic-sinoussi` worktree + linesf from `inspiring-bhabha`, then TOOK OVER port 5199 (stopped the
+5th-agent's stale dev server, restarted from this worktree) per the user. main/other worktrees left untouched.
+
+### 1 — 徐志摩 (and the whole 新诗 set) data LOSS — recovered
+- **Symptom**: clicking 徐志摩 loaded no poems (panel still said 「19 首真实作品」 from poets.index).
+- **Scope (it was systematic)**: exactly the **508 modern poets** (475 当代 + 33 近现代 = the entire
+  yuxqiu/modern-poetry import: 徐志摩/海子/北岛/顾城/戴望舒/洛夫/芒克…) were missing their poem TEXT from BOTH
+  `poems/*.json` AND `lines/*.json`, while their `poets.index.json` rows (committed in git) survived. All 29,300
+  classical poets + every committed asset (charset/gifts/lexicon/manifest/poets.index) were intact.
+- **Root cause**: `build-data.mjs` reads the modern corpus inside a `try/catch` that only WARNS on failure
+  (`build-data.mjs:163`). A `poems/` rebuild that didn't ingest modern produced poems/ + lines/ without it,
+  while git's `poets.index.json` kept modern from an earlier good build → the two diverged. `inspiring-bhabha`
+  (the live 5199) **junctions main's `poems/`**, so main + bhabha were broken identically.
+- **Fix (this worktree)**: junctioned `poems/`+`lines/` from `epic-sinoussi` (a COMPLETE copy — all 29,808
+  poets incl. modern, with sidecars) → `missing = 0 / 29,808`. Verified live on 5199: 徐志摩 Range-fetch → `206`,
+  19 poems《雪花的快乐》; 诗句「轻轻的我走了」→ 徐志摩《再别康桥》. **The source corpus is intact**, so a
+  full `build-data.mjs` rerun also recovers it. ⚠ **main's `poems/`/`lines/` are STILL broken** (left untouched
+  per the user) — the NEXT worktree cut from main must provision from a good source or regenerate.
+
+### 2 — 诗句 → 寻诗, 造诗 → 探诗 (display rename, logic unchanged)
+- The two tab names overlapped in meaning. 「诗句」(find a real poem) → **寻诗**; 「造诗」(compute a poem from an
+  index) → **探诗**. Display-only: the internal `Tab` ids stay `"line"`/`"compose"`. (`SearchPanel`, `Onboarding`.)
+
+### 3 — 寻诗 prefix + 诗名 search (incremental) — `pipeline/build-search.mjs` (`npm run build:search`)
+- The old 诗句 search keyed only WHOLE lines (hash-bucketed) → a mid-line like 「举头望明月」 found nothing until
+  the full line, and there was NO title search. New `search/` index (sharded by `hashStr(key)&0xff`, 256 shards):
+    • **EXACT full TITLE for every poem** → 诗名搜索 for ANYONE, incl. an obscure poet's famous piece
+      (张若虚《春江花月夜》) — found when the whole title is typed.
+    • **len-≤3 PREFIX of a FAMOUS poet's lines + title** → incremental: a single 字, a half line, or a title
+      prefix matches as you type. `举头望` → 李白《静夜思》 (mid-line!); `静` → 静夜思; capped 12 famous-first.
+  - **Size discipline**: prefix-expanding ALL poems was 0.8–2.9 GB. A poemCount bar can't bound it (prolific
+    poets own most poems). Gating PREFIX keys to the 48-name FAMOUS set (≈30 K poems) + exact-title-for-all
+    lands **129 MB / 256 shards (~0.5 MB each)** — local-rich, deploy-curatable (lever = FAMOUS list / PREFIX_MAX).
+  - **Wiring**: `load.ts::searchByHead` (prefix+title) + `searchPoems` (merges searchByHead with the exact-line
+    `searchByLine` + fuzzy, dedups, ranks famous-first, caps ≤2/poet for variety, top 10). 寻诗 tab calls
+    `searchPoems`; 探诗's `findReal` still uses `searchByLine`. 纯随机 半编号 section unchanged.
+  - Limitation: incremental (prefix) only surfaces the 48 famous poets; a non-famous poem appears via exact
+    TITLE (full) or exact LINE (full)/fuzzy. Widen `FAMOUS` in build-search.mjs + rerun to broaden.
+
+### 4 — cluster centering (4a) + guide-line coverage (4b)
+- **4a 恒星系偏上**: `positions.poemOffset` tied the planet RADIUS to the poem index (`pow((i+0.5)/P,…)`) while
+  the LATITUDE `yd` was also monotonic in the index → small radius at the +y pole, large at the −y pole → a
+  lopsided teardrop hanging BELOW the poet, so the cluster centre read as offset toward the TOP of the frame.
+  Replaced the radial quantile with a HASHED uniform (same density, decorrelated from latitude) → symmetric
+  cloud centred on the poet. Same function backs render/pick/locate/guides → clicks stay aligned.
+- **4b 指引线漏诗**: `PoemGuides` drew the FIRST `MAX_LINES=4000` poems → for a >4000-poem poet it dropped the
+  outermost planets (the ones most needing a guide). Now SAMPLES uniformly across the whole range (`poemIndexOf`)
+  so guides span the entire cluster; ≤4000-poem poets are unchanged (every poem still gets a line).
+
+Verify gate: `npm run typecheck` clean, `npm test` **66/66**, `npm run build` ✓. Data + search HTTP-verified on
+5199. **4a/4b are visual — the user eyeballs them on a real GPU (no in-conversation preview, per the user).**
 
 ### Round 8 — fuzzy LINE index (mid-line 异文) + orbit-lock + sustained highlight + guide lines
 - **诗句 mid-line variant search (item 1)** — round-7's `findReal` fuzzy only covered COMPOSE; 诗句 search of a

@@ -88,7 +88,14 @@ export function poemOffset(p: PoetRow, poemIdx: number): [number, number, number
   const th = poemIdx * GOLDEN + phase;
   const h = hashStr(p.id + ":" + poemIdx);
   const jitter = 0.4 + 1.2 * (((h >>> 8) & 0xff) / 255); // WIDE (0.4..1.6) → clumpy, no shell
-  const rho = R0 * Math.pow((poemIdx + 0.5) / P, 0.62) * jitter; // dense core, sparse halo (non-uniform)
+  // Radial quantile from a HASH (not the poem index). The old `(poemIdx+0.5)/P` tied radius to the
+  // latitude `yd` (both monotonic in poemIdx) → small radius at the +y pole, large radius at the −y
+  // pole → a lopsided teardrop whose mass hangs BELOW the poet, so the cluster centre read as offset
+  // toward the top of the frame. A hashed quantile keeps the SAME radial density (dense core, sparse
+  // halo — uniform base in, same pow) but decorrelates it from latitude → a symmetric cloud centred on
+  // the poet (round-9 fix). Same distribution everywhere it's used → clicks/locate/guides stay aligned.
+  const u = ((h >>> 16) & 0xffff) / 0xffff; // independent uniform radial quantile
+  const rho = R0 * Math.pow(u, 0.62) * jitter; // dense core, sparse halo, now symmetric about the poet
   // per-poet ellipsoid axes → varied irregular shapes (some round, some elongated, some oblate)
   const he = hashStr(p.id + "#shape");
   const ax = 0.55 + 1.05 * (((he >>> 2) & 0xff) / 255);

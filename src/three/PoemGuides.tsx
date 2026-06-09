@@ -34,8 +34,12 @@ export function PoemGuides() {
     if (!grp) return;
     if (cur.current) { grp.remove(cur.current.lines); cur.current.geo.dispose(); cur.current.mat.dispose(); cur.current = null; }
     if (!selectedPoet) return;
-    const P = Math.min(MAX_LINES, Math.max(0, selectedPoet.poemCount));
-    if (!P) return;
+    const total = Math.max(0, selectedPoet.poemCount);
+    if (!total) return;
+    const P = Math.min(MAX_LINES, total); // guide-line COUNT (capped only for the few >MAX_LINES poets)
+    // Which poem each guide points at: ≤ cap → every poem; otherwise SAMPLE uniformly across the WHOLE
+    // range so guides reach the OUTERMOST planets too (was the first MAX_LINES → it ignored the rest).
+    const poemIndexOf = (k: number) => (total <= MAX_LINES ? k : Math.floor((k * total) / P));
 
     const [cx, cy, cz] = poetPosition(selectedPoet);
     const omega = poemOmega(selectedPoet);
@@ -47,7 +51,7 @@ export function PoemGuides() {
     const om = new Float32Array(n);
     const cc = new Float32Array(n * 3);
     for (let j = 0; j < P; j++) {
-      const [dx, dy, dz] = poemOffset(selectedPoet, j);
+      const [dx, dy, dz] = poemOffset(selectedPoet, poemIndexOf(j));
       const a = j * 2, b = a + 1;
       pos[a * 3] = cx; pos[a * 3 + 1] = cy; pos[a * 3 + 2] = cz; // poet endpoint (off = 0 → stays)
       pos[b * 3] = cx + dx; pos[b * 3 + 1] = cy + dy; pos[b * 3 + 2] = cz + dz; // planet endpoint

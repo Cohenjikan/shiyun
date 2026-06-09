@@ -268,6 +268,76 @@ export async function searchByLine(query: string, base = "/data"): Promise<LineH
   return hits.slice(0, 30);
 }
 
+// ── 寻诗 prefix + 诗名 index (search/, built by build-search.mjs) — INCREMENTAL: a single char, a half
+//    line, or a poem TITLE matches the moment you type it, instead of only a whole exact line. Two key
+//    kinds live in each shard: an EXACT full title (any poem) + a len≤PREFIX_MAX PREFIX of a famous poem's
+//    line/title. Sharded by hashStr(key)&0xff (== build-search's fnv32). No-op if search/ wasn't built. ──
+const PREFIX_MAX = 3; // mirror build-search.mjs (the client keys on the query's first ≤3 汉字)
+const sxBucket = (s: string) => (hashStr(s) & 0xff).toString(16).padStart(2, "0");
+const _sxShard = new Map<string, Record<string, FirstLineRef[]>>();
+async function loadSxShard(bucket: string, base: string): Promise<Record<string, FirstLineRef[]>> {
+  let obj = _sxShard.get(bucket);
+  if (obj) return obj;
+  obj = await fetch(`${base}/search/${bucket}.json`)
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => ({}));
+  _sxShard.set(bucket, obj!);
+  return obj!;
+}
+
+/** 寻诗 incremental hits: looks up the FULL query (an exact poem title, e.g. 静夜思 / 春江花月夜) AND its
+ *  first ≤PREFIX_MAX chars (a line/title prefix, e.g. 举头望 / a single 字) in the prefix index. */
+export async function searchByHead(query: string, base = "/data"): Promise<LineHit[]> {
+  const cs = [...query].filter((c) => HAN.test(c));
+  if (!cs.length) return [];
+  const keys = new Set<string>([cs.join(""), cs.slice(0, PREFIX_MAX).join("")]);
+  const seen = new Set<string>();
+  const hits: LineHit[] = [];
+  for (const key of keys) {
+    const shard = await loadSxShard(sxBucket(key), base);
+    for (const r of shard[key] || []) {
+      const k = r.p + "#" + r.i;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      hits.push({ poetId: r.p, poemIdx: r.i, title: r.t, form: r.f, firstLine: key, poet: _byId.get(r.p) });
+    }
+  }
+  return hits;
+}
+
+/** The 寻诗 tab search. Merges EXACT-line + fuzzy hits (searchByLine — precise whole-line / 异文) with the
+ *  PREFIX + 诗名 hits (searchByHead — single char / half line / title), dedups, ranks famous-first then
+ *  poemCount, and caps each poet to ≤2 so one prolific poet can't fill all 10 on a one-char query. */
+export async function searchPoems(query: string, base = "/data"): Promise<LineHit[]> {
+  const cs = [...query].filter((c) => HAN.test(c));
+  if (!cs.length) return [];
+  const [head, line] = await Promise.all([
+    searchByHead(query, base),
+    cs.length >= 2 ? searchByLine(query, base) : Promise.resolve([] as LineHit[]),
+  ]);
+  const seen = new Set<string>();
+  const merged: LineHit[] = [];
+  for (const h of [...line, ...head]) {
+    // exact-line hits first → they win the dedupe (their firstLine is the precise matched line)
+    const k = h.poetId + "#" + h.poemIdx;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    merged.push(h);
+  }
+  const fam = (h: LineHit) => (h.poet && FAMOUS_NAMES.has(h.poet.name) ? 1 : 0);
+  merged.sort((a, b) => fam(b) - fam(a) || (b.poet?.poemCount || 0) - (a.poet?.poemCount || 0));
+  const perPoet = new Map<string, number>();
+  const out: LineHit[] = [];
+  for (const h of merged) {
+    const n = perPoet.get(h.poetId) || 0;
+    if (n >= 2) continue; // ≤2 per poet → variety on a single-char query
+    perPoet.set(h.poetId, n + 1);
+    out.push(h);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
 // ── 赠诗 network: committed edge list [fromId, toId, weight]; loaded lazily on first toggle. ──
 let _gifts: GiftEdge[] | null = null;
 export async function loadGifts(base = "/data"): Promise<GiftEdge[]> {
