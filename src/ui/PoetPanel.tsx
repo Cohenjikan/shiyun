@@ -45,8 +45,8 @@ export function PoetPanel() {
   const poems = useStore((s) => s.poetPoems);
   const focus = useStore((s) => s.poetFocus);
   const close = useStore((s) => s.clearPoet);
-  const setFlyTarget = useStore((s) => s.setFlyTarget);
   const pulseAt = useStore((s) => s.pulseAt);
+  const lockPoem = useStore((s) => s.lockPoem);
 
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [shown, setShown] = useState(PAGE);
@@ -100,9 +100,8 @@ export function PoetPanel() {
   // original index, which matches PoemOrbits' per-poem layout, so the flare lands on the right planet.
   function locatePoem(i: number) {
     if (!poet) return;
-    const pos = poemPosition(poet, i);
-    pulseAt(pos, true);
-    setFlyTarget(pos);
+    pulseAt(poemPosition(poet, i), true);
+    lockPoem(poet.id, i); // fly to + follow that orbiting planet
   }
 
   return (

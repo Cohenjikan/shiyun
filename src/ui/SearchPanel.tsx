@@ -14,7 +14,7 @@ import {
 } from "../engine/engineApi";
 import type { FormId } from "../engine/engine";
 import { useStore } from "../state/store";
-import { poetPosition, poemPosition } from "../three/positions";
+import { poemPosition } from "../three/positions";
 import { CopyButton } from "./CopyButton";
 
 const FORM_LABEL: Record<string, string> = {
@@ -37,16 +37,32 @@ const HAN = /\p{Script=Han}/u;
 const hanChars = (s: string) => [...s].filter((c) => HAN.test(c)); // keep only 汉字 (drop pinyin / 标点 / 空白)
 
 type Tab = "poet" | "line" | "compose" | "dynasty";
-type RealHit = { name: string; title: string } | null;
+type RealHit = { name: string; title: string; approx?: boolean } | null;
 
-// Does the typed poem happen to be a REAL corpus poem? (loop closure — same check the reverse used.)
+// Same-length near-match: identical, OR differs by ≤2 chars (and ≥85%) — so popular variants of a real
+// poem still register (静夜思「举头望明月」 vs the corpus「举头望山月」; 的/地…). Different-length variants
+// need the fuzzy line index (next round). Compared by code point (CJK-safe).
+function nearMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  const ca = [...a], cb = [...b];
+  if (ca.length !== cb.length || !ca.length) return false;
+  let diff = 0;
+  const cap = Math.max(2, Math.ceil(ca.length * 0.15));
+  for (let i = 0; i < ca.length; i++) if (ca[i] !== cb[i] && ++diff > cap) return false;
+  return true;
+}
+
+// Does the typed poem happen to be a REAL corpus poem (exactly, or a near variant)? (loop closure.)
 async function findReal(lines: string[]): Promise<RealHit> {
   if (!lines.length || !lines[0]) return null;
   const text = lines.join("");
   const hits = await searchByLine(lines[0]);
   for (const h of hits.slice(0, 6)) {
     const poems = await loadPoetPoems(h.poetId);
-    if (poems[h.poemIdx]?.p.join("") === text) return { name: h.poet?.name ?? "佚名", title: h.title || "无题" };
+    const corpus = poems[h.poemIdx]?.p.join("") ?? "";
+    if (!corpus) continue;
+    if (corpus === text) return { name: h.poet?.name ?? "佚名", title: h.title || "无题" };
+    if (nearMatch(corpus, text)) return { name: h.poet?.name ?? "佚名", title: h.title || "无题", approx: true };
   }
   return null;
 }
@@ -74,6 +90,8 @@ export function SearchPanel() {
   const selectPoem = useStore((s) => s.selectPoem);
   const setFlyTarget = useStore((s) => s.setFlyTarget);
   const pulseAt = useStore((s) => s.pulseAt);
+  const lockPoet = useStore((s) => s.lockPoet);
+  const lockPoem = useStore((s) => s.lockPoem);
   // dynasty filter (merged in — no separate legend box)
   const hidden = useStore((s) => s.hidden);
   const toggleDynasty = useStore((s) => s.toggleDynasty);
@@ -105,18 +123,17 @@ export function SearchPanel() {
 
   function goPoet(p: PoetRow, focus?: { poemIdx: number; title: string; firstLine: string }) {
     selectPoet(p, focus ?? null);
-    setFlyTarget(poetPosition(p));
+    lockPoet(p.id); // lock + follow the poet (camera glides in and tracks it)
     loadPoetPoems(p.id).then((poems) => useStore.getState().setPoetPoems(p.id, poems));
     setResults([]);
   }
   function goHit(h: LineHit) {
     if (!h.poet) return;
     goPoet(h.poet, { poemIdx: h.poemIdx, title: h.title, firstLine: h.firstLine });
-    // refine the fly-to from the poet centre down to the EXACT poem-planet in that poet's system,
-    // and light a flare there — so 诗句 search lands you on the star, not just the constellation.
-    const pos = poemPosition(h.poet, h.poemIdx);
-    pulseAt(pos, true);
-    setFlyTarget(pos);
+    // lock the EXACT poem-planet in that poet's system (camera follows it as it orbits) + flare it,
+    // so 诗句 search lands you on the star, not just the constellation.
+    lockPoem(h.poet.id, h.poemIdx);
+    pulseAt(poemPosition(h.poet, h.poemIdx), true);
   }
 
   // ── 造诗·填字 → 编号 ──────────────────────────────────────────────────────
@@ -345,7 +362,11 @@ export function SearchPanel() {
                     🛸 定位虚空 · 飞过去点亮这首诗
                   </button>
                   {madeReal && (
-                    <div className="rev-real">🎯 这正好是一首真实存在的诗:{madeReal.name}《{madeReal.title}》</div>
+                    <div className="rev-real">
+                      {madeReal.approx
+                        ? `🎯 这几乎就是一首真实的诗(用字略有异文):${madeReal.name}《${madeReal.title}》`
+                        : `🎯 这正好是一首真实存在的诗:${madeReal.name}《${madeReal.title}》`}
+                    </div>
                   )}
                 </div>
               ) : (
@@ -381,7 +402,11 @@ export function SearchPanel() {
                       🛸 定位虚空 · 飞过去点亮这首诗
                     </button>
                     {revReal && (
-                      <div className="rev-real">🎯 这串编号正好对应一首真实存在的诗:{revReal.name}《{revReal.title}》</div>
+                      <div className="rev-real">
+                        {revReal.approx
+                          ? `🎯 这串编号几乎对应一首真实的诗(用字略有异文):${revReal.name}《${revReal.title}》`
+                          : `🎯 这串编号正好对应一首真实存在的诗:${revReal.name}《${revReal.title}》`}
+                      </div>
                     )}
                   </div>
                 ) : (

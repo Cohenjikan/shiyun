@@ -3,14 +3,16 @@ import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import { useStore } from "../state/store";
 import { pullAt, COMMON_K } from "../engine/engineApi";
-import { loadPoetPoems } from "../data/load";
+import { loadPoetPoems, getPoet } from "../data/load";
 import { pickTargets } from "./picking";
 import { spinXZ, unspinXZ, SPIN_RATE, GALAXY } from "./galaxyParams";
-import { poemPosition } from "./positions";
+import { poemPosition, poetPosition, poemSystemRadius } from "./positions";
 
 const GRAVITY_R = GALAXY.RADIUS * 1.15; // inside this sphere the camera is "in the galaxy's grip"
 
 const BASE_SPEED = 140; // world units/sec at speed ×1 (slow, galactic feel)
+// pressing any of these releases the camera lock (随意按移动键解除锁定)
+const MOVE_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ShiftLeft", "ShiftRight"]);
 
 export function FlyControls() {
   const { camera, gl } = useThree();
@@ -47,6 +49,7 @@ export function FlyControls() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTyping()) return;
       keys.current[e.code] = true;
+      if (MOVE_KEYS.has(e.code)) st().unlock(); // a movement key frees the locked camera
     };
     const onKeyUp = (e: KeyboardEvent) => (keys.current[e.code] = false);
     const onDown = (e: PointerEvent) => {
@@ -59,6 +62,7 @@ export function FlyControls() {
         drag.current.lastX = e.clientX;
         drag.current.lastY = e.clientY;
         drag.current.moved += Math.abs(dx) + Math.abs(dy);
+        if (drag.current.moved > 6) st().unlock(); // a real drag (look-around) frees the locked camera
         const s = 0.0024;
         euler.current.y -= dx * s;
         euler.current.x -= dy * s;
@@ -83,11 +87,13 @@ export function FlyControls() {
       const hit = screenPick(e.clientX, e.clientY, true); // click = poets + poem planets
       if (hit?.kind === "poet") {
         st().selectPoet(hit.poet);
+        st().lockPoet(hit.poet.id); // lock the star in the centre + follow it
         loadPoetPoems(hit.poet.id).then((poems) => useStore.getState().setPoetPoems(hit.poet.id, poems));
       } else if (hit?.kind === "poem") {
-        // clicked a poem-planet → open its poet panel focused on that poem + light the planet.
+        // clicked a poem-planet → open its poet panel focused on that poem + light + lock the planet.
         const { poet, poemIdx } = hit;
         st().selectPoet(poet, { poemIdx, title: "", firstLine: "" });
+        st().lockPoem(poet.id, poemIdx);
         loadPoetPoems(poet.id).then((poems) => useStore.getState().setPoetPoems(poet.id, poems));
         st().pulseAt(poemPosition(poet, poemIdx), true);
       } else {
@@ -131,6 +137,32 @@ export function FlyControls() {
 
   const tmpUp = useRef(new THREE.Vector3(0, 1, 0));
   useFrame((_, dt) => {
+    // camera LOCK: keep the selected poet (or one of its orbiting poems) centred + followed. The
+    // target's LOCAL position is recomputed every frame (poetPosition / time-aware poemPosition) and
+    // rotated into world by the live galaxy spin, so the camera tracks it as the galaxy turns and the
+    // planet orbits. Released by a movement key / drag (see handlers). Decoration keeps its faster
+    // DECOR_RATE spin → it streams past the held star, creating the sense of motion.
+    const lockId = useStore.getState().lockPoetId;
+    if (lockId) {
+      const lockedPoet = getPoet(lockId);
+      if (lockedPoet) {
+        const lpi = useStore.getState().lockPoemIdx;
+        const [lx, ly, lz] = lpi != null ? poemPosition(lockedPoet, lpi) : poetPosition(lockedPoet);
+        const [wx, wz] = spinXZ(lx, lz);
+        const target = new THREE.Vector3(wx, ly, wz);
+        const dist = lpi != null ? 240 : Math.min(2600, poemSystemRadius(lockedPoet.poemCount) * 2.4 + 240);
+        const back = new THREE.Vector3().subVectors(camera.position, target);
+        if (back.lengthSq() < 1) back.set(0, 0, 1);
+        back.normalize();
+        const desired = target.clone().addScaledVector(back, dist).add(new THREE.Vector3(0, dist * 0.18, 0));
+        const k = 1 - Math.pow(0.0025, dt); // gentle glide-in then steady follow
+        camera.position.lerp(desired, k);
+        const m = new THREE.Matrix4().lookAt(camera.position, target, tmpUp.current);
+        camera.quaternion.slerp(new THREE.Quaternion().setFromRotationMatrix(m), k);
+        euler.current.setFromQuaternion(camera.quaternion); // so free-fly resumes cleanly on release
+        return;
+      }
+    }
     const flyTarget = useStore.getState().flyTarget;
     if (flyTarget) {
       // flyTarget is LOCAL (a poet position / canonical void point) — rotate it into world by

@@ -29,6 +29,11 @@ export function gauss3(a: number, b: number, c: number): number {
 // spinning" illusion). Because the backdrop is mostly haze now, the drift reads as nebulosity, not
 // a mismatched second arm set.
 export const galaxySpin = { angle: 0, decorAngle: 0 };
+
+// Shared monotonic clock (seconds) for poem-planet SELF-rotation around their poet. Advanced by
+// PoemOrbits each frame; read by the planet shaders (uTime), the GPU picker (so a click hits the
+// planet where it's drawn), and positions.poemPosition (so locate/flares track the orbiting planet).
+export const poemClock = { t: 0 };
 export const SPIN_RATE = 0.012; // poet layer rad/sec — gentle; a full turn ≈ 8.7 min
 export const DECOR_RATE = 0.019; // backdrop rad/sec — ~1.6× the poets → visible differential
 

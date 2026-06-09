@@ -4,7 +4,7 @@
 // galaxy frame (callers apply the shared spinXZ to get world coords).
 import { DYNASTY_BY_KEY, DYNASTIES, DYNASTY_COUNT, bandRadius, hashStr, R_MIN, R_MAX } from "../data/dynasties";
 import type { PoetRow } from "../data/load";
-import { GALAXY, gauss3 } from "./galaxyParams";
+import { GALAXY, gauss3, poemClock } from "./galaxyParams";
 
 // Mean radius = dynasty shell (time = depth) with a GAUSSIAN radial spread that BLEEDS into
 // neighbouring dynasty bands (colours blend into a gradient, not hard rings); angle is biased onto
@@ -54,39 +54,55 @@ export function poetPosition(p: PoetRow): [number, number, number] {
   ];
 }
 
-// ── Poems as a soft 3D star-cluster around their poet ───────────────────────────────────────────
-// A poem at index `poemIdx` of poet `p` sits in a SOFT, near-spherical cloud around the poet star —
-// NOT a flat disc (a flat disc read as a rectangular "block" edge-on and all discs aligned to the
-// galaxy plane → the sky looked tiled). Directions use a spherical-Fibonacci spread (even, no
-// clumping) and the radius is volume-filling with per-point jitter (soft edge, no hard shell). A
-// prolific poet (李白) becomes a dense little cluster; a one-poem poet a single near satellite.
+// ── Poems as a big, irregular, rotating 3D star-cluster around their poet ────────────────────────
+// A poem at index `poemIdx` of poet `p` sits in a LARGE, irregular cloud around the poet star — not a
+// flat disc (read as tiled blocks) and not a uniform ball (read as too even/dense). Directions use a
+// spherical-Fibonacci spread; the radius is a clumpy power-law with WIDE jitter (sparse halo, dense
+// core, no hard shell); and per-poet ELLIPSOID axes give each poet a distinct shape (sphere / ellipse
+// / oblate). The whole cloud also SELF-ROTATES around the poet (poemOmega + poemClock) so it has life
+// and relative motion. A prolific poet (杜甫/李白) becomes a sprawling cluster; a one-poem poet a lone star.
 const GOLDEN = Math.PI * (3 - Math.sqrt(5)); // ~2.39996 rad — even angular spread
 
-/** Cluster radius (LOCAL units) of a poet's poem-cloud — grows with poemCount, capped to limit overlap. */
+/** Cluster radius (LOCAL units) — grows with poemCount. ~6× the round-6 size (was 8+2√P): the field
+ *  read too small/local, so spread it out (杜甫 ~1593首 → ~555; a 1-poem poet → ~48). Tune freely. */
 export function poemSystemRadius(poemCount: number): number {
-  return Math.min(90, 8 + 2.0 * Math.sqrt(Math.max(1, poemCount)));
+  return Math.min(3000, 35 + 13 * Math.sqrt(Math.max(1, poemCount)));
 }
 
-/** OFFSET (relative to the poet centre) of poem `poemIdx` in the soft 3D cluster. Cheap — no
- *  poetPosition call — so the "show ALL poems" build computes the poet centre ONCE and adds this. */
+/** Per-poet self-rotation rate (rad/s) of the poem cloud around its poet. Gentle ± so it drifts, not spins. */
+export function poemOmega(p: PoetRow): number {
+  const h = hashStr(p.id + "~spin");
+  const sign = h & 1 ? 1 : -1;
+  return sign * (0.018 + 0.05 * (((h >>> 8) & 0xff) / 255)); // ~0.018..0.068 rad/s
+}
+
+/** REST OFFSET (relative to the poet centre, BEFORE self-rotation) of poem `poemIdx`. Cheap — no
+ *  poetPosition call — so the "show ALL poems" build computes the poet centre ONCE and adds this.
+ *  The geometry stores this rest offset; the shader (and poemPosition) apply the time rotation. */
 export function poemOffset(p: PoetRow, poemIdx: number): [number, number, number] {
   const P = Math.max(1, p.poemCount);
   const R0 = poemSystemRadius(P);
-  // even direction on a sphere (spherical Fibonacci) → a soft 3D cluster, never a flat disc
   const yd = 1 - (2 * (poemIdx + 0.5)) / P; // +1..-1 (latitude)
   const rxy = Math.sqrt(Math.max(0, 1 - yd * yd));
   const phase = (hashStr(p.id) & 0xffff) * 0.001; // per-poet phase so clusters aren't aligned
   const th = poemIdx * GOLDEN + phase;
   const h = hashStr(p.id + ":" + poemIdx);
-  const jitter = 0.7 + 0.55 * (((h >>> 8) & 0xff) / 255); // soft, non-shell boundary (no hard edge)
-  const rho = R0 * Math.cbrt((poemIdx + 0.5) / P) * jitter; // volume-filling radius
-  const FLAT = 0.85; // very slightly flattened toward the galaxy plane, but essentially spherical
-  return [rxy * Math.cos(th) * rho, yd * rho * FLAT, rxy * Math.sin(th) * rho];
+  const jitter = 0.4 + 1.2 * (((h >>> 8) & 0xff) / 255); // WIDE (0.4..1.6) → clumpy, no shell
+  const rho = R0 * Math.pow((poemIdx + 0.5) / P, 0.62) * jitter; // dense core, sparse halo (non-uniform)
+  // per-poet ellipsoid axes → varied irregular shapes (some round, some elongated, some oblate)
+  const he = hashStr(p.id + "#shape");
+  const ax = 0.55 + 1.05 * (((he >>> 2) & 0xff) / 255);
+  const ay = 0.4 + 0.95 * (((he >>> 10) & 0xff) / 255);
+  const az = 0.55 + 1.05 * (((he >>> 18) & 0xff) / 255);
+  return [rxy * Math.cos(th) * rho * ax, yd * rho * ay, rxy * Math.sin(th) * rho * az];
 }
 
-/** Absolute LOCAL position of a poem-planet (poet centre + orbital offset). */
+/** Absolute LOCAL position of a poem-planet NOW (poet centre + self-rotated offset). Time-aware (reads
+ *  poemClock) so locate/flares land on the orbiting planet where it currently is. */
 export function poemPosition(p: PoetRow, poemIdx: number): [number, number, number] {
   const [cx, cy, cz] = poetPosition(p);
   const [dx, dy, dz] = poemOffset(p, poemIdx);
-  return [cx + dx, cy + dy, cz + dz];
+  const ang = poemClock.t * poemOmega(p); // self-rotation about the poet's Y axis (matches the shader)
+  const c = Math.cos(ang), s = Math.sin(ang);
+  return [cx + dx * c - dz * s, cy + dy, cz + dx * s + dz * c];
 }

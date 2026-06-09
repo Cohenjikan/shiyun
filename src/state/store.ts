@@ -39,6 +39,10 @@ interface State {
   gravity: boolean; // when inside the galaxy, co-rotate the camera with the spin (stars hold still)
   speed: number; // multiplier
   flyTarget: [number, number, number] | null;
+  // camera lock: keep a selected poet (or one of its poems) centred + followed until a movement key
+  // / drag releases it. lockPoemIdx null = lock the poet star; a number = lock that orbiting planet.
+  lockPoetId: string | null;
+  lockPoemIdx: number | null;
 
   setLoaded: (b: boolean) => void;
   setForm: (f: PullForm) => void;
@@ -61,6 +65,9 @@ interface State {
   toggleUI: () => void;
   setSpeed: (s: number) => void;
   setFlyTarget: (t: [number, number, number] | null) => void;
+  lockPoet: (id: string) => void;
+  lockPoem: (poetId: string, poemIdx: number) => void;
+  unlock: () => void;
 }
 
 const MAX_PULLS = 24; // small buffer; PulledStars caps the ALIVE markers at 20 + animates removal
@@ -86,6 +93,8 @@ export const useStore = create<State>((set) => ({
   gravity: true,
   speed: 1,
   flyTarget: null,
+  lockPoetId: null,
+  lockPoemIdx: null,
 
   setLoaded: (loaded) => set({ loaded }),
   setForm: (form) => set({ form }),
@@ -105,6 +114,8 @@ export const useStore = create<State>((set) => ({
       selectedPoet: null,
       poetPoems: null,
       poetFocus: null,
+      lockPoetId: null, // a void pull releases any poet/planet lock
+      lockPoemIdx: null,
       pulls: [...s.pulls, { id: _pullSeq++, pos: p.pos, valid: p.valid }].slice(-MAX_PULLS),
     })),
   pulseAt: (pos, valid) =>
@@ -115,7 +126,7 @@ export const useStore = create<State>((set) => ({
     set({ selectedPoet, poetPoems: null, poetFocus: focus, selected: null }),
   setPoetPoems: (id, poems) =>
     set((s) => (s.selectedPoet?.id === id ? { poetPoems: poems } : {})),
-  clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetFocus: null }),
+  clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetFocus: null, lockPoetId: null, lockPoemIdx: null }),
   toggleGifts: () => set((s) => ({ showGifts: !s.showGifts })),
   toggleAllPoems: () => set((s) => ({ showAllPoems: !s.showAllPoems })),
   toggleQuality: () => set((s) => ({ quality: s.quality === "high" ? "low" : "high" })),
@@ -123,4 +134,7 @@ export const useStore = create<State>((set) => ({
   toggleUI: () => set((s) => ({ uiHidden: !s.uiHidden })),
   setSpeed: (speed) => set({ speed }),
   setFlyTarget: (flyTarget) => set({ flyTarget }),
+  lockPoet: (id) => set({ lockPoetId: id, lockPoemIdx: null }),
+  lockPoem: (id, poemIdx) => set({ lockPoetId: id, lockPoemIdx: poemIdx }),
+  unlock: () => set({ lockPoetId: null, lockPoemIdx: null }),
 }));

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { PoetRow } from "../data/load";
-import { galaxySpin } from "./galaxyParams";
+import { galaxySpin, poemClock } from "./galaxyParams";
 import { pickTargets, type PickResult } from "./picking";
 
 // GPU colour-ID picking — replaces the O(29,808)/hover CPU scan in FlyControls.screenPick.
@@ -127,13 +127,18 @@ export function createGpuPicker(
     depthTest: true,
     depthWrite: true,
     blending: THREE.NoBlending,
-    uniforms: { uScale: { value: 360 }, uMax: { value: 11 }, uGate: { value: 3.0 } },
+    uniforms: { uScale: { value: 360 }, uMax: { value: 11 }, uGate: { value: 3.0 }, uTime: { value: 0 } },
     vertexShader: /* glsl */ `
-      attribute vec3 aPickColor;
-      uniform float uScale; uniform float uMax; uniform float uGate;
+      attribute vec3 aPickColor; attribute vec3 aCenter; attribute float aOmega;
+      uniform float uScale; uniform float uMax; uniform float uGate; uniform float uTime;
       varying vec3 vPick;
       void main() {
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        // self-rotate exactly like the visual planet shader so the click lands where it's drawn
+        vec3 off0 = position - aCenter;
+        float ang = uTime * aOmega;
+        float c = cos(ang), s = sin(ang);
+        vec3 wp = aCenter + vec3(off0.x * c - off0.z * s, off0.y, off0.x * s + off0.z * c);
+        vec4 mv = modelViewMatrix * vec4(wp, 1.0);
         float sz = clamp(uScale / -mv.z, 1.0, uMax); // SAME apparent size as the visual planet
         if (sz < uGate) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }
         gl_PointSize = clamp(sz, uGate, uMax);
@@ -195,6 +200,7 @@ export function createGpuPicker(
       (poemMat.uniforms.uScale.value as number) = layer.sizeScale;
       (poemMat.uniforms.uMax.value as number) = layer.maxPx;
       (poemMat.uniforms.uGate.value as number) = Math.min(gate, 3.0 * pr); // planets are smaller than stars
+      (poemMat.uniforms.uTime.value as number) = poemClock.t; // match the visual self-rotation at click time
       poemPoints.visible = true;
     } else {
       poemPoints.visible = false;
