@@ -28,6 +28,9 @@ interface State {
   poetFocus: { poemIdx: number; title: string; firstLine: string } | null; // poem to surface (诗句 search)
   // 赠诗 network
   showGifts: boolean;
+  // 行星指引线常驻: when ON the selected poet's guide lines stay (no 10s auto-fade); only ONE at a time
+  // (they follow the selected poet, so picking another poet switches them). OFF = one-shot ~10s flash.
+  guideHold: boolean;
   // poem "planets": when ON, every poet shows ALL their poems as orbiting planets (高性能);
   // when OFF, only the selected poet's poems orbit (on-demand 彩蛋). Like 赠诗, a visual toggle.
   showAllPoems: boolean;
@@ -35,6 +38,15 @@ interface State {
   quality: "high" | "low";
   // hide ALL overlay UI (screenshot mode) — toggled by a corner button + the H hotkey
   uiHidden: boolean;
+  // 赠诗漫游 (gift-network roaming): a breadcrumb of poets you've HOPPED through along 赠诗 edges.
+  // trail[last] = the current poet; consecutive nodes are drawn as persistent "return lines" (GiftTrail).
+  // Capped at 11 nodes (= 10 return edges). Reset to [poet] on a NORMAL selectPoet (= 点无关诗人清除);
+  // grown by hopToPoet; cleared on 赠诗 off / manual clear.
+  giftTrail: string[];
+  // pathfinding between two poets over the 赠诗 graph
+  pathStart: string | null;
+  pathEnd: string | null;
+  pathResult: string[] | null; // BFS poet-id path (incl. endpoints), [] = searched but none within range
   // camera
   gravity: boolean; // when inside the galaxy, co-rotate the camera with the spin (stars hold still)
   speed: number; // multiplier
@@ -58,7 +70,12 @@ interface State {
   selectPoet: (p: PoetRow, focus?: { poemIdx: number; title: string; firstLine: string } | null) => void;
   setPoetPoems: (id: string, poems: PoemRecord[]) => void;
   clearPoet: () => void;
+  hopToPoet: (p: PoetRow) => void; // travel along a 赠诗 edge: select + lock + APPEND to the trail (or
+  //   trim back to it if already on the trail). Backed by GiftTrail's persistent return lines.
+  clearTrail: () => void;
+  setPath: (start: string | null, end: string | null, result: string[] | null) => void;
   toggleGifts: () => void;
+  toggleGuideHold: () => void;
   toggleAllPoems: () => void;
   toggleQuality: () => void;
   toggleGravity: () => void;
@@ -87,6 +104,11 @@ export const useStore = create<State>((set) => ({
   poetPoems: null,
   poetFocus: null,
   showGifts: false,
+  guideHold: false,
+  giftTrail: [],
+  pathStart: null,
+  pathEnd: null,
+  pathResult: null,
   showAllPoems: false,
   quality: "high",
   uiHidden: false,
@@ -123,11 +145,24 @@ export const useStore = create<State>((set) => ({
   clearSelection: () => set({ selected: null }),
   setHover: (hoverPoetId) => set({ hoverPoetId }),
   selectPoet: (selectedPoet, focus = null) =>
-    set({ selectedPoet, poetPoems: null, poetFocus: focus, selected: null }),
+    // a NORMAL selection (3D star / search / planet) starts a FRESH trail at this poet (点无关诗人清除)
+    set({ selectedPoet, poetPoems: null, poetFocus: focus, selected: null, giftTrail: [selectedPoet.id] }),
   setPoetPoems: (id, poems) =>
     set((s) => (s.selectedPoet?.id === id ? { poetPoems: poems } : {})),
-  clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetFocus: null, lockPoetId: null, lockPoemIdx: null }),
-  toggleGifts: () => set((s) => ({ showGifts: !s.showGifts })),
+  clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetFocus: null, lockPoetId: null, lockPoemIdx: null, giftTrail: [] }),
+  hopToPoet: (poet) =>
+    set((s) => {
+      const id = poet.id;
+      const i = s.giftTrail.indexOf(id);
+      // already on the trail → trim back to it (返回); else append, capping at 11 nodes (= 10 return lines)
+      const giftTrail = i >= 0 ? s.giftTrail.slice(0, i + 1) : [...s.giftTrail, id].slice(-11);
+      return { selectedPoet: poet, poetPoems: null, poetFocus: null, selected: null, lockPoetId: id, lockPoemIdx: null, giftTrail };
+    }),
+  clearTrail: () => set((s) => ({ giftTrail: s.selectedPoet ? [s.selectedPoet.id] : [], pathResult: null })),
+  setPath: (pathStart, pathEnd, pathResult) => set({ pathStart, pathEnd, pathResult }),
+  toggleGifts: () =>
+    set((s) => (s.showGifts ? { showGifts: false, giftTrail: [], pathStart: null, pathEnd: null, pathResult: null } : { showGifts: true })),
+  toggleGuideHold: () => set((s) => ({ guideHold: !s.guideHold })),
   toggleAllPoems: () => set((s) => ({ showAllPoems: !s.showAllPoems })),
   toggleQuality: () => set((s) => ({ quality: s.quality === "high" ? "low" : "high" })),
   toggleGravity: () => set((s) => ({ gravity: !s.gravity })),

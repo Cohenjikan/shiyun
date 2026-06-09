@@ -6,12 +6,14 @@ import { PoetStars } from "./three/PoetStars";
 import { PoemOrbits } from "./three/PoemOrbits";
 import { PoemGuides } from "./three/PoemGuides";
 import { GiftLines } from "./three/GiftLines";
+import { GiftTrail } from "./three/GiftTrail";
 import { PulledStars } from "./three/PulledStars";
 import { FlyControls } from "./three/FlyControls";
 import { HUD } from "./ui/HUD";
 import { PoemPanel } from "./ui/PoemPanel";
 import { PoetPanel } from "./ui/PoetPanel";
 import { SearchPanel } from "./ui/SearchPanel";
+import { GiftRoam } from "./ui/GiftRoam";
 import { Onboarding } from "./ui/Onboarding";
 import { useStore } from "./state/store";
 import { applyHash, syncHash } from "./state/permalink";
@@ -68,6 +70,7 @@ export default function App() {
         {loaded && <PoemOrbits />}
         {loaded && <PoemGuides />}
         {loaded && <GiftLines />}
+        {loaded && <GiftTrail />}
         <PulledStars />
         <FlyControls />
         {/* HDR additive bloom — turns discrete bright particles into continuous nebulosity and
@@ -90,6 +93,7 @@ export default function App() {
         <>
           <HUD />
           {loaded && <SearchPanel />}
+          {loaded && <GiftRoam />}
           <PoemPanel />
           <PoetPanel />
         </>

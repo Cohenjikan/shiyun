@@ -1021,3 +1021,196 @@ canvas {
   color: var(--muted);
   letter-spacing: 0.2em;
 }
+
+/* ── 赠诗漫游 panel (gift-network roaming) — docked bottom-left, above the hint bar ── */
+.giftroam {
+  position: fixed;
+  left: 20px;
+  bottom: 44px;
+  z-index: 21;
+  width: 300px;
+  max-height: 46vh;
+  overflow: auto;
+  background: rgba(8, 10, 18, 0.86);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 210, 122, 0.22);
+  border-radius: 12px;
+  padding: 10px 12px 12px;
+  font-size: 13px;
+}
+.gr-title {
+  color: var(--gold);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.gr-sub {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.gr-section {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 7px;
+}
+.gr-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+}
+.gr-dim,
+.gr-dim-inline {
+  color: var(--muted);
+  font-size: 11px;
+}
+.gr-dim {
+  padding: 2px 0;
+}
+.gr-links {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 22vh;
+  overflow: auto;
+}
+.gr-link {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.gr-link-go {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.gr-link-go:hover {
+  background: rgba(255, 210, 122, 0.12);
+}
+.gr-dir {
+  font-size: 10px;
+  white-space: nowrap;
+  flex: none;
+}
+.gr-dir.out {
+  color: #ffcf66;
+}
+.gr-dir.in {
+  color: #7fd1ff;
+}
+.gr-link-name {
+  color: var(--fg);
+  flex: 1;
+  min-width: 0;
+}
+.gr-w {
+  color: var(--muted);
+  font-size: 10px;
+  flex: none;
+}
+.gr-dedi {
+  flex: none;
+  max-width: 44%;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gr-dedi:hover {
+  color: var(--gold);
+}
+.gr-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  line-height: 1.7;
+}
+.gr-arrow {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 0 1px;
+}
+.gr-node {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--fg);
+  font-size: 12px;
+  padding: 1px 7px;
+  cursor: pointer;
+}
+.gr-node:hover {
+  border-color: rgba(255, 210, 122, 0.5);
+}
+.gr-node.cur {
+  background: rgba(255, 207, 102, 0.18);
+  border-color: rgba(255, 207, 102, 0.55);
+  color: var(--gold);
+}
+.gr-node.path {
+  border-color: rgba(127, 209, 255, 0.45);
+}
+.gr-clear {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.gr-clear:hover {
+  color: #ff9a9a;
+}
+.gr-path-set {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.gr-slot {
+  color: var(--fg);
+  font-size: 12px;
+  min-width: 38px;
+}
+.gr-set,
+.gr-find {
+  background: rgba(8, 10, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  color: var(--fg);
+  font-size: 12px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.gr-set:hover:not(:disabled),
+.gr-find:hover:not(:disabled) {
+  border-color: rgba(255, 210, 122, 0.5);
+}
+.gr-set:disabled,
+.gr-find:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.gr-path-act {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

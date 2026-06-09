@@ -65,6 +65,34 @@ known-good `epic-sinoussi` worktree + linesf from `inspiring-bhabha`, then TOOK 
 Verify gate: `npm run typecheck` clean, `npm test` **66/66**, `npm run build` ✓. Data + search HTTP-verified on
 5199. **4a/4b are visual — the user eyeballs them on a real GPU (no in-conversation preview, per the user).**
 
+### 5–7 — 产品优化: 行星指引常驻 + 赠诗漫游 (跳跃 / 足迹 / 路径)
+After GitHub backup + **syncing main's data** (copied the complete `poems/` into main, rebuilt main `lines/`+`search/`
+→ `missing 0/29808`, main no longer broken), built three coupled features. **All build + 66/66; the 3D
+interactions need a real-GPU pass (no preview).**
+
+- **5 — 行星指引线常驻 (HUD 指引)**: new `store.guideHold` + HUD toggle. ON → the selected poet's `PoemGuides`
+  lines hold full brightness instead of the ~10 s auto-fade; only ONE poet's guides show at a time (they follow
+  `selectedPoet`, so picking/hopping to another poet switches them). OFF = the existing one-shot flash.
+- **6 — 飞跃赠诗线 (hop to the linked poet)** [user chose 新面板+3D点线]: new **`GiftRoam`** panel (docked
+  bottom-left, shown when 赠诗 on) lists the selected poet's 赠答往来 (赠出→/←收到 · 对方 · 对应赠诗) — click a
+  row to fly across to that poet. ALSO **3D**: clicking a 赠诗 arc in the scene hops along it — `FlyControls`
+  CPU-projects the selected poet's ego-net arcs (same bundled Bézier as `GiftLines`) and picks the nearest within
+  16 px on a void click (cheap, click-only). Hopping = `store.hopToPoet` (select + lock-follow + APPEND to trail).
+- **7 — 赠诗漫游升级 (breadcrumb + return + path search)**:
+    • **足迹/返回线**: `store.giftTrail` = the poets you hopped through; **`GiftTrail.tsx`** draws PERSISTENT
+      bright-GOLD return lines between consecutive nodes (≤10 edges; trail capped at 11 nodes), with a pulse. Click
+      a 足迹 node (panel) or re-hop to return (the trail trims back). Cleared only on 赠诗 off / 清除 / selecting an
+      UNRELATED poet (`selectPoet` resets the trail to `[that poet]`).
+    • **对应赠诗标注**: for an out-edge, `giftGraph.dedicationPoemIdx` finds the giver's poem whose title contains
+      the recipient's name (best-effort; 字号 aliases like 子由→苏辙 may miss → shows the link without a poem).
+      Clicking it flares that planet (`pulseAt`, no lock change).
+    • **路径查找**: set 起点/终点 (from the selected poet) → `giftGraph.giftPath` BFS shortest path ≤10 hops over
+      the 4 849-edge graph (microseconds; budget raisable) → CYAN path highlight in 3D (`GiftTrail`) + clickable
+      result chips to fly along. Verified on real data: 苏轼→苏辙 1跳, 苏轼→纳兰性德 2跳 (苏轼→李之仪→纳兰性德,
+      跨宋清), 李白↔徐志摩 无连接 (古典/新诗为不连通分量).
+  New: `data/giftGraph.ts` (adjacency + BFS + dedication finder), `three/GiftTrail.tsx`, `ui/GiftRoam.tsx`; store
+  gains `giftTrail`/`pathStart`/`pathEnd`/`pathResult` + `hopToPoet`/`clearTrail`/`setPath`; HUD 指引 toggle.
+
 ### Round 8 — fuzzy LINE index (mid-line 异文) + orbit-lock + sustained highlight + guide lines
 - **诗句 mid-line variant search (item 1)** — round-7's `findReal` fuzzy only covered COMPOSE; 诗句 search of a
   variant line (「举头望明月」) still missed. New `pipeline/build-fuzzy.mjs` (`npm run build:fuzzy`) builds a

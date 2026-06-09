@@ -104,16 +104,17 @@ export function PoemGuides() {
     if (grp) grp.rotation.y = galaxySpin.angle;
     const g = cur.current;
     if (!g) return;
+    const hold = useStore.getState().guideHold; // 指引常驻: keep the lines up instead of the 10 s auto-fade
     const t = poemClock.t; // advanced by PoemOrbits
     g.mat.uniforms.uTime.value = t;
     const age = t - g.born;
     g.mat.uniforms.uGrow.value = Math.min(1, age / GROW);
     let alpha: number;
     if (age < GROW) alpha = (age / GROW) * 0.6;
-    else if (age < GROW + HOLD) alpha = 0.6;
+    else if (hold || age < GROW + HOLD) alpha = 0.6; // 常驻 → hold full alpha indefinitely
     else alpha = Math.max(0, 0.6 * (1 - (age - GROW - HOLD) / FADE));
     g.mat.uniforms.uAlpha.value = alpha;
-    if (age >= GROW + HOLD + FADE) { grp?.remove(g.lines); g.geo.dispose(); g.mat.dispose(); cur.current = null; } // auto-delete
+    if (!hold && age >= GROW + HOLD + FADE) { grp?.remove(g.lines); g.geo.dispose(); g.mat.dispose(); cur.current = null; } // auto-delete (off only)
   });
 
   return <group ref={groupRef} />;

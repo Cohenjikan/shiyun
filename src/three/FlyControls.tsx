@@ -4,11 +4,24 @@ import { useThree, useFrame } from "@react-three/fiber";
 import { useStore } from "../state/store";
 import { pullAt, COMMON_K } from "../engine/engineApi";
 import { loadPoetPoems, getPoet } from "../data/load";
+import { giftLinks, giftGraphReady } from "../data/giftGraph";
 import { pickTargets } from "./picking";
 import { spinXZ, unspinXZ, SPIN_RATE, GALAXY } from "./galaxyParams";
 import { poemPosition, poetPosition, poemSystemRadius } from "./positions";
 
 const GRAVITY_R = GALAXY.RADIUS * 1.15; // inside this sphere the camera is "in the galaxy's grip"
+
+// distance (px) from point P to segment AB — for clicking a 赠诗 arc in screen space
+function distPointSeg(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  if (l2 === 0) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+const GIFT_BUNDLE = 0.3; // must match GiftLines' BUNDLE so the pick curve == the drawn arc
+const GIFT_ESTEPS = 16;
+const GIFT_PICK_PX = 16; // click within this many px of an arc to hop along it
 
 const BASE_SPEED = 140; // world units/sec at speed ×1 (slow, galactic feel)
 // pressing any of these releases the camera lock (随意按移动键解除锁定)
@@ -42,6 +55,49 @@ export function FlyControls() {
     const screenPick = (cx: number, cy: number, includePoems = false) => {
       const r = el.getBoundingClientRect();
       return pickTargets.pick?.(cx - r.left, cy - r.top, includePoems) ?? null;
+    };
+
+    // 赠诗线 3D pick: with 赠诗 on + a poet selected, test the cursor against THAT poet's ego-net arcs
+    // (the only ones drawn) by projecting each bundled Bézier into screen space → nearest within
+    // GIFT_PICK_PX → returns the OTHER poet to hop to. Cheap (a handful of edges, click-only).
+    const ZERO = new THREE.Vector3(0, 0, 0);
+    const _gp = new THREE.Vector3(), _ga = new THREE.Vector3(), _gb = new THREE.Vector3(), _gc1 = new THREE.Vector3(), _gc2 = new THREE.Vector3();
+    const pickGiftEdge = (clientX: number, clientY: number) => {
+      const s = useStore.getState();
+      const from = s.selectedPoet;
+      if (!s.showGifts || !from || !giftGraphReady()) return null;
+      const links = giftLinks(from.id);
+      if (!links.length) return null;
+      const r = el.getBoundingClientRect();
+      const cx = clientX - r.left, cy = clientY - r.top;
+      _ga.set(...poetPosition(from));
+      let best: { poet: ReturnType<typeof getPoet>; d: number } | null = null;
+      for (const l of links) {
+        const other = getPoet(l.other);
+        if (!other) continue;
+        _gb.set(...poetPosition(other));
+        _gc1.copy(_ga).lerp(_gb, 0.33).lerp(ZERO, GIFT_BUNDLE);
+        _gc2.copy(_ga).lerp(_gb, 0.67).lerp(ZERO, GIFT_BUNDLE);
+        let psx = 0, psy = 0, hasPrev = false;
+        for (let k = 0; k <= GIFT_ESTEPS; k++) {
+          const t = k / GIFT_ESTEPS, u = 1 - t;
+          _gp.set(0, 0, 0)
+            .addScaledVector(_ga, u * u * u)
+            .addScaledVector(_gc1, 3 * u * u * t)
+            .addScaledVector(_gc2, 3 * u * t * t)
+            .addScaledVector(_gb, t * t * t);
+          const [wx, wz] = spinXZ(_gp.x, _gp.z); // LOCAL → WORLD (the arc group rides the spin)
+          _gp.set(wx, _gp.y, wz).project(camera);
+          const sx = (_gp.x * 0.5 + 0.5) * r.width, sy = (-_gp.y * 0.5 + 0.5) * r.height;
+          const front = _gp.z < 1;
+          if (hasPrev && front) {
+            const d = distPointSeg(cx, cy, psx, psy, sx, sy);
+            if (d < (best?.d ?? Infinity)) best = { poet: other, d };
+          }
+          psx = sx; psy = sy; hasPrev = front;
+        }
+      }
+      return best && best.d < GIFT_PICK_PX ? best.poet : null;
     };
 
     const isTyping = () => {
@@ -92,6 +148,7 @@ export function FlyControls() {
       drag.current.active = false;
       if (!wasClick) return;
       const hit = screenPick(e.clientX, e.clientY, true); // click = poets + poem planets
+      const giftHop = hit ? null : pickGiftEdge(e.clientX, e.clientY); // void click → maybe a 赠诗 arc
       if (hit?.kind === "poet") {
         st().selectPoet(hit.poet);
         st().lockPoet(hit.poet.id); // lock the star in the centre + follow it
@@ -103,6 +160,10 @@ export function FlyControls() {
         st().lockPoem(poet.id, poemIdx);
         loadPoetPoems(poet.id).then((poems) => useStore.getState().setPoetPoems(poet.id, poems));
         st().pulseAt(poemPosition(poet, poemIdx), true);
+      } else if (giftHop) {
+        // clicked a 赠诗 arc of the selected poet → fly across it to the other poet (hop + trail)
+        st().hopToPoet(giftHop);
+        loadPoetPoems(giftHop.id).then((poems) => useStore.getState().setPoetPoems(giftHop.id, poems));
       } else {
         const v = ndc(e.clientX, e.clientY);
         ray.current.setFromCamera(v, camera);

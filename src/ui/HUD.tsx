@@ -19,6 +19,8 @@ export function HUD() {
   const toggleLushi = useStore((s) => s.toggleLushi);
   const showGifts = useStore((s) => s.showGifts);
   const toggleGifts = useStore((s) => s.toggleGifts);
+  const guideHold = useStore((s) => s.guideHold);
+  const toggleGuideHold = useStore((s) => s.toggleGuideHold);
   const showAllPoems = useStore((s) => s.showAllPoems);
   const toggleAllPoems = useStore((s) => s.toggleAllPoems);
   const quality = useStore((s) => s.quality);
@@ -77,6 +79,13 @@ export function HUD() {
           title="行星：把每位诗人的全部作品显示为环绕他的行星（85万颗，建议高性能机器）。关闭时只在点击某位诗人后显示他的行星"
         >
           行星
+        </button>
+        <button
+          className={guideHold ? "filter on" : "filter"}
+          onClick={toggleGuideHold}
+          title="指引常驻：选中诗人后,射向其每首诗的指引线长期保留(同时最多一位);关闭则只闪现约10秒"
+        >
+          指引
         </button>
         <button
           className={gravity ? "filter on" : "filter"}
