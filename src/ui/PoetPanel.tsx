@@ -50,6 +50,7 @@ export function PoetPanel() {
   const pulseAt = useStore((s) => s.pulseAt);
   const lockPoem = useStore((s) => s.lockPoem);
   const openCinema = useStore((s) => s.toggleCinema);
+  const openCinemaFor = useStore((s) => s.openCinemaFor);
 
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [shown, setShown] = useState(PAGE);
@@ -126,8 +127,8 @@ export function PoetPanel() {
         <span className="poet-name" style={{ color: dyn?.color }}>{poet.name}</span>
         <span className="poet-sub">
           {dyn?.label ?? poet.dynasty} · {poet.poemCount} 首真实作品 <ShareButton />
-          <button className="cinema-btn" onClick={openCinema} title="框成一张可截图分享的卡片（时间暂停;展开一首诗后可框住那首）">
-            奇迹时刻
+          <button className="cinema-btn" onClick={openCinema} title="留影当前搜中的那首（时间暂停）;目录里每一行也有单独的「留影」按钮">
+            留影
           </button>
         </span>
       </div>
@@ -159,6 +160,13 @@ export function PoetPanel() {
                     onClick={(e) => { e.stopPropagation(); locatePoem(i); }}
                   >
                     定位
+                  </button>
+                  <button
+                    className="pi-cinema"
+                    title="把这首诗框成一张可截图分享的卡片（时间暂停）"
+                    onClick={(e) => { e.stopPropagation(); openCinemaFor(i); }}
+                  >
+                    留影
                   </button>
                   <LazyCopy compute={() => indexFor(i)?.index ?? null} label="复制编号" />
                 </div>

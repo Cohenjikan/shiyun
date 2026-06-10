@@ -49,10 +49,14 @@ interface State {
   quality: "high" | "low";
   // hide ALL overlay UI (screenshot mode) — toggled by a corner button + the H hotkey
   uiHidden: boolean;
-  // 奇迹时刻 (cinema): freeze ALL auto-animation (galaxy spin, void-pull lifecycle, highlight fades) and
+  // 留影(cinema): freeze ALL auto-animation (galaxy spin, void-pull lifecycle, highlight fades) and
   // show a framed share card over the still scene to guide a clean screenshot. cinemaCopy = which tagline.
   cinema: boolean;
   cinemaCopy: number;
+  // explicit 留影 target: which of the selected poet's poems (ORIGINAL index) to frame, chosen via a
+  // per-poem 留影 button in PoetPanel. null = fall back to the void pull / 搜的这首 focus poem. Reset to
+  // null whenever cinema closes or the selected poet changes, so a stale target never leaks.
+  cinemaPoemIdx: number | null;
   // owner-only feedback viewer (opened by a hidden gesture: 5 taps on the 诗云 logo within 10 s)
   feedbackOpen: boolean;
   // 赠诗漫游 (gift-network roaming): a breadcrumb of poets you've HOPPED through along 赠诗 edges.
@@ -109,6 +113,7 @@ interface State {
   toggleGravity: () => void;
   toggleUI: () => void;
   toggleCinema: () => void;
+  openCinemaFor: (poemIdx: number) => void; // open 留影 framing a SPECIFIC poem (its ORIGINAL index)
   setCinemaCopy: (n: number) => void;
   setFeedbackOpen: (b: boolean) => void;
   setSpeed: (s: number) => void;
@@ -155,6 +160,7 @@ export const useStore = create<State>((set) => ({
   uiHidden: false,
   cinema: false,
   cinemaCopy: 0,
+  cinemaPoemIdx: null,
   feedbackOpen: false,
   gravity: true,
   speed: 1,
@@ -180,6 +186,7 @@ export const useStore = create<State>((set) => ({
       selectedPoet: null,
       poetPoems: null,
       poetFocus: null,
+      cinemaPoemIdx: null, // the explicit 留影 target belonged to the old poet — drop it
       lockPoetId: null, // a void pull releases any poet/planet lock
       lockPoemIdx: null,
       pulls: [...s.pulls, { id: _pullSeq++, pos: p.pos, valid: p.valid }].slice(-MAX_PULLS),
@@ -191,19 +198,19 @@ export const useStore = create<State>((set) => ({
   setHoverPoem: (hoverPoem) => set({ hoverPoem }),
   selectPoet: (selectedPoet, focus = null) =>
     // a NORMAL selection (3D star / search / planet) starts a FRESH trail at this poet (点无关诗人清除)
-    set({ selectedPoet, poetPoems: null, poetPoemsError: null, poetFocus: focus, selected: null, giftTrail: [selectedPoet.id] }),
+    set({ selectedPoet, poetPoems: null, poetPoemsError: null, poetFocus: focus, selected: null, cinemaPoemIdx: null, giftTrail: [selectedPoet.id] }),
   setPoetPoems: (id, poems) =>
     set((s) => (s.selectedPoet?.id === id ? { poetPoems: poems, poetPoemsError: null } : {})),
   setPoetPoemsError: (id) =>
     set((s) => (id === null || s.selectedPoet?.id === id ? { poetPoemsError: id } : {})),
-  clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetPoemsError: null, poetFocus: null, lockPoetId: null, lockPoemIdx: null, giftTrail: [], hoverPoem: null }),
+  clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetPoemsError: null, poetFocus: null, cinemaPoemIdx: null, lockPoetId: null, lockPoemIdx: null, giftTrail: [], hoverPoem: null }),
   hopToPoet: (poet) =>
     set((s) => {
       const id = poet.id;
       const i = s.giftTrail.indexOf(id);
       // already on the trail → trim back to it (返回); else append, capping at 11 nodes (= 10 return lines)
       const giftTrail = i >= 0 ? s.giftTrail.slice(0, i + 1) : [...s.giftTrail, id].slice(-11);
-      return { selectedPoet: poet, poetPoems: null, poetPoemsError: null, poetFocus: null, selected: null, lockPoetId: id, lockPoemIdx: null, giftTrail };
+      return { selectedPoet: poet, poetPoems: null, poetPoemsError: null, poetFocus: null, selected: null, cinemaPoemIdx: null, lockPoetId: id, lockPoemIdx: null, giftTrail };
     }),
   clearTrail: () => set((s) => ({ giftTrail: s.selectedPoet ? [s.selectedPoet.id] : [], pathResult: null })),
   setPath: (pathStart, pathEnd, pathResult) => set({ pathStart, pathEnd, pathResult }),
@@ -223,7 +230,10 @@ export const useStore = create<State>((set) => ({
   toggleQuality: () => set((s) => ({ quality: s.quality === "high" ? "low" : "high" })),
   toggleGravity: () => set((s) => ({ gravity: !s.gravity })),
   toggleUI: () => set((s) => ({ uiHidden: !s.uiHidden })),
-  toggleCinema: () => set((s) => ({ cinema: !s.cinema })),
+  // toggling cinema OFF clears the explicit per-poem target so reopening via the panel button (which
+  // frames the 搜的这首 focus poem) doesn't leak the last 留影 row's poem.
+  toggleCinema: () => set((s) => (s.cinema ? { cinema: false, cinemaPoemIdx: null } : { cinema: true })),
+  openCinemaFor: (poemIdx) => set({ cinema: true, cinemaPoemIdx: poemIdx }),
   setCinemaCopy: (cinemaCopy) => set({ cinemaCopy }),
   setFeedbackOpen: (feedbackOpen) => set({ feedbackOpen }),
   setSpeed: (speed) => set({ speed }),

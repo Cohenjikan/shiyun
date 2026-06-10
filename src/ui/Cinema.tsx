@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import { useStore } from "../state/store";
 import { anyTextIndex } from "../engine/engineApi";
+import { resolveCinemaPoem } from "./cinemaResolve";
 
-// 奇迹时刻 — a "share card" over the FROZEN scene (the store.cinema flag pauses spin + the void-pull /
+// 留影(cinema) — a "share card" over the FROZEN scene (the store.cinema flag pauses spin + the void-pull /
 // highlight lifecycles in the r3f layers), to guide a screenshot. The overlay itself is pointer-events:none
 // EXCEPT its controls + the poem card, so you can still drag the camera through it to compose the shot, then
 // screenshot. The poem card can be DRAGGED to reposition and pinch/wheel/±-zoomed to resize, so the user
@@ -26,10 +27,11 @@ export function Cinema() {
   const poet = useStore((s) => s.selectedPoet);
   const poems = useStore((s) => s.poetPoems);
   const focus = useStore((s) => s.poetFocus);
+  const cinemaPoemIdx = useStore((s) => s.cinemaPoemIdx);
   const copyIdx = useStore((s) => s.cinemaCopy);
   const setCopy = useStore((s) => s.setCinemaCopy);
 
-  // poem transform (composition): translate offset + scale. Local state — resets each time 奇迹时刻 opens,
+  // poem transform (composition): translate offset + scale. Local state — resets each time 留影 opens,
   // because App mounts <Cinema/> only while `cinema` is true.
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
@@ -43,24 +45,13 @@ export function Cinema() {
 
   if (!cinema) return null;
 
-  // resolve the framed poem: a void pull (the purest 奇迹), else the selected poet's focused real poem.
-  let lines: string[] | null = null;
-  let index: string | null = null;
-  let digits = 0;
-  let attribution = "";
-  if (selected) {
-    lines = selected.lines;
-    index = selected.babelIndex;
-    digits = selected.babelDigits;
-    attribution = "诗云 · 从虚空里捞起";
-  } else if (poet && poems && focus && focus.poemIdx >= 0 && poems[focus.poemIdx]) {
-    const pm = poems[focus.poemIdx];
-    const a = anyTextIndex(pm.p);
-    lines = pm.p;
-    index = a?.index ?? null;
-    digits = a?.digits ?? 0;
-    attribution = `${poet.name}《${pm.t || "无题"}》`;
-  }
+  // resolve the framed poem: an explicit per-poem 留影 pick (PoetPanel row button) wins, else a void pull
+  // (the purest 奇迹), else the selected poet's 搜的这首 focus poem. See resolveCinemaPoem for precedence.
+  const resolved = resolveCinemaPoem({ selected, poet, poems, focus, cinemaPoemIdx, indexer: anyTextIndex });
+  const lines = resolved?.lines ?? null;
+  const index = resolved?.index ?? null;
+  const digits = resolved?.digits ?? 0;
+  const attribution = resolved?.attribution ?? "";
   const n = TAGLINES.length;
   const tag = TAGLINES[((copyIdx % n) + n) % n];
 
@@ -168,7 +159,7 @@ export function Cinema() {
       {lines && !touched && <div className="cinema-hint">拖动诗句移动 · 滚轮 / 双指缩放</div>}
 
       <div className="cinema-brand">诗云 · Poetry Cloud</div>
-      <button className="cinema-exit" onClick={close} title="退出奇迹时刻">截好图 · 退出 ✕</button>
+      <button className="cinema-exit" onClick={close} title="退出留影">截好图 · 退出 ✕</button>
     </div>
   );
 }

@@ -573,7 +573,7 @@ canvas {
   background: rgba(130, 180, 255, 0.14);
   border-color: rgba(130, 180, 255, 0.42);
   color: #bcd4ff;
-  /* same size as .cinema-btn so 分享 / 奇迹时刻 sit as a uniform pair */
+  /* same size as .cinema-btn so 分享 / 留影 sit as a uniform pair */
   font-size: 11px;
   padding: 3px 10px;
   border-radius: 6px;
@@ -921,6 +921,22 @@ canvas {
 }
 .pi-row .pi-locate:hover {
   background: rgba(130, 180, 255, 0.24);
+}
+/* per-poem 留影 (cinema) row button — gold accent (matches .cinema-btn) so it reads as 留影, sized
+   like .pi-locate so the row's 定位 / 留影 / 复制编号 trio stays uniform. */
+.pi-row .pi-cinema {
+  flex: none;
+  white-space: nowrap;
+  background: rgba(255, 210, 122, 0.12);
+  border: 1px solid rgba(255, 210, 122, 0.42);
+  border-radius: 5px;
+  color: var(--gold);
+  font-size: 10px;
+  padding: 1px 7px;
+  cursor: pointer;
+}
+.pi-row .pi-cinema:hover {
+  background: rgba(255, 210, 122, 0.24);
 }
 .pi-detail {
   padding: 2px 2px 8px 17px;
@@ -1735,7 +1751,8 @@ canvas {
     padding: 6px 12px;
   }
   .copy-btn,
-  .pi-locate {
+  .pi-locate,
+  .pi-cinema {
     padding: 7px 12px;
   }
   .seg-btn,
@@ -1757,7 +1774,7 @@ canvas {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   奇迹时刻 / Cinema — a framed share card over the FROZEN scene (store.cinema pauses
+   留影 / Cinema — a framed share card over the FROZEN scene (store.cinema pauses
    the spin + void-pull + highlight lifecycles in the r3f layers). The overlay is
    pointer-events:none so you can drag the camera THROUGH it to compose, then shoot;
    only the controls (tagline arrows, exit) are clickable. ui/Cinema.tsx.
@@ -1938,7 +1955,7 @@ canvas {
   background: rgba(255, 84, 84, 0.18);
   color: #ff9a9a;
 }
-/* 奇迹时刻 entry button (poem / poet panels) — same size as .copy-btn.share so the pair is uniform */
+/* 留影(cinema) entry button (poem / poet panels) — same size as .copy-btn.share so the pair is uniform */
 .cinema-btn {
   background: rgba(255, 210, 122, 0.12);
   border: 1px solid rgba(255, 210, 122, 0.42);
