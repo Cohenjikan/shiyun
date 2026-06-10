@@ -5,8 +5,9 @@
 //
 //   POST /api/feedback   body: {"source":"shiyun","message":"…","ts":1781000000000}
 //                        → appends one JSON line to FEEDBACK_FILE, replies {"ok":true}
-//   GET  /api/feedback?token=<FEEDBACK_TOKEN>
+//   GET  /api/feedback   header: Authorization: Bearer <FEEDBACK_TOKEN>
 //                        → owner-only: streams the JSONL back (newest last). 403 without token.
+//                        (header, NOT query string — query strings land in nginx access logs)
 //   GET  /api/feedback/health → {"ok":true} (for monitoring)
 //
 // Privacy by design: stores message + timestamps + truncated user-agent. NO IP address.
@@ -20,6 +21,7 @@
 import { createServer } from "node:http";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -43,16 +45,35 @@ function rateLimited(key) {
 const json = (res, code, obj) =>
   res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" }).end(JSON.stringify(obj));
 
+// constant-time secret comparison: hash both sides → equal-length buffers for timingSafeEqual
+// (a plain !== short-circuits on the first differing char — a textbook timing side channel).
+const sha = (s) => createHash("sha256").update(String(s)).digest();
+const tokenOk = (presented) => !!TOKEN && timingSafeEqual(sha(presented), sha(TOKEN));
+
 await mkdir(dirname(FILE), { recursive: true }).catch(() => {});
 
 createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  const path = url.pathname.replace(/\/+$/, "");
+  // the Host header is attacker-controlled — an invalid one (`Host: a b`) makes new URL throw,
+  // which in an async handler becomes an unhandled rejection and KILLS the process (one-line DoS,
+  // proven). Parse defensively; any other sync throw is caught by the outer try below.
+  try {
+    let url;
+    try {
+      url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    } catch {
+      return json(res, 400, { error: "bad request" });
+    }
+    const path = url.pathname.replace(/\/+$/, "");
 
   if (req.method === "GET" && path === "/api/feedback/health") return json(res, 200, { ok: true });
 
   if (req.method === "GET" && path === "/api/feedback") {
-    if (!TOKEN || url.searchParams.get("token") !== TOKEN) return json(res, 403, { error: "forbidden" });
+    const ua = String(req.headers["user-agent"] || "").slice(0, 120);
+    if (rateLimited("get:" + ua)) return json(res, 429, { error: "slow down" }); // throttle token probes too
+    // token via Authorization header, NOT the query string (query strings land in access logs)
+    const auth = String(req.headers.authorization || "");
+    const presented = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (!tokenOk(presented)) return json(res, 403, { error: "forbidden" });
     const body = await readFile(FILE, "utf8").catch(() => "");
     return res.writeHead(200, { "Content-Type": "application/x-ndjson; charset=utf-8" }).end(body);
   }
@@ -86,6 +107,13 @@ createServer(async (req, res) => {
   }
 
   json(res, 404, { error: "not found" });
+  } catch (e) {
+    // belt-and-braces: no request may ever crash the process (unhandled rejection = process exit)
+    console.error("handler error:", e?.message || e);
+    if (!res.writableEnded) {
+      try { json(res, 500, { error: "internal" }); } catch { /* socket already gone */ }
+    }
+  }
 }).listen(PORT, HOST, () => {
   console.log(`shiyun feedback collector on http://${HOST}:${PORT}/api/feedback → ${FILE}`);
   if (!TOKEN) console.warn("FEEDBACK_TOKEN unset — the GET listing is disabled (POST still works)");

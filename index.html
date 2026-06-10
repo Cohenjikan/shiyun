@@ -42,6 +42,9 @@
           }
         }
         if (msg) {
+          // flag checked by main.tsx: a WebGL-less but otherwise-modern browser CAN run the module
+          // bundle — without this flag React would mount over the message and then black-screen.
+          window.__SHIYUN_UNSUPPORTED__ = true;
           document.getElementById("root").innerHTML =
             '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#07080f;color:#d8c89a;font-family:serif;padding:24px;text-align:center">' +
             '<div style="font-size:34px;letter-spacing:.3em;margin-bottom:18px">诗云</div>' +

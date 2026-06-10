@@ -141,6 +141,7 @@ export function SearchPanel() {
     lockPoet(p.id); // lock + follow the poet (camera glides in and tracks it)
     fetchPoetPoems(p.id);
     setResults([]);
+    setPoetNote(null); // clear the alias/miss note — else it lingers and flips to .miss styling
   }
   function goHit(h: LineHit) {
     if (!h.poet) return;
@@ -229,6 +230,7 @@ export function SearchPanel() {
     setCollapsed(false); // tapping a tab expands the panel (on mobile it starts collapsed to the tab row)
     setQ("");
     setResults([]);
+    setPoetNote(null); // don't carry a stale poet note across tabs (it would flip to .miss styling)
     setHits([]);
     setHalf(null);
   }

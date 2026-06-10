@@ -206,6 +206,10 @@ canvas {
 .legend-row:hover {
   background: rgba(255, 255, 255, 0.05);
 }
+/* .note row isn't a button — no hover affordance */
+.legend-row.note:hover {
+  background: none;
+}
 .legend-row.off {
   opacity: 0.32;
 }

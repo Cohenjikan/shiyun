@@ -173,14 +173,17 @@ for (const file of files) {
 // ── 现代/当代 自由诗 (新诗): yuxqiu/modern-poetry contemporary set (Apache-2.0) — adds 徐志摩/
 //    海子/北岛/顾城… that the classical corpus lacks. Free verse → form "other"; lines feed the
 //    content-search index. 民国-era poets → 近现代 (matches Werneror), the rest → 当代. ──
+// ⚠ POET-ID STABILITY: poetId = fnv32(name|dynasty), so a poet's `#a=<id>` permalink AND star-cluster
+// position depend on this dynasty bucket. Adding a name here flips an EXISTING poet dangdai→jinxiandai,
+// changing their id and silently breaking shared links + moving their cluster. So this set is FROZEN at
+// the v1 membership — do NOT add names (a v2 attempt added 20 民国 names and moved 17 live poets; reverted).
+// The cost of NOT adding them is only that those sheepzh 民国 poets sit in 当代 instead of 近现代 — a
+// cosmetic dynasty-shell nicety that is not worth breaking a single shared permalink.
 const MODERN_JINXIANDAI = new Set([
   "徐志摩","闻一多","郭沫若","戴望舒","朱自清","冯至","卞之琳","何其芳","臧克家","林徽因","废名",
   "李金发","穆旦","郑敏","梁宗岱","刘半农","胡适","俞平伯","汪静之","冰心","宗白华","沈尹默",
   "刘大白","王独清","穆木天","殷夫","蒋光慈","田间","袁可嘉","杜运燮","陈梦家","朱湘","邵洵美",
   "鲁迅","周作人","艾青","纪弦","痖弦","郑愁予","周梦蝶","洛夫","余光中","覃子豪","方思",
-  // expanded for the sheepzh import (民国-era poets the original hand-set missed)
-  "徐玉诺","应修人","潘漠华","冯雪峰","朱英诞","辛笛","陈敬容","杭约赫","唐祈","唐湜",
-  "绿原","牛汉","曾卓","苏金伞","鲁藜","王统照","刘延陵","康白情","蒲风","王亚平",
 ]);
 // modern-poem dedup across sources (yuxqiu ships first and is PRESERVED verbatim — its poems keep
 // their existing per-poet order/idx; sheepzh then adds only poems whose CONTENT wasn't seen).

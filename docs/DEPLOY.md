@@ -43,9 +43,10 @@ npm run deploy:build                 # tsc + vite build → dist/ (heavy data ba
 (`charset.json`, `poets.index.json`, `lexicon.json`, `gifts.json`, `manifest.json`) is tracked, so a fresh
 checkout boots the galaxy + author list but **cannot load any poem** until you provide the buckets.
 
-- **Option A — use the existing complete copy (recommended; no corpora needed).** The canonical, verified set
-  (poems 236 MB · lines 792 MB · search 130 MB) is in the main worktree's `public/data`. Either **build from
-  the main worktree** (the Quickstart above), or copy those dirs into your build tree:
+- **Option A — use the existing complete copy (recommended; no corpora needed).** The canonical, verified
+  **v2** set (poems 279 MB · lines 904 MB · search 137 MB — 32,657 poets / 933,857 poems) is in the main
+  worktree's `public/data`. Either **build from the main worktree** (the Quickstart above), or copy those
+  dirs into your build tree:
   ```bash
   # from a fresh clone's repo root, on the same machine:
   cp -r "C:/Users/Cohen/Desktop/shiyun/public/data/poems"  public/data/
@@ -53,6 +54,18 @@ checkout boots the galaxy + author list but **cannot load any poem** until you p
   cp -r "C:/Users/Cohen/Desktop/shiyun/public/data/search" public/data/   # only if you want 寻诗/探诗 search
   ```
   (On Windows you can junction instead of copy: `New-Item -ItemType Junction -Path public\data\poems -Target "C:\Users\Cohen\Desktop\shiyun\public\data\poems"` — vite follows junctions when copying into `dist/`.)
+- **Option A′ — restore from the GitHub backup (works on ANY machine).** The v2 data set is archived as
+  release assets on the private repo — release **`data-v2-2026-06-10`** at
+  `https://github.com/Cohenjikan/shiyun/releases` (assets: `poems.tar.gz`, `lines.tar.gz`,
+  `search.tar.gz`, `SHA256SUMS.txt`). Download (needs repo auth), verify checksums, then extract into
+  `public/data/`:
+  ```bash
+  cd public/data
+  sha256sum -c SHA256SUMS.txt          # verify first
+  tar -xzf poems.tar.gz && tar -xzf lines.tar.gz && tar -xzf search.tar.gz
+  ```
+  Old v1 data (pre-2026-06-10, 29,808 poets) is kept on the dev machine as `public/data/*_v1_backup`
+  for rollback only — do not deploy it; the git-tracked `poets.index.json` now matches v2.
 - **Option B — regenerate (only if you have the corpora).** Needs `C:/corpus/Werneror-Poetry` **and**
   `C:/corpus/modern-poetry` cloned. **This OVERWRITES `public/data`.** A missing modern corpus now **fails
   loud** (it used to silently drop the 508 modern 新诗 poets and desync the index): set `ALLOW_NO_MODERN=1`
@@ -184,10 +197,11 @@ location /api/feedback {
 }
 ```
 
-**Reading the inbox (owner):**
+**Reading the inbox (owner)** — token goes in the `Authorization` header, never the URL (query
+strings land in nginx access logs):
 
 ```bash
-curl -s "https://你的域名/api/feedback?token=<FEEDBACK_TOKEN>"   # newest last, one JSON per line
+curl -s -H "Authorization: Bearer <FEEDBACK_TOKEN>" "https://你的域名/api/feedback"   # one JSON per line
 # or directly on the server:  tail -n 50 /var/lib/shiyun/feedback.jsonl
 ```
 

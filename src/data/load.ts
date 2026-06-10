@@ -127,10 +127,18 @@ export async function loadPoetPoems(id: string, base = "/data"): Promise<PoemRec
       try {
         const r = await fetch(`${base}/poems/${bucket}.idx.json`);
         // 404 genuinely means "no sidecar in this dataset" → latch null (whole-bucket from now on).
-        // A NETWORK failure must NOT be latched — next attempt should try the sidecar again.
-        const fetched: Record<string, [number, number]> | null = r.ok ? await r.json() : null;
-        _idxCache.set(bucket, fetched);
-        idx = fetched;
+        // A 5xx / other non-ok status is transient and must NOT be latched — next attempt retries.
+        // A NETWORK failure must NOT be latched either — next attempt should try the sidecar again.
+        if (r.ok) {
+          const fetched = (await r.json()) as Record<string, [number, number]>;
+          _idxCache.set(bucket, fetched);
+          idx = fetched;
+        } else if (r.status === 404) {
+          _idxCache.set(bucket, null); // genuinely no sidecar → whole-bucket from now on
+          idx = null;
+        } else {
+          idx = null; // transient (5xx etc.) — skip Range this attempt, don't poison the cache
+        }
       } catch {
         idx = null; // transient — skip Range this attempt, don't poison the cache
       }
@@ -201,26 +209,45 @@ const lineBucket = (s: string) => (hashStr(s) & 0xff).toString(16).padStart(2, "
 const fzBucket = (s: string) => (hashStr(s) & 0xfff).toString(16).padStart(3, "0"); // 4096 fuzzy shards
 const _flShard = new Map<string, Record<string, FirstLineRef[]>>();
 async function loadFlShard(bucket: string, base: string): Promise<Record<string, FirstLineRef[]>> {
-  let obj = _flShard.get(bucket);
-  if (obj) return obj;
-  obj = await fetch(`${base}/lines/${bucket}.json`)
-    .then((r) => (r.ok ? r.json() : {}))
-    .catch(() => ({}));
-  _flShard.set(bucket, obj!);
-  return obj!;
+  const cached = _flShard.get(bucket);
+  if (cached) return cached;
+  // Only cache a SUCCESS (r.ok) or a genuine 404 (shard absent in this dataset). A 5xx / network
+  // failure returns empty for THIS call but stays uncached so the next call retries (else search
+  // silently returns nothing until reload).
+  try {
+    const r = await fetch(`${base}/lines/${bucket}.json`);
+    if (r.ok) {
+      const obj = (await r.json()) as Record<string, FirstLineRef[]>;
+      _flShard.set(bucket, obj);
+      return obj;
+    }
+    if (r.status === 404) _flShard.set(bucket, {});
+  } catch {
+    /* transient — leave cache unset so the next call retries */
+  }
+  return {};
 }
 
 // fuzzy (delete-1 skeleton) shards — linesf/{bucket}.json — for mid-line 异文 search (build-fuzzy.mjs).
 // Absent on a worktree that hasn't run `npm run build:fuzzy` → fetch returns {} → fuzzy simply no-ops.
 const _fzShard = new Map<string, Record<string, FirstLineRef[]>>();
 async function loadFzShard(bucket: string, base: string): Promise<Record<string, FirstLineRef[]>> {
-  let obj = _fzShard.get(bucket);
-  if (obj) return obj;
-  obj = await fetch(`${base}/linesf/${bucket}.json`)
-    .then((r) => (r.ok ? r.json() : {}))
-    .catch(() => ({}));
-  _fzShard.set(bucket, obj!);
-  return obj!;
+  const cached = _fzShard.get(bucket);
+  if (cached) return cached;
+  // Only cache a SUCCESS or a genuine 404 (linesf/ not built in this dataset → fuzzy no-ops). A
+  // 5xx / network failure returns empty for THIS call but stays uncached so the next call retries.
+  try {
+    const r = await fetch(`${base}/linesf/${bucket}.json`);
+    if (r.ok) {
+      const obj = (await r.json()) as Record<string, FirstLineRef[]>;
+      _fzShard.set(bucket, obj);
+      return obj;
+    }
+    if (r.status === 404) _fzShard.set(bucket, {});
+  } catch {
+    /* transient — leave cache unset so the next call retries */
+  }
+  return {};
 }
 /** All "drop one code point" skeletons of a line's Han chars (SymSpell-style 1-edit lookup key set). */
 export function lineSkeletons(cps: string[]): string[] {
@@ -287,13 +314,22 @@ const PREFIX_MAX = 3; // mirror build-search.mjs (the client keys on the query's
 const sxBucket = (s: string) => (hashStr(s) & 0xff).toString(16).padStart(2, "0");
 const _sxShard = new Map<string, Record<string, FirstLineRef[]>>();
 async function loadSxShard(bucket: string, base: string): Promise<Record<string, FirstLineRef[]>> {
-  let obj = _sxShard.get(bucket);
-  if (obj) return obj;
-  obj = await fetch(`${base}/search/${bucket}.json`)
-    .then((r) => (r.ok ? r.json() : {}))
-    .catch(() => ({}));
-  _sxShard.set(bucket, obj!);
-  return obj!;
+  const cached = _sxShard.get(bucket);
+  if (cached) return cached;
+  // Only cache a SUCCESS or a genuine 404 (search/ not built in this dataset). A 5xx / network
+  // failure returns empty for THIS call but stays uncached so the next call retries.
+  try {
+    const r = await fetch(`${base}/search/${bucket}.json`);
+    if (r.ok) {
+      const obj = (await r.json()) as Record<string, FirstLineRef[]>;
+      _sxShard.set(bucket, obj);
+      return obj;
+    }
+    if (r.status === 404) _sxShard.set(bucket, {});
+  } catch {
+    /* transient — leave cache unset so the next call retries */
+  }
+  return {};
 }
 
 /** 寻诗 incremental hits: looks up the FULL query (an exact poem title, e.g. 静夜思 / 春江花月夜) AND its
@@ -353,9 +389,21 @@ export async function searchPoems(query: string, base = "/data"): Promise<LineHi
 let _gifts: GiftEdge[] | null = null;
 export async function loadGifts(base = "/data"): Promise<GiftEdge[]> {
   if (_gifts) return _gifts;
-  const a: GiftsAsset | null = await fetch(`${base}/gifts.json`)
-    .then((r) => (r.ok ? r.json() : null))
-    .catch(() => null);
-  _gifts = a?.edges ?? [];
-  return _gifts;
+  // Only latch a SUCCESS or a genuine 404 (no gift network in this dataset). A 5xx / network
+  // failure returns empty for THIS call but stays uncached so the next call retries.
+  try {
+    const r = await fetch(`${base}/gifts.json`);
+    if (r.ok) {
+      const a = (await r.json()) as GiftsAsset;
+      _gifts = a?.edges ?? [];
+      return _gifts;
+    }
+    if (r.status === 404) {
+      _gifts = [];
+      return _gifts;
+    }
+  } catch {
+    /* transient — leave _gifts null so the next call retries */
+  }
+  return [];
 }
