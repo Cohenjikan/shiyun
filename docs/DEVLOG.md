@@ -10,6 +10,33 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
 
 ---
 
+## 2026-06-10 — Session: 8th agent · round 6 (adversarial review of round 5 — fixes)
+
+A multi-agent adversarial review of round 5's commit (2508b5a) ran in the cloud; it surfaced a critical
+DoS + a real data regression I'd introduced. All confirmed findings fixed + verified (commit `faf11f9`).
+
+- **CRITICAL — feedback-server unauth DoS:** a malformed `Host: a b` header made `new URL` throw in the
+  async handler → unhandled rejection → process exit (one-line crash, reproduced). Guarded the URL parse
+  (400) + wrapped the whole handler in try/catch. Re-smoke-tested: Host-DoS → 400 + server alive.
+- **SECURITY — feedback-server token:** moved the owner-inbox token from the query string (leaks to nginx
+  access logs) to `Authorization: Bearer`, compared via `crypto.timingSafeEqual` over sha256 (was `!==`);
+  GET path rate-limited too. DEPLOY §5 updated.
+- **REGRESSION (real, mine) — 17 broken `#a=` permalinks:** round 5 added 20 民国 names to
+  `MODERN_JINXIANDAI`, which flipped **17 EXISTING** poets dangdai→jinxiandai → new `poetId` → broken
+  shared links + moved star clusters (poet-id is the sibling of the charset-permalink contract). Reverted
+  the additions (set FROZEN at v1 membership + documented); full rebuild restored **17/17** to their v1
+  dangdai ids; charset/lexicon stay byte-identical. Totals unchanged (32,657 / 933,857).
+- **ROBUSTNESS — cache poisoning:** the failure-as-success cache bug fixed for `poems/` in round 5 still
+  bit `lines/` `linesf/` `search/` `gifts.json` (a transient 5xx/network failure latched empty → search/
+  gifts silently dead until reload). Now only `r.ok`/genuine-404 is cached; the sidecar idx cache no longer
+  latches null on 5xx.
+- **UX/robustness:** SearchPanel clears the alias/miss note on select + tab-switch; the 五代十国 info row
+  drops its clickable hover; the no-WebGL gate now sets `window.__SHIYUN_UNSUPPORTED__` so `main.tsx` skips
+  the React mount (was black-screening over the gate message).
+- Corrected heavy data mirrored to the main worktree + the GitHub backup release refreshed to match.
+
+---
+
 ## 2026-06-10 — Session: 8th agent · round 5 (post-launch P0/P1/P2 — alias search, error fallbacks, data v2, 自建反馈后端)
 
 Post-launch hardening per the owner's prioritized list. Verify gate green: tsc · **93 tests** (4 new) ·
