@@ -15,7 +15,12 @@ never stored* (every poem ⇄ a big-integer index, bijectively).
 > 不设则一切照旧),nginx 条件反代 + **DEPLOY §6** 运维照抄。**(3) 数据 v3 调研 → NO-GO**(语料源已饱和、唯一
 > 大候选无作者字段;见 DATA_AUDIT.md 补记)。**(4) 留影(round 2)** — 奇迹时刻全面改名「留影」,且诗人目录
 > **每行诗都能直接留影**(`store.openCinemaFor`/`cinemaPoemIdx`,显式目标 > 虚空 > 搜索命中,关闭/换诗人即
-> 复位;解析抽成纯函数 `ui/cinemaResolve.ts`)——之前只能绕道编号反查。现在 **138 tests** 全绿。
+> 复位;解析抽成纯函数 `ui/cinemaResolve.ts`)——之前只能绕道编号反查。**(5) Top-8 加固(round 3,五视角
+> 评审后)** — FNV 分桶哈希契约测试(管线↔前端漂移=CI 红)、字库哈希启动校验(`EXPECTED_CHARSET_HASH=
+> a392703b`,错配横幅警告)、**GitHub Actions CI**(.github/workflows/ci.yml)、**拾遗**(虚空诗收藏,
+> localStorage,更多菜单入口)、FlyControls useFrame 零分配(§6 旧账)、`pipeline/pack-data.mjs` 冷备一键
+> 打包、`VITE_DATA_BASE` 旋钮(§6 旧账)、nginx `/data/v2/` immutable 缓存铺路(注释默认关)。
+> 现在 **172 tests** 全绿。评审其余 P2/P3 发现未做,清单见 round-3 会话记录。
 >
 > **▶ Status (2026-06-10, 8th agent · round 5 — post-launch P0/P1/P2):** **(1) 别名搜索** — 搜「陶渊明/李太白/
 > 苏东坡」命中本名行;庄子/诸葛亮/三字经 落空时给体面解释 (`src/data/poetAliases.ts` + integrity test)。
@@ -80,6 +85,8 @@ hand-off is broken — fix `main` first.** Check with `git log --oneline --all -
 
 **Backups:** private GitHub repo `github.com/Cohenjikan/shiyun` (all branches); local all-branches
 bundle at `C:\Users\Cohen\Desktop\shiyun-ALL-branches-backup.bundle` (restore: `git clone <bundle>`).
+Heavy-data cold backup = GitHub release assets (DEPLOY §1.0 Option A′); repack/re-upload with ONE command:
+`npm run pack:data` (pipeline/pack-data.mjs — tars poems/lines/search + SHA256SUMS + prints the gh commands).
 
 > 🖥 **Live preview is port 5199 (`vite.config` strictPort).** The user watches `http://localhost:5199`
 > directly — **do NOT load the in-conversation preview MCP.** At this hand-off 5199 is served by the 7th-agent
@@ -96,7 +103,7 @@ bundle at `C:\Users\Cohen\Desktop\shiyun-ALL-branches-backup.bundle` (restore: `
 ```bash
 npm install
 npm run dev        # vite → http://localhost:5199 (strictPort)
-npm test           # vitest: 138 tests (47 engine + 6 engineApi + 4 load + 11 GPU-pick + 21 touch-gesture + 4 alias + 13 permalink + 17 og-inject + 15 cinema/留影)
+npm test           # vitest: 172 tests (47 engine + 6 engineApi + 4 load + 11 GPU-pick + 21 touch-gesture + 4 alias + 13 permalink + 17 og-inject + 15 cinema/留影 + 12 shardHash + 7 charsetHash + 15 拾遗)
 npm run deploy:build  # build + precompress for a static host (see docs/DEPLOY.md) — Range-safe
 npm run build      # tsc --noEmit && vite build  (the real verify gate)
 npm run typecheck
@@ -143,6 +150,7 @@ drei 9 / three 0.169 + zustand 5. **100% static + exactly ONE optional backend**
 | **响应式布局** (7th) | One `@media(max-width:600px)`: transient panels → 全宽 bottom-sheets; 搜索 stays top tracking a live `--hud-h` (ResizeObserver); HUD wraps/trims; 16px inputs (no iOS zoom-on-focus); `dvh` + `env(safe-area-inset-*)`; ≥40px tap targets on coarse pointers. |
 | **手机面板折叠** (7th) | On touch, 诗人/虚空诗 panels + 搜索 default to a bottom **peek bar** (一行摘要 + 「▲ 展开」); tap to open, 「▾ 收起」 back. Re-collapses per new selection. Never auto-covers the galaxy. `ui/useSheet.ts` + `.sheet-peek`. Desktop unchanged. |
 | **留影 / 分享卡** (7th; renamed from 奇迹时刻 + per-poem 目录直达, 9th) | 留影 button (诗/诗人面板) **+ 诗人目录每行的「留影」** (`store.openCinemaFor(i)`, explicit target wins over void/focus, resets on close/poet-change — `ui/cinemaResolve.ts`) → a framed share card over the **FROZEN** scene (spin + void-pull + highlight lifecycles paused; manual camera still composable) with a cyclable concept tagline (5) + the poem rendered **竖排 right-to-left, one column per line** (`writing-mode: vertical-rl` — long poems never clip) + its 全集编号; exit is a **red top-left** button. `ui/Cinema.tsx`, `store.cinema`. |
+| **拾遗** (9th) | Void poems are non-reproducible by design — 拾遗 keeps them: PoemPanel 「收进拾遗」 stores {全集编号, preview, ts} in localStorage (`shiyun_shiyi_v1`, dedupe by index, cap 200, corrupt-tolerant — pure module `state/shiyi.ts`, 15 tests); 更多 menu → 「拾遗 — 我捞起的诗」 panel re-pulls via `pulledFromIndex` + fly-back (mirrors the `#p=` permalink path). Void poems only (real poems are re-findable via their poet). `ui/ShiyiViewer.tsx`. |
 | **更多 菜单 + 关于/反馈** (7th) | HUD 设置→**更多** (`ui/SettingsMenu.tsx`): + 个人主页 `cohenjikan.com` / `GitHub` links + an in-page **反馈** box (localStorage, ≤5000 汉字). Owner reads via a hidden gesture — **5 taps on the 诗云 logo in 10 s** → `ui/FeedbackViewer.tsx`. ⚠ localStorage = per-device; `state/feedback.ts::submitFeedback` is the seam to repoint at a form service for cross-visitor collection at deploy. |
 
 Three pull modes to feel the project: plain random「牛蝛茙漂綵」→ 格律「趰㵎憣烔岆」→ 格律+常用字
@@ -283,7 +291,7 @@ npm run build:fuzzy                                       # linesf/ — 异文 f
   to host. Options: drop it on deploy (it's a fallback; `load.ts` no-ops if absent), build a CURATED set (唐诗三百首 /
   高频名篇), OR ship `linesf/` brotli'd behind a flag. `lines/` 791 MB + `search/` 129 MB + `poems/` 235 MB also need a
   host plan (object storage / CDN — `loadData(base)` + the `load.ts` fetch helpers are already `base`-parameterized,
-  but add a `VITE_DATA_BASE` knob so it's one place; watch CORS + that the host honours **Range** on raw `poems/*.json`).
+  ✅ the `VITE_DATA_BASE` knob EXISTS as of round 3 (load.ts `DATA_BASE`, .env.example); watch CORS + that the host honours **Range** on raw `poems/*.json`).
 - **Feedback inbox (optional)** — the in-page 反馈 (更多 menu) stores to localStorage = per-device only. If you
   want to actually RECEIVE visitor feedback after deploy, repoint `state/feedback.ts::submitFeedback` at a
   serverless form (Formspree / Google Forms / a Cloudflare Worker) — the only seam to change. Static-friendly.
@@ -291,9 +299,9 @@ npm run build:fuzzy                                       # linesf/ — 异文 f
   byte ranges (nginx/Caddy/Cloudflare Pages+R2 over GH-Pages/Netlify). Decide the fuzzy strategy first.
 
 ### ⏭ Also worth a focused follow-up (deferred from the 7th-agent perf round, all low-risk)
-- **`FlyControls` `useFrame` allocation hoist** — ~6–9 `new THREE.Vector3()/Matrix4()/Quaternion()` per frame on the
-  lock/flyTarget/WASD hot paths → GC sawtooth on weak GPUs. Hoist to module/ref temps. (Deferred to not collide with
-  this round's touch edits in the same `useFrame`.)
+- ✅ **DONE (9th agent, round 3)** — `FlyControls` `useFrame` allocation hoist: all per-frame `new THREE.*` on the
+  lock/flyTarget/WASD hot paths hoisted to module-level temps (math/order byte-identical; lock & flyTarget blocks
+  are mutually exclusive so they share the temps safely).
 - **`prefers-reduced-motion`** on the perpetual galaxy spin (battery/a11y) + optional `frameloop="demand"`.
 - **`webglcontextlost`/`restored`** (iOS drops the GL context on backgrounding → black galaxy on return) — needs a
   real device to reproduce + a forced rebuild-key.

@@ -10,6 +10,44 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
 
 ---
 
+## 2026-06-10 — Session: 9th agent · round 3 (五视角评审 Top-8 加固)
+
+A 5-lens read-only review (架构/运行时性能/加载网络/产品UX/数据管线运维, 5 Opus reviewers) produced a
+prioritized list; the owner green-lit the Top 8. Executed as 3 conflict-isolated Opus batches (A 正确性+CI /
+C 前端 / B 数据运维), orchestrator re-ran the combined gate: tsc · **172 tests** (was 138, +34) · build
+(three 675.5 KB chunk intact). Commit `ddfdeaa`. 其余评审发现(P2/P3)暂不做,见会话记录。
+
+**批次 A — 正确性防线 + CI**
+- `shardHash.contract.test.ts` NEW(12):FNV-1a 分桶哈希是管线 3 处 fnv32 + 前端 hashStr 的隐形契约,
+  漂移=搜索静默全空。7 组黄金值冻结 hashStr + 源码扫描绊线钉死 build-search/lines/fuzzy 的两个常量。
+- `charsetHash.ts` NEW + 运行时校验:loadData 由实际 chars 重算 FNV-1a,与文件自带 hash 及冻结常量
+  `EXPECTED_CHARSET_HASH=a392703b`(实测主目录 charset.json 验证)双向比对;数据↔代码错配(错部署/CDN
+  串味/`*_v1_backup` 混淆)从「每个编号永久链静默错位」变成响亮报错 + App 顶部可关闭横幅
+  「数据与本版本不匹配:编号链接可能错位」(仅警告不阻断,截图模式隐藏)。+7 测试。
+- `.github/workflows/ci.yml` NEW:push(main/claude/**)+PR → ubuntu·node24·npm 缓存 → ci/build/test;
+  重数据无依赖(测试全为纯函数/自带 fixture)。九任 agent 的手跑验证门从此机器化。
+- 清理 PoemOrbits/engine 三处无 eslint 可依的失效 disable 注释。
+
+**批次 C — FlyControls 零分配 + 拾遗**
+- FlyControls useFrame 三条热路径(锁定/飞向/WASD)每帧 ~10 个 THREE 对象分配全部上提为模块级临时量
+  (§6 挂账清掉);锁定与飞向两块因各自提前 return 互斥而安全复用同组临时量,数学与求值顺序逐字不变。
+- **拾遗** NEW:虚空诗不可复现、失之永逝,现可一键收存。纯模块 `state/shiyi.ts`(localStorage
+  `shiyun_shiyi_v1`,以全集编号去重、最新置顶、上限 200、容损坏 JSON,+15 测试);PoemPanel 分享/留影旁
+  「收进拾遗/已在拾遗 ✓」;更多菜单「拾遗 — 我捞起的诗」面板,行点击经 `pulledFromIndex` 重建+飞回
+  (复刻 permalink `#p=` 还原路径),逐行删除 +「仅存于此浏览器」脚注。独立 zustand 切片,刻意置于
+  跨域重置纪律之外。本轮仅虚空诗(真实诗经诗人可再寻,扩展应改存 poetId+poemIdx,已注明)。
+
+**批次 B — 数据运维**
+- `pipeline/pack-data.mjs` NEW + `npm run pack:data`:冷备打包从手工 tar/校验/传 201 资产收敛为一条命令
+  (流式 SHA-256、缺目录告警不崩、打印 gh release 命令);微型 fixture 全 round-trip 验证;顺手修掉
+  GNU tar 把 `C:\…` 绝对路径误判为远程 host:path 的真实坑(改相对 -f,bsdtar/GNU 通吃)。
+- `VITE_DATA_BASE` 旋钮落地(§6 挂账):load.ts 六个 fetch 助手默认参数统一指 `DATA_BASE`(默认 /data,
+  不设零变化);vite-env.d.ts/.env.example 补齐;grep 确认 src 无其它 /data 直连。
+- 版本化数据缓存铺路:nginx.conf 注释版两条同级 `^~ /data/v2/` location(poems 子块照搬 RAW+Range 规则,
+  immutable 一年),默认仍 /data 86400;DEPLOY §2.1 说明开启时机与三项验证 curl。
+
+---
+
 ## 2026-06-10 — Session: 9th agent · round 2 (留影直达 + 改名)
 
 Owner report: 搜索诗人后,目录里无法对某一首诗单独开分享卡,只能绕道编号反查;并要求改名 奇迹时刻→留影.
