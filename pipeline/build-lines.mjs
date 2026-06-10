@@ -20,6 +20,7 @@ const DATA = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "data
 const POEMS = join(DATA, "poems");
 const LINES = join(DATA, "lines");
 
+// FNV-1a, must match the frontend's hashStr — contract-tested in src/data/shardHash.contract.test.ts.
 function fnv32(s) {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }

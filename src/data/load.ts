@@ -6,13 +6,28 @@ import type { Lexicon } from "../engine/engine";
 import { setDataset } from "./provider";
 import { hydrateLexicon, type LexiconAsset, type FirstLineRef, type GiftEdge, type GiftsAsset } from "./contract";
 import { hashStr } from "./dynasties";
+import { checkCharset, type CharsetCheck } from "./charsetHash";
 import { FAMOUS_POETS } from "./famousPoets";
 
 const FAMOUS_NAMES = new Set(FAMOUS_POETS.map((f) => f.name)); // rank landmark poets first in 诗句 hits
 
+// Where the data shards are served from. Defaults to the same-origin "/data" (100% static, as before).
+// Override at BUILD time with VITE_DATA_BASE to point the whole fetch layer elsewhere — an absolute
+// CDN/object-storage origin (egress offload, see DEPLOY.md §1.1) or a VERSIONED path like "/data/v2"
+// for immutable caching (DEPLOY.md §2.1). Trailing slashes are stripped so "/data/v2/" === "/data/v2"
+// (every helper builds `${base}/poems/…` etc.). This is the default for all six fetch helpers below;
+// each still takes an explicit `base` param so a caller can override per-call.
+const DATA_BASE = ((import.meta.env.VITE_DATA_BASE as string | undefined) || "/data").replace(/\/+$/, "");
+
 let _realGelu = false;
 /** True once a real 平仄/平水韵 lexicon is loaded (so the UI can offer the 格律 mode). */
 export const hasRealGelu = (): boolean => _realGelu;
+
+// data↔code version guard: set by loadData after recomputing the charset hash. Null until a load
+// runs; non-null with ok=false means the served 字库 differs from what this build expects, so every
+// shared 编号 permalink may decode to the WRONG poem. App surfaces this as a dismissible warning.
+let _charsetCheck: CharsetCheck | null = null;
+export const getCharsetCheck = (): CharsetCheck | null => _charsetCheck;
 
 export interface PoetRow {
   id: string;
@@ -78,7 +93,7 @@ function dummyLexicon(N: number): Lexicon {
   return { N, pingList, zeList, pingRank, zeRank, toneClass, rhymeOf, rhymeMembers, rhymeRank };
 }
 
-export async function loadData(base = "/data"): Promise<DataManifest> {
+export async function loadData(base = DATA_BASE): Promise<DataManifest> {
   const [charset, poets, manifest, lexAsset] = await Promise.all([
     fetch(`${base}/charset.json`).then((r) => r.json()),
     fetch(`${base}/poets.index.json`).then((r) => r.json()),
@@ -90,6 +105,17 @@ export async function loadData(base = "/data"): Promise<DataManifest> {
   _poets = poets;
   _byId = new Map(poets.map((p: PoetRow) => [p.id, p]));
   _manifest = manifest;
+  // data↔code guard: recompute the charset hash from the actual chars (don't trust the file's own
+  // hash field alone) and compare to BOTH that field and this build's frozen EXPECTED_CHARSET_HASH.
+  // A mismatch means the served 字库 differs from what the code expects → shared 编号 permalinks decode
+  // to the WRONG poem. We DON'T hard-block (the cloud still renders), but we log + flag for the UI.
+  _charsetCheck = checkCharset(charset.chars as string, typeof charset.hash === "string" ? charset.hash : undefined);
+  if (!_charsetCheck.ok) {
+    console.error(
+      `[诗云] 字库与本版本不匹配:编号链接可能错位。computed=${_charsetCheck.computed} ` +
+        `expected=${_charsetCheck.expected} file=${_charsetCheck.fileHash ?? "(none)"}`,
+    );
+  }
   const chars = [...(charset.chars as string)]; // code-point split (handles astral chars)
   const lexicon = lexAsset ? hydrateLexicon(lexAsset) : dummyLexicon(charset.n);
   _realGelu = !!lexAsset;
@@ -116,7 +142,7 @@ async function loadBucketWhole(bucket: string, base: string): Promise<Record<str
 // sidecar (poems/{bucket}.idx.json), fetch ONLY this poet's slice via an HTTP Range request. The
 // .json stays one valid JSON object, so we transparently fall back to the whole bucket when the
 // sidecar is absent (old data) or the host ignores Range (returns 200 instead of 206).
-export async function loadPoetPoems(id: string, base = "/data"): Promise<PoemRecord[]> {
+export async function loadPoetPoems(id: string, base = DATA_BASE): Promise<PoemRecord[]> {
   const cached = _poemCache.get(id);
   if (cached) return cached;
   const bucket = id.slice(0, 2);
@@ -266,7 +292,7 @@ export interface LineHit {
 }
 /** Find real poems containing the typed line — EXACT (any line / opening), then a FUZZY 1-edit
  *  fallback (linesf/) so a mid-line variant like 「举头望明月」 still finds 李白《静夜思》 (corpus「山月」). */
-export async function searchByLine(query: string, base = "/data"): Promise<LineHit[]> {
+export async function searchByLine(query: string, base = DATA_BASE): Promise<LineHit[]> {
   const cs = [...query].filter((c) => HAN.test(c));
   if (cs.length < 2) return [];
   const han = cs.join("");
@@ -334,7 +360,7 @@ async function loadSxShard(bucket: string, base: string): Promise<Record<string,
 
 /** 寻诗 incremental hits: looks up the FULL query (an exact poem title, e.g. 静夜思 / 春江花月夜) AND its
  *  first ≤PREFIX_MAX chars (a line/title prefix, e.g. 举头望 / a single 字) in the prefix index. */
-export async function searchByHead(query: string, base = "/data"): Promise<LineHit[]> {
+export async function searchByHead(query: string, base = DATA_BASE): Promise<LineHit[]> {
   const cs = [...query].filter((c) => HAN.test(c));
   if (!cs.length) return [];
   const keys = new Set<string>([cs.join(""), cs.slice(0, PREFIX_MAX).join("")]);
@@ -355,7 +381,7 @@ export async function searchByHead(query: string, base = "/data"): Promise<LineH
 /** The 寻诗 tab search. Merges EXACT-line + fuzzy hits (searchByLine — precise whole-line / 异文) with the
  *  PREFIX + 诗名 hits (searchByHead — single char / half line / title), dedups, ranks famous-first then
  *  poemCount, and caps each poet to ≤2 so one prolific poet can't fill all 10 on a one-char query. */
-export async function searchPoems(query: string, base = "/data"): Promise<LineHit[]> {
+export async function searchPoems(query: string, base = DATA_BASE): Promise<LineHit[]> {
   const cs = [...query].filter((c) => HAN.test(c));
   if (!cs.length) return [];
   const [head, line] = await Promise.all([
@@ -387,7 +413,7 @@ export async function searchPoems(query: string, base = "/data"): Promise<LineHi
 
 // ── 赠诗 network: committed edge list [fromId, toId, weight]; loaded lazily on first toggle. ──
 let _gifts: GiftEdge[] | null = null;
-export async function loadGifts(base = "/data"): Promise<GiftEdge[]> {
+export async function loadGifts(base = DATA_BASE): Promise<GiftEdge[]> {
   if (_gifts) return _gifts;
   // Only latch a SUCCESS or a genuine 404 (no gift network in this dataset). A 5xx / network
   // failure returns empty for THIS call but stays uncached so the next call retries.

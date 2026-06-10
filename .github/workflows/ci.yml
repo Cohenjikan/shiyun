@@ -1,0 +1,26 @@
+# 诗云 / Poetry Cloud — minimal CI.
+# Heavy data (public/data/lines, linesf, search, poems) is git-ignored and NOT needed: all tests are
+# pure / self-fixturing (the og-inject spawn-smoke test writes its own tmp index.html + poets.index.json
+# and binds a random localhost port). So a bare `npm ci && build && test` on a clean checkout is green.
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- --run

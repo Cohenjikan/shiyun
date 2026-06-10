@@ -491,7 +491,6 @@ export function randBig(maxExclusive: bigint): bigint {
     n >>= 1n;
   }
   const bytes = Number((bits + 7n) / 8n);
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const buf = new Uint8Array(bytes);
     crypto.getRandomValues(buf);

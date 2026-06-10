@@ -31,6 +31,23 @@ const BASE_SPEED = 140; // world units/sec at speed ×1 (slow, galactic feel)
 // pressing any of these releases the camera lock (随意按移动键解除锁定)
 const MOVE_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ShiftLeft", "ShiftRight"]);
 
+// ── per-frame scratch (hoisted out of useFrame so the hot camera loop allocates ZERO objects) ──
+// The lock and flyTarget blocks are mutually exclusive (each early-returns), so they SHARE these:
+//   _tgt = follow target (lock's `target` / flyTarget's `tv`) — must survive a whole block;
+//   _camOff = camera→target offset (lock's `cur` / flyTarget's `back`) — distinct from _tgt (used together);
+//   _desired = the lerp destination — distinct from _tgt (it copies _tgt then mutates);
+//   _off = a transient offset vector folded into _desired — distinct from the three above;
+//   _mat / _quat = lookAt matrix + its quaternion, consumed within one statement.
+// _flyV is the WASD/touch fly vector (runs only when neither block returned). All distinct where used
+// simultaneously — see the per-line aliasing notes in useFrame.
+const _tgt = new THREE.Vector3();
+const _camOff = new THREE.Vector3();
+const _desired = new THREE.Vector3();
+const _off = new THREE.Vector3();
+const _mat = new THREE.Matrix4();
+const _quat = new THREE.Quaternion();
+const _flyV = new THREE.Vector3();
+
 export function FlyControls() {
   const { camera, gl } = useThree();
   const keys = useRef<Record<string, boolean>>({});
@@ -333,7 +350,6 @@ export function FlyControls() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera, gl]);
 
   const tmpUp = useRef(new THREE.Vector3(0, 1, 0));
@@ -350,24 +366,25 @@ export function FlyControls() {
         const lpi = useStore.getState().lockPoemIdx;
         const [lx, ly, lz] = lpi != null ? poemPosition(lockedPoet, lpi) : poetPosition(lockedPoet);
         const [wx, wz] = spinXZ(lx, lz);
-        const target = new THREE.Vector3(wx, ly, wz);
+        const target = _tgt.set(wx, ly, wz); // _tgt: held the whole block (lookAt source below)
         const key = lockId + ":" + (lpi ?? -1);
         if (lock.current.key !== key) {
           // new lock → frame it CLOSE (was too far) + seed the orbit angle from the current view (no snap)
           lock.current.key = key;
           lock.current.dist = lpi != null ? 130 : Math.min(1800, poemSystemRadius(lockedPoet.poemCount) * 1.15 + 130);
-          const cur = new THREE.Vector3().subVectors(camera.position, target);
+          const cur = _camOff.subVectors(camera.position, target); // _camOff ≠ _tgt → both read together OK
           const d = cur.length();
           if (d > 1) { lock.current.pitch = Math.asin(Math.max(-1, Math.min(1, cur.y / d))); lock.current.yaw = Math.atan2(cur.x, cur.z); }
           else { lock.current.pitch = 0.32; lock.current.yaw = 0; }
         }
         const { yaw, pitch, dist } = lock.current;
         const cp = Math.cos(pitch);
-        const desired = target.clone().add(new THREE.Vector3(Math.sin(yaw) * cp * dist, Math.sin(pitch) * dist, Math.cos(yaw) * cp * dist));
+        // _desired copies _tgt then adds the orbit offset (_off); _desired/_tgt/_off all distinct objects
+        const desired = _desired.copy(target).add(_off.set(Math.sin(yaw) * cp * dist, Math.sin(pitch) * dist, Math.cos(yaw) * cp * dist));
         const k = 1 - Math.pow(0.0025, dt); // gentle glide-in then steady follow (drag/wheel adjust orbit)
         camera.position.lerp(desired, k);
-        const m = new THREE.Matrix4().lookAt(camera.position, target, tmpUp.current);
-        camera.quaternion.slerp(new THREE.Quaternion().setFromRotationMatrix(m), k);
+        const m = _mat.lookAt(camera.position, target, tmpUp.current); // _tgt still valid here
+        camera.quaternion.slerp(_quat.setFromRotationMatrix(m), k);
         euler.current.setFromQuaternion(camera.quaternion); // so free-fly resumes cleanly on release
         return;
       }
@@ -377,16 +394,17 @@ export function FlyControls() {
       // flyTarget is LOCAL (a poet position / canonical void point) — rotate it into world by
       // the live spin so the camera homes onto the star as the galaxy turns.
       const [fwx, fwz] = spinXZ(flyTarget[0], flyTarget[2]);
-      const tv = new THREE.Vector3(fwx, flyTarget[1], fwz);
+      const tv = _tgt.set(fwx, flyTarget[1], fwz); // _tgt: held the whole block (lookAt + distanceTo below)
       // approach from the camera's CURRENT side (no jarring swing): pull back along target→camera
-      const back = new THREE.Vector3().subVectors(camera.position, tv);
+      const back = _camOff.subVectors(camera.position, tv); // _camOff ≠ _tgt → both read together OK
       if (back.lengthSq() < 1) back.set(0, 0, 1);
       back.normalize();
-      const desired = tv.clone().addScaledVector(back, 320).add(new THREE.Vector3(0, 70, 0));
+      // _desired copies _tgt then folds in back + the (0,70,0) lift (_off); all four objects distinct
+      const desired = _desired.copy(tv).addScaledVector(back, 320).add(_off.set(0, 70, 0));
       const k = 1 - Math.pow(0.0015, dt);
       camera.position.lerp(desired, k);
-      const m = new THREE.Matrix4().lookAt(camera.position, tv, tmpUp.current);
-      camera.quaternion.slerp(new THREE.Quaternion().setFromRotationMatrix(m), k);
+      const m = _mat.lookAt(camera.position, tv, tmpUp.current); // _tgt still valid here
+      camera.quaternion.slerp(_quat.setFromRotationMatrix(m), k);
       if (camera.position.distanceTo(desired) < 24) {
         euler.current.setFromQuaternion(camera.quaternion);
         useStore.getState().setFlyTarget(null);
@@ -410,7 +428,7 @@ export function FlyControls() {
       }
     }
     const k = keys.current;
-    const v = new THREE.Vector3();
+    const v = _flyV.set(0, 0, 0); // reset the hoisted temp each frame (was a fresh Vector3)
     if (k["KeyW"]) v.z -= 1;
     if (k["KeyS"]) v.z += 1;
     if (k["KeyA"]) v.x -= 1;

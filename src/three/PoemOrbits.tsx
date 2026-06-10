@@ -162,7 +162,6 @@ export function PoemOrbits() {
     return () => {
       if (allRef.current) { grp.remove(allRef.current.points); allRef.current.geo.dispose(); allRef.current.mat.dispose(); allRef.current = null; }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAll]);
 
   // HIGHLIGHT: selecting a poet always flashes its whole cluster in for ~10 s (item 1), regardless of
@@ -188,7 +187,6 @@ export function PoemOrbits() {
       }
     }
     refreshPick();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPoet]);
 
   useEffect(() => () => {

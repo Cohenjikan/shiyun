@@ -1971,6 +1971,16 @@ canvas {
 .cinema-btn:hover {
   background: rgba(255, 210, 122, 0.22);
 }
+/* 拾遗 collect toggle in the void-poem panel — sits beside 分享/留影 as a uniform pair (same .cinema-btn
+   size). The `.on` (已在拾遗 ✓) state fills in so "kept" reads at a glance. */
+.cinema-btn.shiyi.on {
+  background: rgba(255, 210, 122, 0.3);
+  border-color: rgba(255, 210, 122, 0.7);
+  color: #ffe6b8;
+}
+.cinema-btn.shiyi.on:hover {
+  background: rgba(255, 210, 122, 0.4);
+}
 
 /* ── 关于 / 链接 + 页内反馈 (更多 菜单底部) ── */
 .set-links {
@@ -2216,4 +2226,69 @@ canvas {
 }
 .fbv-clear:hover {
   background: rgba(255, 120, 120, 0.12);
+}
+
+/* ── 拾遗 revisit panel (我捞起的诗) — reuses .fbv-overlay / .fbv-card; rows are click-to-restore ── */
+.shiyi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.shiyi-item {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 6px;
+}
+.shiyi-open {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px; /* coarse-pointer tap target */
+  background: none;
+  border: none;
+  border-radius: 7px;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.shiyi-open:hover {
+  background: rgba(255, 210, 122, 0.1);
+}
+.shiyi-preview {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--fg);
+  word-break: break-word;
+}
+.shiyi-time {
+  flex: none;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.shiyi-del {
+  flex: none;
+  min-width: 40px;
+  background: none;
+  border: 1px solid rgba(255, 120, 120, 0.32);
+  border-radius: 7px;
+  color: #ff9a9a;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.shiyi-del:hover {
+  background: rgba(255, 120, 120, 0.12);
+}
+.shiyi-foot {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
 }

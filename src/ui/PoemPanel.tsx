@@ -14,9 +14,17 @@ export function PoemPanel() {
   const selected = useStore((s) => s.selected);
   const close = useStore((s) => s.clearSelection);
   const openCinema = useStore((s) => s.toggleCinema);
+  // 拾遗: a void pull is irreproducible — let the visitor keep it. babelIndex is the universal 全集编号
+  // (anyRank), which doubles as the dedupe key AND the restore key (pulledFromIndex rebuilds it). Subscribe
+  // to membership so the toggle flips live. (Real poems are re-findable via their poet → not kept here.)
+  const keep = useStore((s) => s.keepShiyi);
+  const drop = useStore((s) => s.dropShiyi);
+  const kept = useStore((s) => !!selected && s.shiyi.some((e) => e.index === selected.babelIndex));
   const sheet = useSheet(selected?.babelIndex ?? null);
   if (!selected) return null;
   const isFree = selected.form === "ziyou";
+  const toggleKeep = () =>
+    kept ? drop(selected.babelIndex) : keep({ index: selected.babelIndex, preview: selected.lines[0] ?? "" });
 
   // mobile: a fresh void-pull stays stashed as a bottom peek bar until tapped (never covers the galaxy)
   if (sheet.collapsed) {
@@ -82,6 +90,13 @@ export function PoemPanel() {
           <ShareButton />
           <button className="cinema-btn" onClick={openCinema} title="把这首诗框成一张可截图分享的卡片（时间暂停）">
             留影
+          </button>
+          <button
+            className={kept ? "cinema-btn shiyi on" : "cinema-btn shiyi"}
+            onClick={toggleKeep}
+            title={kept ? "已收进拾遗 · 点此移出（更多 → 拾遗 里可重新捞起）" : "把这首从虚空捞起的诗收进拾遗,稍后还能再找到它"}
+          >
+            {kept ? "已在拾遗 ✓" : "收进拾遗"}
           </button>
         </div>
       </div>

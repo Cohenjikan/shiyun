@@ -27,6 +27,7 @@ const POEMS = join(DATA, "poems");
 const OUT = join(DATA, "search");
 const TMP = join(DATA, "_sxtmp");
 
+// FNV-1a, must match the frontend's hashStr — contract-tested in src/data/shardHash.contract.test.ts.
 function fnv32(s) {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }

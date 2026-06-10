@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "../state/store";
 import { COARSE, WEAK } from "../three/detectQuality";
 import { submitFeedback } from "../state/feedback";
+import { ShiyiViewer } from "./ShiyiViewer";
 
 // in-page feedback box (collapsed → a single button; expanded → a textarea). Stored locally; the owner
 // reads it via the hidden 5-tap-on-logo gesture (FeedbackViewer). See state/feedback.ts.
@@ -145,6 +146,8 @@ export function SettingsMenu() {
   const toggleGifts = useStore((s) => s.toggleGifts);
   const gravity = useStore((s) => s.gravity);
   const toggleGravity = useStore((s) => s.toggleGravity);
+  const shiyiCount = useStore((s) => s.shiyi.length);
+  const openShiyi = useStore((s) => s.setShiyiOpen);
 
   // DRAGGABLE (item 2): default below the top bar + left of the right-side panels (诗人/诗 panels), so it
   // never traps behind them — drag the header to move it anywhere and watch the effect live.
@@ -267,6 +270,14 @@ export function SettingsMenu() {
 
       <button className="set-reset wide" onClick={resetAll} disabled={allDefault}>全部恢复默认</button>
 
+      {/* 拾遗 — 从虚空捞起的诗的私人收藏 (仅本机) */}
+      <div className="set-group">
+        <div className="set-label">拾遗</div>
+        <button className="set-feedback-open" onClick={() => openShiyi(true)}>
+          {shiyiCount > 0 ? `拾遗 — 我捞起的诗 · ${shiyiCount} 首` : "拾遗 — 我捞起的诗"}
+        </button>
+      </div>
+
       {/* 关于 + 页内反馈 (at the very bottom of 更多) */}
       <div className="set-group">
         <div className="set-label">关于 · 反馈</div>
@@ -277,6 +288,9 @@ export function SettingsMenu() {
         </div>
         <FeedbackBox />
       </div>
+
+      {/* the 拾遗 revisit overlay — rendered while the 更多 menu stays open behind it (mirrors Credits) */}
+      <ShiyiViewer />
     </div>
   );
 }

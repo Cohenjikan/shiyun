@@ -91,8 +91,11 @@ npm run deploy:build   # = npm run build (tsc --noEmit + vite build → dist/) &
   next to every text asset **except `dist/data/poems/*.json`** (those stay raw — see §3).
 
 **Size:** `dist/data/poems/` ≈ 235 MB, `dist/data/lines/` ≈ 791 MB (compresses well). If your host
-caps build size, host `data/` on object storage / a CDN and point `loadData(base)` /
-`loadPoetPoems(id, base)` at it (the `base` arg already exists for exactly this).
+caps build size, host `data/` on object storage / a CDN and build with **`VITE_DATA_BASE`** set to that
+absolute origin (e.g. `VITE_DATA_BASE="https://cdn.example.com/shiyun-data"`) — all six fetch helpers in
+[src/data/load.ts](../src/data/load.ts) default to it. (Each helper still takes an explicit `base` arg for
+per-call overrides; `VITE_DATA_BASE` just changes the default.) Unset ⇒ same-origin `/data` as before. A
+*same-origin* versioned value like `/data/v2` unlocks immutable caching — see §2.1.
 
 ## 2. Serve
 
@@ -102,6 +105,45 @@ Use [deploy/nginx.conf](../deploy/nginx.conf) as a starting point (needs the `ng
 - **SPA fallback** — 诗云 is a hash-router (`#a=…` / `#p=…`), so `try_files $uri $uri/ /index.html`.
 - **Cache** — `/assets/*` (content-hashed) `immutable, max-age=31536000`; `index.html` `no-cache`.
 - **Compression** — brotli/gzip for js/css/json **except** `data/poems/` (§3).
+
+### 2.1 Optional: versioned data path → IMMUTABLE caching (kill the daily revalidate)
+
+By default the data shards are served from the stable `/data/` path with `Cache-Control: max-age=86400`
+(1 day). Because the path never changes across data bumps, we *can't* mark it `immutable` — so a returning
+visitor revalidates every shard daily, most painfully the ~2.8 MB `poets.index.json`. To serve those
+byte-frozen shards with a **1-year `immutable`** cache (like `/assets/*`), pin them behind a **versioned
+path** and let the version bump bust the cache:
+
+1. **Build** with the data base pointed at a versioned path (the `VITE_DATA_BASE` knob in
+   [src/data/load.ts](../src/data/load.ts)):
+   ```bash
+   cp .env.example .env.local
+   # .env.local:  VITE_DATA_BASE="/data/v2"      ← all six fetch helpers now request /data/v2/…
+   npm run deploy:build
+   ```
+2. **Serve** the *same files on disk* under that versioned prefix with `immutable` — uncomment the two
+   sibling `location ^~ /data/v2/…` blocks in [deploy/nginx.conf](../deploy/nginx.conf). They `alias`
+   straight back at the existing `dist/data/` dir (no disk restructuring, no second copy). **The
+   `/data/v2/poems/` block MUST keep the §3 Range gotcha** — RAW (no gzip/brotli) + `Accept-Ranges: bytes`
+   — or per-poet Range fetches silently fall back to whole-bucket.
+
+**When to flip the suffix.** On every data version change (new poems/lines/search → a fresh
+`data-vN-…` release per §1.0 Option A′): bump BOTH the nginx path suffix (`/data/v2` → `/data/v3`, new
+sibling pair) AND `VITE_DATA_BASE` to match, then rebuild + redeploy. Old `/data/v2` caches die naturally —
+their URLs are simply never requested again, so there's no purge to coordinate. Leaving this OFF (the
+default config) is the safe choice: stable `/data/`, `max-age=86400`, no immutability promise to break.
+
+Verify after deploy (immutable header present · poems Range still 206 · no compression under
+`/data/v2/poems/`):
+```bash
+# small shard → immutable, 1-year:
+curl -s -D- -o /dev/null https://shiyun.example.com/data/v2/poets.index.json | grep -i 'cache-control'
+# want: Cache-Control: public, max-age=31536000, immutable
+# poems Range still works AND stays uncompressed under the versioned path:
+curl -s -D- -o /dev/null -H 'Range: bytes=0-99' https://shiyun.example.com/data/v2/poems/00.json \
+  | grep -i '206\|content-range\|content-encoding\|cache-control'
+# want: HTTP/.. 206, Content-Range: bytes 0-99/…, NO Content-Encoding, and the immutable Cache-Control
+```
 
 ## 3. ⚠ The one deploy gotcha: keep `data/poems/*.json` RAW
 

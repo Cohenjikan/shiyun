@@ -3,6 +3,7 @@ import type { PulledPoem, PullForm } from "../engine/engineApi";
 import type { PoetRow, PoemRecord } from "../data/load";
 import { DYNASTIES } from "../data/dynasties";
 import { WEAK } from "../three/detectQuality";
+import { listShiyi, addShiyi, removeShiyi, type ShiyiEntry } from "./shiyi";
 
 export interface Pull {
   id: number; // stable identity so PulledStars can track per-marker birth/death animation
@@ -59,6 +60,11 @@ interface State {
   cinemaPoemIdx: number | null;
   // owner-only feedback viewer (opened by a hidden gesture: 5 taps on the 诗云 logo within 10 s)
   feedbackOpen: boolean;
+  // 拾遗: VOID-poem keepsakes (newest first), persisted to localStorage by the PURE state/shiyi.ts module.
+  // A standalone slice — NO existing action (selectPoem/selectPoet/clearPoet/…) touches it: a kept poem
+  // survives every selection change, so it deliberately sits OUTSIDE the cross-domain reset discipline.
+  shiyi: ShiyiEntry[];
+  shiyiOpen: boolean; // the revisit panel (opened from 更多)
   // 赠诗漫游 (gift-network roaming): a breadcrumb of poets you've HOPPED through along 赠诗 edges.
   // trail[last] = the current poet; consecutive nodes are drawn as persistent "return lines" (GiftTrail).
   // Capped at 11 nodes (= 10 return edges). Reset to [poet] on a NORMAL selectPoet (= 点无关诗人清除);
@@ -116,6 +122,9 @@ interface State {
   openCinemaFor: (poemIdx: number) => void; // open 留影 framing a SPECIFIC poem (its ORIGINAL index)
   setCinemaCopy: (n: number) => void;
   setFeedbackOpen: (b: boolean) => void;
+  setShiyiOpen: (b: boolean) => void;
+  keepShiyi: (entry: { index: string; preview: string }) => void; // 收进拾遗 (a void poem)
+  dropShiyi: (index: string) => void; // 从拾遗移除
   setSpeed: (s: number) => void;
   setFlyTarget: (t: [number, number, number] | null) => void;
   lockPoet: (id: string) => void;
@@ -162,6 +171,8 @@ export const useStore = create<State>((set) => ({
   cinemaCopy: 0,
   cinemaPoemIdx: null,
   feedbackOpen: false,
+  shiyi: listShiyi(), // hydrate the keepsake list from localStorage at boot
+  shiyiOpen: false,
   gravity: true,
   speed: 1,
   flyTarget: null,
@@ -236,6 +247,11 @@ export const useStore = create<State>((set) => ({
   openCinemaFor: (poemIdx) => set({ cinema: true, cinemaPoemIdx: poemIdx }),
   setCinemaCopy: (cinemaCopy) => set({ cinemaCopy }),
   setFeedbackOpen: (feedbackOpen) => set({ feedbackOpen }),
+  // 拾遗: delegate the dedupe/cap/persistence to the pure module, then mirror its returned list into the
+  // store so subscribed UI (PoemPanel toggle, the revisit panel) re-renders. No cross-domain reset.
+  setShiyiOpen: (shiyiOpen) => set({ shiyiOpen }),
+  keepShiyi: (entry) => set({ shiyi: addShiyi(entry) }),
+  dropShiyi: (index) => set({ shiyi: removeShiyi(index) }),
   setSpeed: (speed) => set({ speed }),
   setFlyTarget: (flyTarget) => set({ flyTarget }),
   lockPoet: (id) => set({ lockPoetId: id, lockPoemIdx: null }),

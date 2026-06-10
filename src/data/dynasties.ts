@@ -47,7 +47,8 @@ export function bandRadius(order: number): [number, number] {
   return [inner, inner + SPAN];
 }
 
-// Deterministic string hash (murmur-ish) → uint32.
+// Deterministic string hash (FNV-1a, 32-bit) → uint32. Shard-bucket contract with the pipeline's
+// fnv32 (build-search/lines/fuzzy) — contract-tested in src/data/shardHash.contract.test.ts.
 export function hashStr(s: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {

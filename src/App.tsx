@@ -21,7 +21,7 @@ import { Cinema } from "./ui/Cinema";
 import { FeedbackViewer } from "./ui/FeedbackViewer";
 import { useStore } from "./state/store";
 import { applyHash, syncHash } from "./state/permalink";
-import { loadData } from "./data/load";
+import { loadData, getCharsetCheck } from "./data/load";
 import { WEAK } from "./three/detectQuality";
 
 // dpr is keyed to the INITIAL device seed, not the live 画质 toggle: dpr 1→2 quadruples the additive
@@ -40,10 +40,15 @@ export default function App() {
   const cinema = useStore((s) => s.cinema);
   // boot-data failure (network/CDN) — without this the user faces an eternal 正在点亮… spinner
   const [loadError, setLoadError] = useState(false);
+  // data↔code version mismatch (wrong/mixed deploy, stale CDN): the 字库 the server sent differs from
+  // what this build expects, so shared 编号 permalinks may decode to the WRONG poem. A WARNING, not a
+  // block — the cloud still renders — surfaced as a dismissible banner. (See data/charsetHash.ts.)
+  const [charsetWarn, setCharsetWarn] = useState(false);
 
   useEffect(() => {
     loadData()
       .then(() => {
+        if (getCharsetCheck()?.ok === false) setCharsetWarn(true);
         setLoaded(true);
         applyHash(); // restore a shared #a=poet / #p=poem link
       })
@@ -120,6 +125,48 @@ export default function App() {
 
       {/* 奇迹时刻: framed share card over the frozen scene (hides the normal UI; keeps camera composable) */}
       {cinema && <Cinema />}
+
+      {/* data↔code version mismatch banner: visible, dismissible, never blocks. Inline-styled so it
+          needs no shared CSS. Hidden in screenshot mode (H) like the other overlays. */}
+      {charsetWarn && !uiHidden && (
+        <div
+          role="alert"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
+            padding: "8px 14px",
+            background: "rgba(120, 30, 30, 0.92)",
+            color: "#ffe6e6",
+            font: "13px/1.5 system-ui, sans-serif",
+            textAlign: "center",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.5)",
+          }}
+        >
+          <span>数据与本版本不匹配:编号链接可能错位</span>
+          <button
+            onClick={() => setCharsetWarn(false)}
+            aria-label="关闭提示"
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(255,230,230,0.5)",
+              borderRadius: 4,
+              color: "#ffe6e6",
+              cursor: "pointer",
+              padding: "2px 8px",
+              font: "inherit",
+            }}
+          >
+            知道了
+          </button>
+        </div>
+      )}
 
       {/* owner-only feedback inbox (opened by the hidden 5-tap-on-logo gesture); self-gates on the store */}
       <FeedbackViewer />
