@@ -20,7 +20,10 @@ never stored* (every poem ⇄ a big-integer index, bijectively).
 > a392703b`,错配横幅警告)、**GitHub Actions CI**(.github/workflows/ci.yml)、**拾遗**(虚空诗收藏,
 > localStorage,更多菜单入口)、FlyControls useFrame 零分配(§6 旧账)、`pipeline/pack-data.mjs` 冷备一键
 > 打包、`VITE_DATA_BASE` 旋钮(§6 旧账)、nginx `/data/v2/` immutable 缓存铺路(注释默认关)。
-> 现在 **172 tests** 全绿。评审其余 P2/P3 发现未做,清单见 round-3 会话记录。
+> **(6) 指引线平面坐标式(round 4)** — 直线光伞太耀眼信息少 → 重做为两段折线(平面段=方位+水平距离,
+> 垂直段=相对赤道面高度)+ 散射→直射分段生长 + 极淡赤道参考环;亮度峰值 0.60→0.28;旧直线模式保留
+> (`store.guideStyle`,设置·指引·样式)。现在 **189 tests** 全绿。评审其余 P2/P3 发现未做,清单见
+> round-3 会话记录。
 >
 > **▶ Status (2026-06-10, 8th agent · round 5 — post-launch P0/P1/P2):** **(1) 别名搜索** — 搜「陶渊明/李太白/
 > 苏东坡」命中本名行;庄子/诸葛亮/三字经 落空时给体面解释 (`src/data/poetAliases.ts` + integrity test)。
@@ -103,7 +106,7 @@ Heavy-data cold backup = GitHub release assets (DEPLOY §1.0 Option A′); repac
 ```bash
 npm install
 npm run dev        # vite → http://localhost:5199 (strictPort)
-npm test           # vitest: 172 tests (47 engine + 6 engineApi + 4 load + 11 GPU-pick + 21 touch-gesture + 4 alias + 13 permalink + 17 og-inject + 15 cinema/留影 + 12 shardHash + 7 charsetHash + 15 拾遗)
+npm test           # vitest: 189 tests (47 engine + 6 engineApi + 4 load + 11 GPU-pick + 21 touch-gesture + 4 alias + 13 permalink + 17 og-inject + 15 cinema/留影 + 12 shardHash + 7 charsetHash + 15 拾遗 + 17 planeGuidePath)
 npm run deploy:build  # build + precompress for a static host (see docs/DEPLOY.md) — Range-safe
 npm run build      # tsc --noEmit && vite build  (the real verify gate)
 npm run typecheck
@@ -142,7 +145,7 @@ drei 9 / three 0.169 + zustand 5. **100% static + exactly ONE optional backend**
 | **赠诗网络** | HUD 赠诗 toggle → **4,849 dedication edges** (寄/赠/和/次韵… title-parsed; greedy-longest name match + ~250-entry 字号 alias table — 少陵→杜甫, 子瞻→苏轼, 香山→白居易; one edge per 兼寄 recipient). 元稹→白居易, 苏辙→苏轼, 黄庭坚→苏轼…. Committed `gifts.json` (~126 KB). `three/GiftLines`. |
 | **新诗 / modern** | yuxqiu/modern-poetry contemporary set (Apache-2.0) folded in: +4,494 free-verse poems / +508 poets (徐志摩《再别康桥》, 海子, 北岛, 顾城, 戴望舒…). Free verse → form `other`; 民国→近现代 else 当代; their lines are searchable. |
 | **诗云设置菜单** | HUD **⚙设置** (`store.settingsOpen`) → `ui/SettingsMenu.tsx` collects 指引 / 行星 / 赠诗 / 引力 (moved out of the top bar) + 恢复默认. |
-| **行星指引线设置** | `store.guideMode` (off/flash/hold) × `guideCoverage` (all=每首不漏 / optimized=采样) × `guideSeconds` (flash 时长). In the settings menu. `three/PoemGuides.tsx`. |
+| **行星指引线设置** | `store.guideMode` (off/flash/hold) × `guideCoverage` (all=每首不漏 / optimized=采样) × `guideSeconds` (flash 时长) × **`guideStyle` (plane=平面坐标式 两段折线+赤道参考环, default / line=直线·旧版)** (9th, round 4: L-path = 平面段(方位+水平距离)+垂直段(高度), 散射→直射分段生长, alpha 峰值 0.28 vs 旧 0.60; pure math `three/planeGuidePath.ts` + 17 tests). In the settings menu. `three/PoemGuides.tsx`. |
 | **赠诗漫游** | `ui/GiftRoam.tsx` (when 赠诗 on): **往来** list (click → fly across) + **3D arc click** (`FlyControls` ego-net CPU pick, hover-highlights `store.giftHoverId` + 22–26px generous range → easy to hit) + **足迹** breadcrumb with PERSISTENT gold **return lines** (`three/GiftTrail.tsx`, ≤10) + **路径查找** (typed `searchPoets` or 选中 endpoints; BFS **≤100 hops, undirected, deterministic+symmetric** — 7th-agent fix: A→B == reverse(B→A), stronger edge wins ties; cyan 3D highlight that suppresses the gold 足迹 line while shown; `store.pathDimEgo` 弱化往来线). Hop = `store.hopToPoet`. Graph/BFS/dedication = `data/giftGraph.ts`. |
 | **选中诗人增强** | Selected poet's planets HOLD the bright/large highlight for the whole selection (easier GPU pick) + hover a planet → 《title》 tooltip (`store.hoverPoem`, `ui/PoemHoverLabel`). `three/PoemOrbits.tsx`. |
 | **移动端 / 触控** (7th) | `FlyControls` `pointers`-Map state machine: 1-finger drag = 转向, **2-finger drag = 飞行, 2-finger pinch = 调速/缩放**, tap = 选中 — reuses the desktop camera math. `canvas{touch-action:none}` + `viewport-fit=cover` + `overscroll-behavior:none`. Pure gesture math + pan/pinch mode-lock in `three/touchGesture.ts` (unit-tested). Hover-pick skipped on touch (no hover + a GPU stall). `pointercancel` + finger-transition reseed handled. |

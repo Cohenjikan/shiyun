@@ -10,6 +10,27 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
 
 ---
 
+## 2026-06-10 — Session: 9th agent · round 4 (行星指引线重做 — 平面坐标式)
+
+Owner verdict on the old guide lines: 太耀眼、太瞩目、有效信息不多(直线光伞)。Redesigned per the
+orchestrator's spec, Opus 4.8 executed; orchestrator re-ran the gate: tsc · **189 tests**(+17)· build。
+Commit `188ba68`。视觉终调(亮度/参考环淡度/动画节奏)留给真机眼测,旋钮已列明。
+
+- **平面坐标式折线**:过诗人取赤道参考面(星团最大横截面,非真实物体),每首诗的指引线 = 平面段
+  (诗人→H=(ox,0,oz),读方位+水平距离)+ 垂直段(H→P,读相对赤道面的高度);oy≈0 自然退化零长。
+- **散射→直射分段生长**:平面段先向外辐射(grow 0→0.6),垂直段再升起(0.6→1),per-vertex `aStage` +
+  着色器分段进度;grow→hold→fade 生命周期与 显示/覆盖/时长/亮度 全部旋钮沿用。
+- **降噪(硬指标)**:整体 alpha 峰值 0.60→**0.28**,平面段强度 0.35 最暗、垂直段 0.70 稍亮(承载新信息);
+  新增极淡赤道参考环(alpha 0.10,随平面段生长淡入)。
+- **旋转保形**:H 与 P 共用 aCenter/aOmega,本地偏移空间绕 Y 旋转后回加中心——赤道面在 Y 轴自转下映射
+  到自身,L 形随星团自转刚性不剪切(与 PoemOrbits 同方案)。
+- **旧模式保留**:`store.guideStyle`("plane"|"line",默认 plane),设置·指引组新增「样式:平面坐标 /
+  直线(旧版)」分段控件,恢复默认回 plane;旧光束代码路径原样可选。
+- 路径数学抽纯模块 `three/planeGuidePath.ts`(零 THREE 依赖)+17 headless 单测(端点/退化/顶点数/进度
+  单调/参考环);172→**189** 全绿。
+
+---
+
 ## 2026-06-10 — Session: 9th agent · round 3 (五视角评审 Top-8 加固)
 
 A 5-lens read-only review (架构/运行时性能/加载网络/产品UX/数据管线运维, 5 Opus reviewers) produced a
