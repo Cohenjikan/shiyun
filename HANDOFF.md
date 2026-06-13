@@ -7,23 +7,46 @@ Inspired by 刘慈欣《诗云》 + 博尔赫斯《巴别图书馆》: a roamabl
 is a star and the void between them is **every possible poem**, pulled out on click — *computed,
 never stored* (every poem ⇄ a big-integer index, bijectively).
 
-> **▶ Status (2026-06-10, 9th agent — orchestrated round: vite 8 · 动态 OG · v3 NO-GO):** **(1) vite 8 /
-> vitest 4 / plugin-react 6** — round-5 暂缓的 P2 清账:5 个 dev 链漏洞 → `npm audit` **0**;Rollup→Rolldown
-> 迁移保住 three 独立 chunk(675 KB < 700 限额);93 测试零改动;5199 strictPort / `__OG_ORIGIN__` / precompress
-> 全保留。**(2) 动态 OG 分享卡** — 分享链接加 query 镜像(`/?a=…#a=…`,hash 仍正典、旧链接逐字节兼容);
-> `feedback-server.mjs` 可选 `SITE_ROOT` 模式按诗人注入 og/twitter meta(`deploy/og-inject.mjs` 纯函数 + 测试;
-> 不设则一切照旧),nginx 条件反代 + **DEPLOY §6** 运维照抄。**(3) 数据 v3 调研 → NO-GO**(语料源已饱和、唯一
-> 大候选无作者字段;见 DATA_AUDIT.md 补记)。**(4) 留影(round 2)** — 奇迹时刻全面改名「留影」,且诗人目录
-> **每行诗都能直接留影**(`store.openCinemaFor`/`cinemaPoemIdx`,显式目标 > 虚空 > 搜索命中,关闭/换诗人即
-> 复位;解析抽成纯函数 `ui/cinemaResolve.ts`)——之前只能绕道编号反查。**(5) Top-8 加固(round 3,五视角
-> 评审后)** — FNV 分桶哈希契约测试(管线↔前端漂移=CI 红)、字库哈希启动校验(`EXPECTED_CHARSET_HASH=
-> a392703b`,错配横幅警告)、**GitHub Actions CI**(.github/workflows/ci.yml)、**拾遗**(虚空诗收藏,
-> localStorage,更多菜单入口)、FlyControls useFrame 零分配(§6 旧账)、`pipeline/pack-data.mjs` 冷备一键
-> 打包、`VITE_DATA_BASE` 旋钮(§6 旧账)、nginx `/data/v2/` immutable 缓存铺路(注释默认关)。
-> **(6) 指引线平面坐标式(round 4)** — 直线光伞太耀眼信息少 → 重做为两段折线(平面段=方位+水平距离,
-> 垂直段=相对赤道面高度)+ 散射→直射分段生长 + 极淡赤道参考环;亮度峰值 0.60→0.28;旧直线模式保留
-> (`store.guideStyle`,设置·指引·样式)。现在 **189 tests** 全绿。评审其余 P2/P3 发现未做,清单见
-> round-3 会话记录。
+> **▶ Status (2026-06-13, 9th agent — orchestrated session; `main` tip `5899644`, 197 tests green, build OK).**
+> **→ 10th agent: cut your worktree from `main` (= `5899644`). Everything below is DONE + pushed.** 工作方式:本
+> 会话全部执行交给 Opus 4.8 子代理,主循环只统筹 + 每轮复跑门禁(tsc · vitest · vite build);owner 嘱咐控成本
+> (看 `npx ccusage`,5h 块到 ~95% 暂停)+ 不浪费 token 做 headless preview(WebGL 截不了图,真机眼测)。八件事:
+>
+> 1. **vite 8 / vitest 4 / plugin-react 6** (`f723db8`) — 清掉全部 5 个安装期 npm-audit 漏洞(1 critical)→
+>    `npm audit` **0**;Rollup→Rolldown 迁移用 `rolldownOptions.codeSplitting.groups` 保住 three 独立 chunk(675 KB);
+>    生产依赖一字未动。**⚠ 换工作树务必 `npm ci`(lockfile 大改)。**
+> 2. **动态 OG 分享卡** (`85cac49`) — 分享链接加 query 镜像 `/?a=…#a=…`(hash 仍正典、旧纯 hash 链接逐字节兼容);
+>    `feedback-server.mjs` 可选 `SITE_ROOT` 模式按诗人注入 og/twitter meta(纯函数 `deploy/og-inject.mjs` + 测试)。
+>    **不设 SITE_ROOT / 不改 nginx → 纯静态行为与从前完全一致**;运维步骤见 **DEPLOY §6**。
+> 3. **数据 v3(当代诗扩充)调研 → NO-GO** — 语料源已饱和、唯一大候选(HF `Iess`)无作者字段、违反 poet-id 稳定。
+>    结论写进 **DATA_AUDIT.md**,后人勿重查。
+> 4. **留影**(`b3d32ba`,前称「奇迹时刻」,**已全面改名**) — 诗人目录**每行诗都能直接留影**
+>    (`store.openCinemaFor`/`cinemaPoemIdx`,显式目标>虚空>搜索命中,关闭/换诗人即复位;解析纯函数 `ui/cinemaResolve.ts`)。
+> 5. **拾遗**(`ddfdeaa`) — 虚空诗不可复现 → 一键收存(localStorage `shiyun_shiyi_v1`,纯模块 `state/shiyi.ts`,去重/
+>    上限200/容损坏;「更多」菜单「拾遗 — 我捞起的诗」点击经 `pulledFromIndex` 重建+飞回)。仅虚空诗(真实诗经诗人可再寻)。
+> 6. **Top-8 加固(五视角只读评审驱动,`ddfdeaa`)** — FNV 分桶哈希**契约测试**(管线↔前端漂移=CI 红)、**字库哈希
+>    启动校验**(`EXPECTED_CHARSET_HASH=a392703b`,错配顶部横幅警告、不阻断)、**GitHub Actions CI**
+>    (`.github/workflows/ci.yml`,push/PR → ci+build+test)、FlyControls useFrame **零分配**、`pipeline/pack-data.mjs`
+>    **冷备一键打包**(`npm run pack:data`)、**`VITE_DATA_BASE`** 旋钮、nginx `/data/v2/` immutable 缓存铺路(注释默认关)。
+> 7. **指引线·平面坐标式**(`188ba68`) — 旧直线光伞太耀眼信息少 → 两段折线(平面段=方位+水平距离 / 垂直段=相对赤道面
+>    高度)+ 散射→直射分段生长 + 极淡赤道参考环;亮度峰值 0.60→0.28;**旧直线模式保留**(`store.guideStyle`,设置·指引·样式)。
+>    纯路径数学 `three/planeGuidePath.ts`。
+> 8. **自由填诗·字库外字提示**(`4c20325`) — owner 报「查不出编号」实为粘了繁体「與」(U+8207,不在简体冻结字库)。
+>    **非 bug**(字库简体+冻结=编号链接稳定),但自由模式过去静默无反馈 → 新增 `engineApi.outOfCharset()`,自由模式
+>    现列出哪个字不在库(固定格模式早有红格)。
+>
+> **⚠ 部署状态(运维 / 10th agent 注意):** 上述全部已 push 到 `main`,但**线上 shiyun.cohenjikan.com 未必是最新构建**。
+> 在主目录 `C:\Users\Cohen\Desktop\shiyun` 跑 `git pull && npm ci && npm run deploy:build`;重建后新 JS bundle 应为
+> `index-Chk6Fqfq.js`(`curl -s https://shiyun.cohenjikan.com/ | grep index-` 可验)。**6-13 曾发生全站 403 封禁**
+> (linesf 404 洪流触发自动封 IP),已由 `cac5965` 的 nginx linesf 短路修复——别让未来 redeploy 回退掉它。
+>
+> **遗留 / 下一步(10th agent 可选,均未做):** 五视角评审的 P2/P3 项 —— hover/select 预取诗人 bucket、shard cache
+> 加 LRU+输入防抖、SEO sitemap/robots、键盘可达性(`:focus-visible` + canvas aria)、`prefers-reduced-motion`、
+> 文档计数漂移修正、`build-fuzzy.mjs` 的「陶渊明→陶潜」核查、build-data 原子写 manifest、feedback JSONL 轮转、
+> Service Worker 离线层。**指引线 / 留影 / 拾遗的真机视觉**待 owner 在 5199 眼测。
+>
+> **📅 注意:本会话较早的 DEVLOG / 下方 8th-agent 状态块仍标 2026-06-10,实际是 2026-06-13(round 5 起已改正);
+> 未回溯修旧条目。**
 >
 > **▶ Status (2026-06-10, 8th agent · round 5 — post-launch P0/P1/P2):** **(1) 别名搜索** — 搜「陶渊明/李太白/
 > 苏东坡」命中本名行;庄子/诸葛亮/三字经 落空时给体面解释 (`src/data/poetAliases.ts` + integrity test)。
@@ -106,7 +129,7 @@ Heavy-data cold backup = GitHub release assets (DEPLOY §1.0 Option A′); repac
 ```bash
 npm install
 npm run dev        # vite → http://localhost:5199 (strictPort)
-npm test           # vitest: 189 tests (47 engine + 6 engineApi + 4 load + 11 GPU-pick + 21 touch-gesture + 4 alias + 13 permalink + 17 og-inject + 15 cinema/留影 + 12 shardHash + 7 charsetHash + 15 拾遗 + 17 planeGuidePath)
+npm test           # vitest: 197 tests across 13 files (engine/engineApi/load/gpu-pick/touch/alias/permalink/og-inject/cinema-留影/shardHash/charsetHash/拾遗/planeGuidePath) — run it for the live count, don't hand-maintain the breakdown
 npm run deploy:build  # build + precompress for a static host (see docs/DEPLOY.md) — Range-safe
 npm run build      # tsc --noEmit && vite build  (the real verify gate)
 npm run typecheck
