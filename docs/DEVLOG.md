@@ -10,6 +10,19 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
 
 ---
 
+## 2026-06-13 — Session: 9th agent · round 5 (自由填诗:字库外字提示)
+
+Owner-reported "查不出编号":粘贴的诗含繁体「與」(U+8207),不在简体冻结字库(N=12,877)→ `anyTextIndex`
+正确返回 null → 不是 bug,是设计。但**自由填诗(textarea)模式静默无反馈**(固定格模式早有 `.cell.bad` 红格),
+用户以为功能坏了。诊断时已用引擎真身证明编号正反算均正确,且线上构建/数据一致(curl 验)。Opus 主循环直接做,
+门禁:tsc · **197 tests**(+1)· build。Commit `4c20325`。
+
+- 新增纯函数 `engineApi.outOfCharset(text)`:返回文本中不在字库的唯一字(码点感知、去重、保序);`SearchPanel`
+  自由分支在算编号前调用它,把字库外的字列出来(「『與』不在字库 —— 诗云用简体,繁体/异体/生僻字没有编号」),
+  不再静默空白。固定格模式不变(它已有逐格红字)。+1 单测(繁体「與」/拉丁 Z/去重/空串)。
+
+---
+
 ## 2026-06-10 — Session: 9th agent · round 4 (行星指引线重做 — 平面坐标式)
 
 Owner verdict on the old guide lines: 太耀眼、太瞩目、有效信息不多(直线光伞)。Redesigned per the
