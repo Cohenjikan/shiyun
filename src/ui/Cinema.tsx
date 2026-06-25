@@ -196,12 +196,15 @@ export function Cinema() {
           onPointerCancel={onPointerUp}
           onWheel={onWheel}
         >
-          {/* 字体槽:固定 w×h 的框;诗句在框内 竖排-折行,字号自适应填满。拖右下角手柄改框大小。 */}
+          {/* 字体槽:固定 w×h 的框;诗句在内层 .cinema-clip(overflow:hidden)里竖排-折行 + 字号自适应填满。
+              手柄是 slot 的直接子级(在 clip 之外),所以不会被裁掉;拖右下角手柄改框大小。 */}
           <div className="cinema-slot" ref={slotRef} style={{ width: slot.w, height: slot.h }}>
-            <div className={showBg ? "cinema-poem with-bg" : "cinema-poem"} ref={poemRef} lang="zh" style={{ color: textColor }}>
-              {lines.map((l, i) => (
-                <div key={i} className="cinema-line">{l}</div>
-              ))}
+            <div className="cinema-clip">
+              <div className={showBg ? "cinema-poem with-bg" : "cinema-poem"} ref={poemRef} lang="zh" style={{ color: textColor }}>
+                {lines.map((l, i) => (
+                  <div key={i} className="cinema-line">{l}</div>
+                ))}
+              </div>
             </div>
             <div
               className="cinema-resize"
@@ -211,7 +214,9 @@ export function Cinema() {
               onPointerCancel={onResizeUp}
               title="拖动调整字体槽大小"
               aria-label="拖动调整字体槽大小"
-            />
+            >
+              ⤡
+            </div>
           </div>
           <div className="cinema-attr">{attribution}</div>
           {index && (

@@ -1986,30 +1986,48 @@ canvas {
 /* classical 竖排: each line is an upright column; columns flow right→left. NO max-width/height/overflow:
    a long poem renders at FULL length (it may extend past the viewport edges) — the user zooms out with the
    − control + drags to compose, instead of having the left columns clipped/occluded. */
-/* 字体槽:固定 w×h 的框(尺寸由 React inline 给),诗句在框内竖排-折行 + 字号自适应填满;右下角手柄可拖拽改大小。 */
+/* 字体槽:固定 w×h 的框(尺寸由 React inline 给)。slot 本身 NOT overflow:hidden,所以右下角手柄(在 clip
+   之外的直接子级)不会被裁掉;裁剪交给内层 .cinema-clip。 */
 .cinema-slot {
   position: relative;
+}
+.cinema-slot:hover {
+  /* 悬停才显字体槽边界(截图时鼠标移开即隐);触屏没有 hover,靠常驻手柄找边界。 */
+  outline: 1px dashed rgba(255, 210, 122, 0.32);
+  outline-offset: 6px;
+}
+.cinema-clip {
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* 诗句溢出时裁掉(自适应字号一般正好填满,极端长诗才会触发) */
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
 }
-/* 右下角拖拽手柄(金色直角):拖动调整字体槽大小,排版随之自适应 */
+/* 右下角拖拽手柄:始终可见的金色小块(即使背景衬底关掉也找得到),拖动调整字体槽大小,排版随之自适应。 */
 .cinema-resize {
   position: absolute;
-  right: -3px;
-  bottom: -3px;
-  width: 24px;
-  height: 24px;
+  right: -10px;
+  bottom: -10px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: rgba(20, 18, 12, 0.62);
+  border: 1px solid rgba(255, 210, 122, 0.6);
+  color: var(--gold);
+  font-size: 13px;
+  line-height: 1;
   cursor: nwse-resize;
   touch-action: none;
-  border-right: 2px solid rgba(255, 210, 122, 0.55);
-  border-bottom: 2px solid rgba(255, 210, 122, 0.55);
-  border-bottom-right-radius: 7px;
-  opacity: 0.65;
+  z-index: 2;
+  opacity: 0.85;
 }
 .cinema-resize:hover {
   opacity: 1;
+  background: rgba(255, 210, 122, 0.2);
 }
 /* 竖排:每行 = 一列(字符上→下),列右→左排;列触到字体槽宽度即 flex-wrap 折叠到下一行。颜色由 JS 内联
    (无极调色,默认暖白);背景衬底默认关,需要时在设置里开。多层暗描边一直在,保证亮场景基本可读。 */
