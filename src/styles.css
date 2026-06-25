@@ -1986,18 +1986,43 @@ canvas {
 /* classical 竖排: each line is an upright column; columns flow right→left. NO max-width/height/overflow:
    a long poem renders at FULL length (it may extend past the viewport edges) — the user zooms out with the
    − control + drags to compose, instead of having the left columns clipped/occluded. */
-/* 竖排:每行 = 一列(字符上→下),列右→左排;列触到画面边界即 flex-wrap 折叠到下一行,长诗不再溢出视口。
-   颜色由 JS 内联(无极调色,默认暖白);背景衬底默认关,需要时在设置里开。多层暗描边一直在,保证亮场景基本可读。 */
+/* 字体槽:固定 w×h 的框(尺寸由 React inline 给),诗句在框内竖排-折行 + 字号自适应填满;右下角手柄可拖拽改大小。 */
+.cinema-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+/* 右下角拖拽手柄(金色直角):拖动调整字体槽大小,排版随之自适应 */
+.cinema-resize {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 24px;
+  height: 24px;
+  cursor: nwse-resize;
+  touch-action: none;
+  border-right: 2px solid rgba(255, 210, 122, 0.55);
+  border-bottom: 2px solid rgba(255, 210, 122, 0.55);
+  border-bottom-right-radius: 7px;
+  opacity: 0.65;
+}
+.cinema-resize:hover {
+  opacity: 1;
+}
+/* 竖排:每行 = 一列(字符上→下),列右→左排;列触到字体槽宽度即 flex-wrap 折叠到下一行。颜色由 JS 内联
+   (无极调色,默认暖白);背景衬底默认关,需要时在设置里开。多层暗描边一直在,保证亮场景基本可读。 */
 .cinema-poem {
   display: flex;
   flex-direction: row-reverse; /* 竖排右→左:第一行在最右 */
-  flex-wrap: wrap; /* 触到画面边界 → 折叠到下一行 */
+  flex-wrap: wrap; /* 触到字体槽宽度 → 折叠到下一行 */
   justify-content: center;
   align-items: flex-start;
   gap: 0.18em 0.4em;
-  max-width: min(92vw, 1100px); /* 边缘触界即换行的依据 */
+  max-width: 100%; /* 在字体槽内折行;字号由 useLayoutEffect 二分到填满 */
   font-family: var(--serif);
-  font-size: clamp(19px, 3.6vh, 30px);
+  font-size: 28px; /* 初值,随即被自适应字号覆盖 */
   letter-spacing: 0.18em;
   text-shadow: 0 0 3px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.85),
     0 2px 22px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 210, 122, 0.14);

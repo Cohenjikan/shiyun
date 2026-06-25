@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useStore } from "../state/store";
 import { anyTextIndex } from "../engine/engineApi";
 import { resolveCinemaPoem } from "./cinemaResolve";
@@ -6,8 +6,10 @@ import { resolveCinemaPoem } from "./cinemaResolve";
 // 留影(cinema) — a "share card" over the FROZEN scene (the store.cinema flag pauses spin + the void-pull /
 // highlight lifecycles in the r3f layers), to guide a screenshot. The overlay itself is pointer-events:none
 // EXCEPT its controls + the poem card, so you can still drag the camera through it to compose the shot, then
-// screenshot. The poem card can be DRAGGED to reposition and pinch/wheel/±-zoomed to resize, so the user
-// frames the poem wherever they like in the shot. Copy emphasises the 诗云 / 巴别图书馆 concept; ‹ › cycle it.
+// screenshot. The poem sits in a RESIZABLE 字体槽 (text slot): drag it to move, drag the corner / pinch /
+// wheel to resize the slot, and the poem AUTO-FITS inside — it 竖排-wraps to the slot's width and the font
+// binary-searches to the largest size that fills the slot's height. Copy emphasises the 诗云 / 巴别图书馆
+// concept; ‹ › cycle it.
 const TAGLINES = [
   "一切可能的诗都已写就,藏在这片噪声的星海里。你刚刚,捞起了其中一首。",
   "在诗云里,杰作不被创作,只被找到——它本就在那里,等你给它一个编号。",
@@ -16,9 +18,12 @@ const TAGLINES = [
   "巴别图书馆收藏了一切可能的诗。这,是它的一件藏品。",
 ];
 
-const SCALE_MIN = 0.45;
-const SCALE_MAX = 3.2;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const vw = () => (typeof window !== "undefined" ? window.innerWidth : 1280);
+const vh = () => (typeof window !== "undefined" ? window.innerHeight : 800);
+// 字体槽默认尺寸:占屏大半(改掉旧版"太保守"的小占位);clampSlot 限制在视口内的合理范围。
+const initSlot = () => ({ w: Math.round(Math.min(vw() * 0.86, 1150)), h: Math.round(Math.min(vh() * 0.72, 780)) });
+const clampSlot = (w: number, h: number) => ({ w: clamp(w, 220, vw() * 0.92), h: clamp(h, 150, vh() * 0.9) });
 
 export function Cinema() {
   const cinema = useStore((s) => s.cinema);
@@ -37,31 +42,53 @@ export function Cinema() {
   const hideTagline = useStore((s) => s.cinemaHideTagline);
   const toggleTagline = useStore((s) => s.toggleCinemaTagline);
 
-  // poem transform (composition): translate offset + scale. Local state — resets each time 留影 opens,
-  // because App mounts <Cinema/> only while `cinema` is true.
+  // composition state — resets each time 留影 opens (App mounts <Cinema/> only while `cinema` is true):
+  // tx/ty = card position offset; slot = the 字体槽 size the poem auto-fits into.
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
-  const [scale, setScale] = useState(1);
-  const [touched, setTouched] = useState(false); // hide the drag hint after the first interaction
+  const [slot, setSlot] = useState(initSlot);
+  const [touched, setTouched] = useState(false); // hide the hint after the first interaction
   const [dragging, setDragging] = useState(false);
   const [setOpen, setSetOpen] = useState(false); // 留影设置子菜单展开
-  // pointer tracking: 1 pointer = drag-to-move, 2 pointers = pinch-to-resize.
+  // pointer tracking on the card: 1 pointer = drag-to-move, 2 pointers = pinch-to-resize the slot.
   const ptrs = useRef<Map<number, { x: number; y: number }>>(new Map());
   const dragStart = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
-  const pinchStart = useRef<{ dist: number; scale: number } | null>(null);
+  const pinchStart = useRef<{ dist: number; w: number; h: number } | null>(null);
+  const resizeStart = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const slotRef = useRef<HTMLDivElement>(null);
+  const poemRef = useRef<HTMLDivElement>(null);
 
-  if (!cinema) return null;
-
-  // resolve the framed poem: an explicit per-poem 留影 pick (PoetPanel row button) wins, else a void pull
-  // (the purest 奇迹), else the selected poet's 搜的这首 focus poem. See resolveCinemaPoem for precedence.
-  const resolved = resolveCinemaPoem({ selected, poet, poems, focus, cinemaPoemIdx, indexer: anyTextIndex });
+  const resolved = cinema ? resolveCinemaPoem({ selected, poet, poems, focus, cinemaPoemIdx, indexer: anyTextIndex }) : null;
   const lines = resolved?.lines ?? null;
   const index = resolved?.index ?? null;
   const digits = resolved?.digits ?? 0;
   const attribution = resolved?.attribution ?? "";
+
+  // AUTO-FIT: pick the largest font-size at which the 竖排-wrapped poem fits the slot (width caps wrapping,
+  // height is the binding constraint). Runs after every slot resize / poem change / 背景 toggle (padding).
+  useLayoutEffect(() => {
+    const poem = poemRef.current, box = slotRef.current;
+    if (!poem || !box) return;
+    const availW = box.clientWidth, availH = box.clientHeight;
+    if (availW < 8 || availH < 8) return;
+    let lo = 8, hi = 200, best = 8;
+    for (let i = 0; i < 10; i++) {
+      const mid = (lo + hi) / 2;
+      poem.style.fontSize = mid + "px";
+      if (poem.scrollWidth <= availW + 1 && poem.scrollHeight <= availH + 1) {
+        best = mid;
+        lo = mid;
+      } else hi = mid;
+    }
+    poem.style.fontSize = best + "px";
+  }, [slot.w, slot.h, index, showBg]);
+
+  if (!cinema) return null;
+
   const n = TAGLINES.length;
   const tag = TAGLINES[((copyIdx % n) + n) % n];
 
+  // ── card move + pinch-resize-slot ──
   const onPointerDown = (e: React.PointerEvent) => {
     try {
       (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
@@ -72,7 +99,7 @@ export function Cinema() {
     setTouched(true);
     if (ptrs.current.size >= 2) {
       const [a, b] = [...ptrs.current.values()];
-      pinchStart.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, scale };
+      pinchStart.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, w: slot.w, h: slot.h };
       dragStart.current = null; // pinch suspends single-finger drag
     } else {
       dragStart.current = { x: e.clientX, y: e.clientY, tx, ty };
@@ -84,8 +111,8 @@ export function Cinema() {
     ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (ptrs.current.size >= 2 && pinchStart.current) {
       const [a, b] = [...ptrs.current.values()];
-      const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      setScale(clamp((pinchStart.current.scale * dist) / pinchStart.current.dist, SCALE_MIN, SCALE_MAX));
+      const r = (Math.hypot(a.x - b.x, a.y - b.y) || 1) / pinchStart.current.dist;
+      setSlot(clampSlot(pinchStart.current.w * r, pinchStart.current.h * r)); // 双指捏合 = 调字体槽大小
     } else if (dragStart.current) {
       setTx(dragStart.current.tx + (e.clientX - dragStart.current.x));
       setTy(dragStart.current.ty + (e.clientY - dragStart.current.y));
@@ -95,26 +122,50 @@ export function Cinema() {
     ptrs.current.delete(e.pointerId);
     if (ptrs.current.size < 2) pinchStart.current = null;
     if (ptrs.current.size === 1) {
-      // a finger lifted out of a pinch — re-arm drag from the one that remains
       const [only] = [...ptrs.current.values()];
-      dragStart.current = { x: only.x, y: only.y, tx, ty };
+      dragStart.current = { x: only.x, y: only.y, tx, ty }; // re-arm move from the finger that remains
     } else if (ptrs.current.size === 0) {
       dragStart.current = null;
       setDragging(false);
     }
   };
+
+  // ── corner handle: free-aspect slot resize (the slot is center-anchored, so each edge moves half the
+  //    size change → ×2 the drag delta keeps the corner under the finger). Aspect drives how the poem folds. ──
+  const onResizeDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    try {
+      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    resizeStart.current = { x: e.clientX, y: e.clientY, w: slot.w, h: slot.h };
+    setTouched(true);
+  };
+  const onResizeMove = (e: React.PointerEvent) => {
+    if (!resizeStart.current) return;
+    e.stopPropagation();
+    const dx = e.clientX - resizeStart.current.x, dy = e.clientY - resizeStart.current.y;
+    setSlot(clampSlot(resizeStart.current.w + dx * 2, resizeStart.current.h + dy * 2));
+  };
+  const onResizeUp = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    resizeStart.current = null;
+  };
+
   const onWheel = (e: React.WheelEvent) => {
     setTouched(true);
-    setScale((s) => clamp(s * (e.deltaY < 0 ? 1.08 : 1 / 1.08), SCALE_MIN, SCALE_MAX));
+    const f = e.deltaY < 0 ? 1.06 : 1 / 1.06;
+    setSlot((s) => clampSlot(s.w * f, s.h * f)); // 滚轮 = 等比缩放字体槽
   };
-  const zoom = (f: number) => {
+  const grow = (f: number) => {
     setTouched(true);
-    setScale((s) => clamp(s * f, SCALE_MIN, SCALE_MAX));
+    setSlot((s) => clampSlot(s.w * f, s.h * f));
   };
   const reset = () => {
     setTx(0);
     setTy(0);
-    setScale(1);
+    setSlot(initSlot());
     setTouched(false);
   };
 
@@ -128,33 +179,39 @@ export function Cinema() {
         </div>
       )}
 
-      {/* resize / reset controls (top-right, opposite the exit). Drag the poem itself to move it. */}
+      {/* 字体槽 缩放 / 复位(右上角,与左上角退出相对)。拖诗句本体可移动,拖右下角可改字体槽大小。 */}
       <div className="cinema-tools">
-        <button className="cinema-tool" onClick={() => zoom(1 / 1.15)} aria-label="缩小" title="缩小">−</button>
-        <button className="cinema-tool" onClick={() => zoom(1.15)} aria-label="放大" title="放大">+</button>
-        <button className="cinema-tool" onClick={reset} aria-label="复位" title="复位居中">⟲</button>
+        <button className="cinema-tool" onClick={() => grow(1 / 1.12)} aria-label="字体槽缩小" title="字体槽缩小">−</button>
+        <button className="cinema-tool" onClick={() => grow(1.12)} aria-label="字体槽放大" title="字体槽放大">+</button>
+        <button className="cinema-tool" onClick={reset} aria-label="复位" title="复位居中 + 默认字体槽">⟲</button>
       </div>
 
       {lines && (
         <div
           className="cinema-card"
-          style={{
-            transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(${scale})`,
-            cursor: dragging ? "grabbing" : "grab",
-          }}
+          style={{ transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px))`, cursor: dragging ? "grabbing" : "grab" }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           onWheel={onWheel}
         >
-          {/* classical 竖排: each line is a column, columns flow RIGHT→LEFT (writing-mode in CSS) so a
-              long poem spreads sideways instead of getting clipped at the bottom. */}
-          {/* 竖排:每行一列,列触到画面边界自动折叠到下一行(CSS flex-wrap)。颜色无极可调;背景默认关。 */}
-          <div className={showBg ? "cinema-poem with-bg" : "cinema-poem"} lang="zh" style={{ color: textColor }}>
-            {lines.map((l, i) => (
-              <div key={i} className="cinema-line">{l}</div>
-            ))}
+          {/* 字体槽:固定 w×h 的框;诗句在框内 竖排-折行,字号自适应填满。拖右下角手柄改框大小。 */}
+          <div className="cinema-slot" ref={slotRef} style={{ width: slot.w, height: slot.h }}>
+            <div className={showBg ? "cinema-poem with-bg" : "cinema-poem"} ref={poemRef} lang="zh" style={{ color: textColor }}>
+              {lines.map((l, i) => (
+                <div key={i} className="cinema-line">{l}</div>
+              ))}
+            </div>
+            <div
+              className="cinema-resize"
+              onPointerDown={onResizeDown}
+              onPointerMove={onResizeMove}
+              onPointerUp={onResizeUp}
+              onPointerCancel={onResizeUp}
+              title="拖动调整字体槽大小"
+              aria-label="拖动调整字体槽大小"
+            />
           </div>
           <div className="cinema-attr">{attribution}</div>
           {index && (
@@ -166,7 +223,7 @@ export function Cinema() {
         </div>
       )}
 
-      {lines && !touched && <div className="cinema-hint">拖动诗句移动 · 滚轮 / 双指缩放</div>}
+      {lines && !touched && <div className="cinema-hint">拖动移动 · 拖右下角调字体槽 · 滚轮 / 双指缩放</div>}
 
       {/* 左下角统一设置按钮 → 点开子菜单:背景衬底(默认关) / 字体调色(无极) / 顶部文案 */}
       <div className="cinema-settings">
