@@ -10,6 +10,27 @@ real GPU. Data dirs (`poems/`, `lines/`) are git-ignored — see HANDOFF "data p
 
 ---
 
+## 2026-06-26 — 年度维护轮(10th agent · 6 月常规维护)
+
+首次正式维护轮(此后每年一次);全程在 worktree 分支 `claude/june-maint-2026`,**未合并 main**,待 owner 真机眼测。
+门禁每步:tsc · vitest(138 → **217**)· vite build。完整账目见 [docs/MAINTENANCE.md](MAINTENANCE.md)。
+
+- **前序(owner 已做,登记在案):** 检索权重 — `lines/` 名家优先封顶 + 前端整联多句重排(`1347cc8`)。
+- **探诗诗体误判(真 bug):** `engineApi.describeAny` 把 `form` 写死 `"ziyou"`,而 `pulledFromIndex`(永久链接 / 拾遗 /
+  定位虚空)据此把七律误标「自由」,与 `pullByIndex`(已 `inferForm`)前后不一致 → `describeAny` 改用 `inferForm`
+  + 回归测试。**设计阶段子代理初判 FALSE_REPORT,直接核查代码后推翻 —— 子代理结论要复核。**
+- **触屏整体锁定(改动最大):** 新增 `freeMove`(触屏默认锁定整体、电脑默认自由飞行)。锁定模式绕原点 orbit:单指拖
+  转 yaw/pitch、双指·滚轮 `orbitZoom` 缩放(解决「只能拖不能放大缩小」),点诗人/诗歌换锁定目标;「更多」加「自由移动」。
+- **关随机诗:** `allowRandomPoem`(默认开),关后点虚空不生成随机诗;「更多」加开关。
+- **留影重做:** 统一 `⚙ 设置` 子菜单(背景衬底默认关 / 无极调色盘 `<input type=color>` / 顶部文案 / 调整手柄默认关);
+  **可调字体槽** `.cinema-slot`(`useLayoutEffect` 二分字号填满字体槽,右下角手柄 / 双指 / 滚轮调槽大小);取消旧的横/竖排
+  `cinemaLayout`。手柄曾被 `overflow:hidden` 裁没 → 拆出 `.cinema-clip` 裁剪、手柄移到其外。
+- **新手引导:** 精简为四步(B 版,owner 选定)、分平台;localStorage 键 `shiyun_onboarded_v1 → v2`。
+
+验证:tsc · 217 vitest · vite build 全过;3D · 触屏 · 留影排版由 owner 在 5199 + 触屏真机眼测。
+
+---
+
 ## 2026-06-13 — Session: 9th agent · round 5 (自由填诗:字库外字提示)
 
 Owner-reported "查不出编号":粘贴的诗含繁体「與」(U+8207),不在简体冻结字库(N=12,877)→ `anyTextIndex`

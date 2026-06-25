@@ -41,6 +41,8 @@ export function Cinema() {
   const setTextColor = useStore((s) => s.setCinemaTextColor);
   const hideTagline = useStore((s) => s.cinemaHideTagline);
   const toggleTagline = useStore((s) => s.toggleCinemaTagline);
+  const showHandle = useStore((s) => s.cinemaShowHandle);
+  const toggleHandle = useStore((s) => s.toggleCinemaHandle);
 
   // composition state — resets each time 留影 opens (App mounts <Cinema/> only while `cinema` is true):
   // tx/ty = card position offset; slot = the 字体槽 size the poem auto-fits into.
@@ -206,17 +208,19 @@ export function Cinema() {
                 ))}
               </div>
             </div>
-            <div
-              className="cinema-resize"
-              onPointerDown={onResizeDown}
-              onPointerMove={onResizeMove}
-              onPointerUp={onResizeUp}
-              onPointerCancel={onResizeUp}
-              title="拖动调整字体槽大小"
-              aria-label="拖动调整字体槽大小"
-            >
-              ⤡
-            </div>
+            {showHandle && (
+              <div
+                className="cinema-resize"
+                onPointerDown={onResizeDown}
+                onPointerMove={onResizeMove}
+                onPointerUp={onResizeUp}
+                onPointerCancel={onResizeUp}
+                title="拖动调整字体槽大小"
+                aria-label="拖动调整字体槽大小"
+              >
+                ⤡
+              </div>
+            )}
           </div>
           <div className="cinema-attr">{attribution}</div>
           {index && (
@@ -228,7 +232,7 @@ export function Cinema() {
         </div>
       )}
 
-      {lines && !touched && <div className="cinema-hint">拖动移动 · 拖右下角调字体槽 · 滚轮 / 双指缩放</div>}
+      {lines && !touched && <div className="cinema-hint">拖动移动 · 滚轮 / 双指缩放字体槽 · 手柄在设置里开</div>}
 
       {/* 左下角统一设置按钮 → 点开子菜单:背景衬底(默认关) / 字体调色(无极) / 顶部文案 */}
       <div className="cinema-settings">
@@ -251,6 +255,10 @@ export function Cinema() {
             <label className="cinema-set-row">
               <span>顶部文案</span>
               <input type="checkbox" checked={!hideTagline} onChange={toggleTagline} />
+            </label>
+            <label className="cinema-set-row">
+              <span>调整手柄</span>
+              <input type="checkbox" checked={showHandle} onChange={toggleHandle} />
             </label>
           </div>
         )}

@@ -66,10 +66,12 @@ interface State {
   //   cinemaShowBg      = 诗句暗色衬底(默认关,亮场景需要时再开;描边阴影一直在,保证基本可读)
   //   cinemaTextColor   = 诗句字体颜色(无极调色盘,默认暖白)
   //   cinemaHideTagline = 隐藏留影顶部的概念文案(tagline)
-  // 排版恒为竖排,列触到画面边界自动折叠到下一行(纯 CSS flex-wrap,无横/竖切换)。
+  //   cinemaShowHandle  = 显示字体槽右下角拖拽手柄(默认关,免得碍眼;关时仍可用滚轮/双指/+− 调槽大小)
+  // 排版恒为竖排,诗句在可调字体槽内 折行 + 字号自适应填满。
   cinemaShowBg: boolean;
   cinemaTextColor: string;
   cinemaHideTagline: boolean;
+  cinemaShowHandle: boolean;
   // owner-only feedback viewer (opened by a hidden gesture: 5 taps on the 诗云 logo within 10 s)
   feedbackOpen: boolean;
   // 拾遗: VOID-poem keepsakes (newest first), persisted to localStorage by the PURE state/shiyi.ts module.
@@ -145,6 +147,7 @@ interface State {
   toggleCinemaBg: () => void;
   setCinemaTextColor: (c: string) => void;
   toggleCinemaTagline: () => void;
+  toggleCinemaHandle: () => void;
   setFeedbackOpen: (b: boolean) => void;
   setShiyiOpen: (b: boolean) => void;
   keepShiyi: (entry: { index: string; preview: string }) => void; // 收进拾遗 (a void poem)
@@ -199,6 +202,7 @@ export const useStore = create<State>((set) => ({
   cinemaShowBg: false,
   cinemaTextColor: "#fbf7ec",
   cinemaHideTagline: false,
+  cinemaShowHandle: false,
   feedbackOpen: false,
   shiyi: listShiyi(), // hydrate the keepsake list from localStorage at boot
   shiyiOpen: false,
@@ -286,6 +290,7 @@ export const useStore = create<State>((set) => ({
   toggleCinemaBg: () => set((s) => ({ cinemaShowBg: !s.cinemaShowBg })),
   setCinemaTextColor: (cinemaTextColor) => set({ cinemaTextColor }),
   toggleCinemaTagline: () => set((s) => ({ cinemaHideTagline: !s.cinemaHideTagline })),
+  toggleCinemaHandle: () => set((s) => ({ cinemaShowHandle: !s.cinemaShowHandle })),
   setFeedbackOpen: (feedbackOpen) => set({ feedbackOpen }),
   // 拾遗: delegate the dedupe/cap/persistence to the pure module, then mirror its returned list into the
   // store so subscribed UI (PoemPanel toggle, the revisit panel) re-renders. No cross-domain reset.

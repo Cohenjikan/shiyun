@@ -38,13 +38,14 @@
 **需求(三次细化后):** ① 左下角**统一设置按钮**(点开子菜单);② **背景衬底默认关**、设置里可开;③ **无极调色盘**调字体颜色;④ 取消横/竖排两种格式;⑤ 旧版固定折叠"太保守" → 改为**可调字体槽**:用户自己调字体槽大小来控制排版,诗句在槽内**自适应**。
 **实现:**
 - **字体槽(`.cinema-slot`,React inline `w×h`)**:诗句恒竖排、`flex row-reverse wrap` 折行到槽宽;字号用 `useLayoutEffect` **二分**到"填满字体槽高度"的最大值(`scrollW/H ≤ 槽`)→ 排版在槽内自适应填满。默认槽 `min(86vw,1150)×min(72vh,780)`(改掉旧版小占位)。
-- **调字体槽大小**:右下角拖拽手柄(`.cinema-resize`,自由长宽 → 控制折几行)+ 双指捏合 / 滚轮 / `+`−` 等比缩放槽;拖本体移动;`⟲` 复位位置+默认槽。删旧 `scale`(整卡缩放)与 `cinemaLayout`/`.horizontal`。
-- store:新增 `cinemaShowBg`(默认 `false`)+ `cinemaTextColor`(默认 `#fbf7ec`);保留 `cinemaHideTagline`。
+- **调字体槽大小**:双指捏合 / 滚轮 / 右上 `+`−` 等比缩放槽(主路径)+ **右下角拖拽手柄**(`.cinema-resize`,自由长宽 → 控制折几行,**默认隐藏、设置里开**,免得碍眼);拖本体移动;`⟲` 复位位置+默认槽。删旧 `scale`(整卡缩放)与 `cinemaLayout`/`.horizontal`。
+- 手柄裁剪坑:`.cinema-resize` 原在 `overflow:hidden` 的 slot 内被裁没 → 拆出内层 `.cinema-clip` 裁剪,手柄移到其外;`.cinema-slot:hover` 显虚线边界帮发现。
+- store:新增 `cinemaShowBg`(默认 `false`)+ `cinemaTextColor`(`#fbf7ec`)+ `cinemaShowHandle`(默认 `false`);保留 `cinemaHideTagline`。
 - 可读性:多层暗描边 text-shadow **常驻**;暗底 `.cinema-poem.with-bg` 仅在开「背景衬底」时加;字体颜色走内联 `style.color`(无极)。
-- 左下角 `⚙ 设置` → 弹出菜单:背景衬底(默认关)/ 字体颜色(`<input type=color>` 无极)/ 顶部文案。
+- 左下角 `⚙ 设置` → 弹出菜单 4 项:背景衬底(默认关)/ 字体颜色(`<input type=color>` 无极)/ 顶部文案 / 调整手柄(默认关)。
 
 涉及:`src/ui/Cinema.tsx`、`src/state/store.ts`、`src/styles.css`。
-> 眼测点:拖右下角手柄改字体槽大小,诗句字号/折行是否随之自适应填满;双指/滚轮缩放槽;背景开关;调色盘改色;`⟲` 复位。
+> 眼测点:滚轮/双指缩放字体槽,诗句字号/折行随之自适应填满;设置里开「调整手柄」后拖右下角金色 `⤡` 改长宽比;背景/调色/文案/手柄四个开关;`⟲` 复位。
 
 #### 2. 探诗诗体归类(七律被判为「词」)—— ✅ 真 bug · 已修
 **判定:** **是真 bug(非误报)。** 设计阶段子代理曾判 FALSE_REPORT,我直接核查后推翻:`探诗·凭编号`(`pullByIndex`)本就调 `inferForm` 推断诗体,显示正确(七律);**但 `describeAny` 把 `form` 写死为 `"ziyou"`**,而 `pulledFromIndex`(永久链接还原 / 拾遗 / 「定位虚空」)直接用它 → 同一首七律,反查面板显示「七律」,一旦定位/分享/拾遗就被重标成「自由」,前后不一致 = 用户看到的「归类有误」。
@@ -82,8 +83,39 @@ npm test          # vitest 217 全绿
 触屏 / 视觉项 + 留影排版另需 owner 在 5199 与触屏真机眼测。
 
 ### 待 owner 眼测清单(合并前)
-- 留影:亮场景诗句是否清晰;长诗自动横排是否完整入图;左下角「排版 / 文案」开关。
-- 触屏(真机):单指转、双指缩放整体;点诗人锁定+跟随、再点换目标;「更多」开「自由移动」恢复自由飞行。
-- 电脑:默认 WASD 不变;「更多」关「自由移动」→ 拖动转 + 滚轮缩放整体。
+- **留影**:滚轮/双指缩放字体槽 → 诗句字号+折行自适应填满;`⚙ 设置`四开关(背景衬底/字体颜色无极调色/顶部文案/调整手柄);开「调整手柄」后右下角金色 `⤡` 拖拽改长宽比;`⟲` 复位。
+- **触屏(真机)**:单指转、双指缩放诗云整体;点诗人锁定+跟随、再点换目标;「更多」开「自由移动」恢复自由飞行。
+- **电脑**:默认 WASD 不变;「更多」关「自由移动」→ 拖动转 + 滚轮缩放整体。
 - 关「生成随机诗」后点虚空无随机诗、点诗人正常。
-- 引导四步文案分平台正确(可清 localStorage 或无痕窗口重看)。
+- 引导四步(B 版精简)文案分平台正确(清 localStorage 或无痕窗口重看;键 `shiyun_onboarded_v2`)。
+
+---
+
+## 交接 · 下一轮维护
+
+**工作区(worktree):** `C:\Users\Cohen\Desktop\shiyun\.claude\worktrees\june-maint`
+**分支:** `claude/june-maint-2026`(从 main `68f4d3e` 切出)· **未合并 main**
+**本轮提交(新 → 旧):** `55a6ed7`(手柄裁剪修复)· `82f736d`(可调字体槽)· `f309a11`(引导精简)· `53cd256`(留影统一设置)· `d37bba4`(5 项主体)+ 本次手柄开关。
+
+**怎么跑 / 验证:**
+```bash
+# worktree 已 junction main 的 node_modules + public/data(poems/lines/search),可直接:
+cd <worktree>
+npm run dev          # vite → http://localhost:5199(strictPort)
+npm run build        # tsc --noEmit && vite build —— 合并前必过
+npm test             # vitest(当前 217 全绿)
+```
+> 注:Claude 会话会**自动**在 5199 起 dev server(detached,见 owner 记忆)。3D/触屏/留影排版**无法 headless 验证**,靠 owner 在 5199 + 触屏真机眼测。
+
+**合并(owner 眼测通过后):**
+```bash
+git checkout main
+git merge --ff-only claude/june-maint-2026
+git push origin main
+```
+
+**仍开放 / 下一轮可做(本轮未做):**
+- 留影自适应字号在**极小字体槽 + 超长诗**时可能仍裁剪(自适应下限 8px),如需可加省略或缩进提示。
+- 触屏「整体锁定」orbit 的缩放手感 / 阻尼、单指转灵敏度,待真机调参(`FlyControls` `ORBIT_*` 常量、`lock.current` k 值)。
+- `docs/ENGINE_API.md` 等历史文档的已知漂移(显示编号=anyRank 非 babelRank 等)未在本轮订正,见仓库根 `CLAUDE`/记忆「maintenance-footguns」。
+- 维护节奏:下一次常规维护约 **2027-06**。
