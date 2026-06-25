@@ -34,14 +34,16 @@
 > 门禁已过:`tsc --noEmit` 干净 · `vitest` **217 全绿**(+任务2/3 新增回归测试) · `vite build` 成功。
 > 3D / 触屏 / 留影排版无法 headless 验证 → 需 owner 在 `5199` 与触屏真机眼测。
 
-#### 1. 留影(分享卡)可读性 + 超长诗适配 + 左下角设置 —— ✅ 已实现·待眼测
-**需求:** 高画质亮场景白字看不清;超长诗竖排一张图放不下;留影左下角加设置(切横/竖排 + 开关顶部文案)。
+#### 1. 留影(分享卡)统一设置 + 横向折叠 + 无极调色 —— ✅ 已实现·待眼测(2026-06 二次细化)
+**需求(细化后):** 左下角做**统一设置按钮**(点开子菜单);**背景衬底默认关**、设置里可开;加**无极调色盘**调字体颜色;**取消横/竖排两种格式**,改为**横向折叠**——竖排列触到画面边界时自动折叠到下一行。
 **实现:**
-- `.cinema-poem` 加柔和暗底(`rgba(8,10,18,.34)` + `backdrop-filter: blur(3px)`)+ 多层暗描边 text-shadow,任意画质都清晰(非旧版被移除的金色硬画框)。
-- 新增 store `cinemaLayout`(`auto`/`horizontal`/`vertical`,默认 auto)+ `cinemaHideTagline`。auto 时诗长 > 100 字 或 > 12 行 自动横排;`.cinema-poem.horizontal` 改 `horizontal-tb` flex-column 逐行堆叠,超长行可换行。
-- 留影左下角新增 `.cinema-settings`:「排版 · 横/竖」主动切换(覆盖 auto)+「文案 · 显示/隐藏」;tagline 按 `cinemaHideTagline` 条件渲染。
+- 排版恒为竖排:`.cinema-poem` 改 `flex; row-reverse; wrap; max-width:min(92vw,1100px)`,每个 `.cinema-line` 为 `writing-mode: vertical-rl` 单列;列右→左排,触界 `flex-wrap` 折叠到下一行(长诗不再溢出)。删除旧 `cinemaLayout` 及 `.horizontal`。
+- store:删 `cinemaLayout`;新增 `cinemaShowBg`(默认 `false`)+ `cinemaTextColor`(默认 `#fbf7ec`);保留 `cinemaHideTagline`。
+- 可读性:多层暗描边 text-shadow **常驻**(保证亮场景基本可读);暗底 `.cinema-poem.with-bg` 仅在开「背景衬底」时加;字体颜色走内联 `style.color`(无极)。
+- 左下角 `⚙ 设置` 按钮 → 弹出 `.cinema-set-menu`:背景衬底(开关,默认关)/ 字体颜色(`<input type="color">` 无极调色盘)/ 顶部文案(开关)。
 
 涉及:`src/ui/Cinema.tsx`、`src/state/store.ts`、`src/styles.css`。
+> 注:首版(自动横/竖排切换)已被本次细化取代;眼测点改为:统一设置按钮弹/收、背景开关、调色盘改色、长诗竖排是否在触界处折叠到下一行。
 
 #### 2. 探诗诗体归类(七律被判为「词」)—— ✅ 真 bug · 已修
 **判定:** **是真 bug(非误报)。** 设计阶段子代理曾判 FALSE_REPORT,我直接核查后推翻:`探诗·凭编号`(`pullByIndex`)本就调 `inferForm` 推断诗体,显示正确(七律);**但 `describeAny` 把 `form` 写死为 `"ziyou"`**,而 `pulledFromIndex`(永久链接还原 / 拾遗 / 「定位虚空」)直接用它 → 同一首七律,反查面板显示「七律」,一旦定位/分享/拾遗就被重标成「自由」,前后不一致 = 用户看到的「归类有误」。

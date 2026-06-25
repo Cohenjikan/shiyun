@@ -1986,67 +1986,99 @@ canvas {
 /* classical 竖排: each line is an upright column; columns flow right→left. NO max-width/height/overflow:
    a long poem renders at FULL length (it may extend past the viewport edges) — the user zooms out with the
    − control + drags to compose, instead of having the left columns clipped/occluded. */
+/* 竖排:每行 = 一列(字符上→下),列右→左排;列触到画面边界即 flex-wrap 折叠到下一行,长诗不再溢出视口。
+   颜色由 JS 内联(无极调色,默认暖白);背景衬底默认关,需要时在设置里开。多层暗描边一直在,保证亮场景基本可读。 */
 .cinema-poem {
-  writing-mode: vertical-rl;
-  text-orientation: upright;
+  display: flex;
+  flex-direction: row-reverse; /* 竖排右→左:第一行在最右 */
+  flex-wrap: wrap; /* 触到画面边界 → 折叠到下一行 */
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.18em 0.4em;
+  max-width: min(92vw, 1100px); /* 边缘触界即换行的依据 */
   font-family: var(--serif);
   font-size: clamp(19px, 3.6vh, 30px);
   letter-spacing: 0.18em;
-  color: #fbf7ec;
-  /* 高画质下场景很亮,纯白诗句会糊看不清 → 给诗句一层柔和暗底(模糊)+ 多层暗描边,任意亮度都清晰
-     (区别于旧版被移除的金色硬画框,这里是无边的柔和衬底)。 */
-  padding: 16px 20px;
-  border-radius: 16px;
-  background: rgba(8, 10, 18, 0.34);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
   text-shadow: 0 0 3px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.85),
     0 2px 22px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 210, 122, 0.14);
 }
-/* 长诗横排:逐行从上到下(超长诗竖排会向两侧铺开,一张图放不下 → 横排更易完整入图)。auto 按诗长自动,
-   也可在左下角主动切换。 */
-.cinema-poem.horizontal {
-  writing-mode: horizontal-tb;
-  text-orientation: mixed;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.12em;
-  line-height: 1.5;
-  letter-spacing: 0.1em;
+/* 可选暗色衬底(默认关,设置里开) */
+.cinema-poem.with-bg {
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: rgba(8, 10, 18, 0.42);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
 }
 .cinema-line {
-  padding: 0 0.4em; /* horizontal gap between the upright columns */
-  white-space: nowrap; /* one line = one column (never wraps into a second column) */
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  white-space: nowrap; /* 一列字符,列内不换行 */
 }
-.cinema-poem.horizontal .cinema-line {
-  padding: 0;
-  max-width: 86vw;
-  white-space: normal; /* 横排时超长的新诗行可换行,而不是溢出视口 */
-}
-/* 左下角设置(留影视图内):主动切换 横排/竖排 + 开关顶部文案 */
+/* 左下角统一设置:一个 ⚙ 按钮,点开上方弹出菜单(背景 / 调色 / 文案) */
 .cinema-settings {
   position: absolute;
   left: calc(10px + env(safe-area-inset-left));
   bottom: calc(34px + env(safe-area-inset-bottom));
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
   pointer-events: auto;
 }
 .cinema-set-btn {
-  height: 30px;
-  padding: 0 12px;
+  height: 32px;
+  padding: 0 14px;
   border-radius: 8px;
   background: rgba(8, 10, 18, 0.55);
   border: 1px solid rgba(255, 210, 122, 0.4);
   color: var(--gold);
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.04em;
   line-height: 1;
   cursor: pointer;
 }
-.cinema-set-btn:hover {
+.cinema-set-btn:hover,
+.cinema-set-btn.on {
   background: rgba(255, 210, 122, 0.16);
+}
+.cinema-set-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 172px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(14, 16, 24, 0.92);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 210, 122, 0.28);
+}
+.cinema-set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: rgba(240, 236, 224, 0.92);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cinema-set-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--gold);
+}
+.cinema-color {
+  width: 40px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(255, 210, 122, 0.4);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
 }
 .cinema-attr {
   margin-top: 12px;

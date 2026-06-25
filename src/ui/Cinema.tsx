@@ -30,8 +30,10 @@ export function Cinema() {
   const cinemaPoemIdx = useStore((s) => s.cinemaPoemIdx);
   const copyIdx = useStore((s) => s.cinemaCopy);
   const setCopy = useStore((s) => s.setCinemaCopy);
-  const cinemaLayout = useStore((s) => s.cinemaLayout);
-  const setCinemaLayout = useStore((s) => s.setCinemaLayout);
+  const showBg = useStore((s) => s.cinemaShowBg);
+  const toggleBg = useStore((s) => s.toggleCinemaBg);
+  const textColor = useStore((s) => s.cinemaTextColor);
+  const setTextColor = useStore((s) => s.setCinemaTextColor);
   const hideTagline = useStore((s) => s.cinemaHideTagline);
   const toggleTagline = useStore((s) => s.toggleCinemaTagline);
 
@@ -42,6 +44,7 @@ export function Cinema() {
   const [scale, setScale] = useState(1);
   const [touched, setTouched] = useState(false); // hide the drag hint after the first interaction
   const [dragging, setDragging] = useState(false);
+  const [setOpen, setSetOpen] = useState(false); // 留影设置子菜单展开
   // pointer tracking: 1 pointer = drag-to-move, 2 pointers = pinch-to-resize.
   const ptrs = useRef<Map<number, { x: number; y: number }>>(new Map());
   const dragStart = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
@@ -58,11 +61,6 @@ export function Cinema() {
   const attribution = resolved?.attribution ?? "";
   const n = TAGLINES.length;
   const tag = TAGLINES[((copyIdx % n) + n) % n];
-
-  // 超长诗一张图放不下竖排 → 横排逐行。auto:按诗长自动切换;否则用用户在左下角主动选择的 横排/竖排。
-  const totalChars = lines ? lines.reduce((a, l) => a + [...l].length, 0) : 0;
-  const longPoem = totalChars > 100 || (lines?.length ?? 0) > 12;
-  const horizontal = cinemaLayout === "auto" ? longPoem : cinemaLayout === "horizontal";
 
   const onPointerDown = (e: React.PointerEvent) => {
     try {
@@ -152,7 +150,8 @@ export function Cinema() {
         >
           {/* classical 竖排: each line is a column, columns flow RIGHT→LEFT (writing-mode in CSS) so a
               long poem spreads sideways instead of getting clipped at the bottom. */}
-          <div className={horizontal ? "cinema-poem horizontal" : "cinema-poem"} lang="zh">
+          {/* 竖排:每行一列,列触到画面边界自动折叠到下一行(CSS flex-wrap)。颜色无极可调;背景默认关。 */}
+          <div className={showBg ? "cinema-poem with-bg" : "cinema-poem"} lang="zh" style={{ color: textColor }}>
             {lines.map((l, i) => (
               <div key={i} className="cinema-line">{l}</div>
             ))}
@@ -169,17 +168,38 @@ export function Cinema() {
 
       {lines && !touched && <div className="cinema-hint">拖动诗句移动 · 滚轮 / 双指缩放</div>}
 
-      {/* 左下角设置:主动切换 横排/竖排(长诗自动横排)+ 开关顶部文案 */}
+      {/* 左下角统一设置按钮 → 点开子菜单:背景衬底(默认关) / 字体调色(无极) / 顶部文案 */}
       <div className="cinema-settings">
+        {setOpen && (
+          <div className="cinema-set-menu">
+            <label className="cinema-set-row">
+              <span>背景衬底</span>
+              <input type="checkbox" checked={showBg} onChange={toggleBg} />
+            </label>
+            <label className="cinema-set-row">
+              <span>字体颜色</span>
+              <input
+                type="color"
+                className="cinema-color"
+                value={textColor}
+                onChange={(e) => setTextColor(e.target.value)}
+                title="无极调色 · 拖动取任意颜色"
+              />
+            </label>
+            <label className="cinema-set-row">
+              <span>顶部文案</span>
+              <input type="checkbox" checked={!hideTagline} onChange={toggleTagline} />
+            </label>
+          </div>
+        )}
         <button
-          className="cinema-set-btn"
-          onClick={() => setCinemaLayout(horizontal ? "vertical" : "horizontal")}
-          title="竖排 / 横排 —— 超长诗自动横排,这里可主动切换"
+          className={setOpen ? "cinema-set-btn on" : "cinema-set-btn"}
+          onClick={() => setSetOpen((o) => !o)}
+          title="留影设置"
+          aria-label="留影设置"
+          aria-expanded={setOpen}
         >
-          排版 · {horizontal ? "横排" : "竖排"}
-        </button>
-        <button className="cinema-set-btn" onClick={toggleTagline} title="显示 / 隐藏顶部文案">
-          文案 · {hideTagline ? "已隐藏" : "显示中"}
+          ⚙ 设置
         </button>
       </div>
 

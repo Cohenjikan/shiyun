@@ -62,9 +62,13 @@ interface State {
   // per-poem 留影 button in PoetPanel. null = fall back to the void pull / 搜的这首 focus poem. Reset to
   // null whenever cinema closes or the selected poet changes, so a stale target never leaks.
   cinemaPoemIdx: number | null;
-  // 留影排版偏好(会话内保留):auto = 按诗长自动(超长 → 横排逐行,否则竖排 vertical-rl),或手动 horizontal /
-  // vertical 主动切换;cinemaHideTagline = 隐藏留影顶部的概念文案(tagline)。左下角设置面板控制这两项。
-  cinemaLayout: "auto" | "horizontal" | "vertical";
+  // 留影设置(会话内保留,左下角统一设置按钮的子菜单控制):
+  //   cinemaShowBg      = 诗句暗色衬底(默认关,亮场景需要时再开;描边阴影一直在,保证基本可读)
+  //   cinemaTextColor   = 诗句字体颜色(无极调色盘,默认暖白)
+  //   cinemaHideTagline = 隐藏留影顶部的概念文案(tagline)
+  // 排版恒为竖排,列触到画面边界自动折叠到下一行(纯 CSS flex-wrap,无横/竖切换)。
+  cinemaShowBg: boolean;
+  cinemaTextColor: string;
   cinemaHideTagline: boolean;
   // owner-only feedback viewer (opened by a hidden gesture: 5 taps on the 诗云 logo within 10 s)
   feedbackOpen: boolean;
@@ -138,7 +142,8 @@ interface State {
   toggleCinema: () => void;
   openCinemaFor: (poemIdx: number) => void; // open 留影 framing a SPECIFIC poem (its ORIGINAL index)
   setCinemaCopy: (n: number) => void;
-  setCinemaLayout: (m: "auto" | "horizontal" | "vertical") => void;
+  toggleCinemaBg: () => void;
+  setCinemaTextColor: (c: string) => void;
   toggleCinemaTagline: () => void;
   setFeedbackOpen: (b: boolean) => void;
   setShiyiOpen: (b: boolean) => void;
@@ -191,7 +196,8 @@ export const useStore = create<State>((set) => ({
   cinema: false,
   cinemaCopy: 0,
   cinemaPoemIdx: null,
-  cinemaLayout: "auto",
+  cinemaShowBg: false,
+  cinemaTextColor: "#fbf7ec",
   cinemaHideTagline: false,
   feedbackOpen: false,
   shiyi: listShiyi(), // hydrate the keepsake list from localStorage at boot
@@ -277,7 +283,8 @@ export const useStore = create<State>((set) => ({
   toggleCinema: () => set((s) => (s.cinema ? { cinema: false, cinemaPoemIdx: null } : { cinema: true })),
   openCinemaFor: (poemIdx) => set({ cinema: true, cinemaPoemIdx: poemIdx }),
   setCinemaCopy: (cinemaCopy) => set({ cinemaCopy }),
-  setCinemaLayout: (cinemaLayout) => set({ cinemaLayout }),
+  toggleCinemaBg: () => set((s) => ({ cinemaShowBg: !s.cinemaShowBg })),
+  setCinemaTextColor: (cinemaTextColor) => set({ cinemaTextColor }),
   toggleCinemaTagline: () => set((s) => ({ cinemaHideTagline: !s.cinemaHideTagline })),
   setFeedbackOpen: (feedbackOpen) => set({ feedbackOpen }),
   // 拾遗: delegate the dedupe/cap/persistence to the pure module, then mirror its returned list into the
