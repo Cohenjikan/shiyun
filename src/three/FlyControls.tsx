@@ -10,9 +10,13 @@ import { pickTargets } from "./picking";
 import { spinXZ, unspinXZ, SPIN_RATE, GALAXY } from "./galaxyParams";
 import { poemPosition, poetPosition, poemSystemRadius } from "./positions";
 import { COARSE } from "./detectQuality";
-import { centroid, pinchDistance, thrustFromDrag, pinchSpeed, classifyGesture, type Pt } from "./touchGesture";
+import { centroid, pinchDistance, thrustFromDrag, pinchSpeed, classifyGesture, orbitZoom, type Pt } from "./touchGesture";
 
 const GRAVITY_R = GALAXY.RADIUS * 1.15; // inside this sphere the camera is "in the galaxy's grip"
+const ORBIT_MAX_POET = 6000; // pinch/wheel zoom-out limit when orbiting a poet/poem
+const ORBIT_MAX_GALAXY = GALAXY.RADIUS * 3; // …and when orbiting the whole galaxy (see it all)
+const ORBIT_MIN = 40;
+const GALAXY_SEED_DIST = GALAXY.RADIUS * 1.7; // fallback orbit distance for a fresh galaxy-lock
 
 // distance (px) from point P to segment AB — for clicking a 赠诗 arc in screen space
 function distPointSeg(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
@@ -156,9 +160,9 @@ export function FlyControls() {
           twoFinger.current = { origin: centroid(pts[0], pts[1]), prevDist: d0, startDist: d0, mode: null };
           touchThrust.current = { z: 0, x: 0 };
           drag.current.moved += 99; // a multi-touch gesture is never a tap-pick
-          // releasing any lock mirrors how a movement key frees the camera on desktop → lets touch users
-          // leave a locked view by starting a two-finger gesture.
-          st().unlock();
+          // FREE-FLY: two fingers leave a lock to fly away (mirrors a movement key on desktop).
+          // GALAXY-LOCK: two fingers PINCH-ZOOM the current orbit (poet or whole galaxy) — do NOT unlock.
+          if (st().freeMove) st().unlock();
         }
       }
     };
@@ -178,16 +182,23 @@ export function FlyControls() {
         const d = pinchDistance(pts[0], pts[1]);
         const tf = twoFinger.current;
         if (tf) {
-          // lock the gesture to ONE mode once it moves enough, so a one-handed pinch (whose centroid
-          // drifts ~half the spread) can't leak thrust and a pan can't wobble the speed (TG-2).
-          if (tf.mode === null) tf.mode = classifyGesture(tf.origin, cen, tf.startDist, d);
-          if (tf.mode === "pan") {
-            touchThrust.current = thrustFromDrag(tf.origin, cen);
-          } else if (tf.mode === "pinch") {
-            const sm = pinchSpeed(speedMul.current, tf.prevDist, d);
-            if (sm !== speedMul.current) {
-              speedMul.current = sm;
-              st().setSpeed(sm);
+          if (!st().freeMove) {
+            // GALAXY-LOCK: two-finger pinch = ZOOM the orbit distance (the "放大缩小" touch users wanted).
+            // No mode classification, no speed change, no thrust — single-finger handles rotation.
+            const max = st().lockPoetId ? ORBIT_MAX_POET : ORBIT_MAX_GALAXY;
+            lock.current.dist = orbitZoom(lock.current.dist, tf.prevDist, d, ORBIT_MIN, max);
+          } else {
+            // FREE-FLY: lock the gesture to ONE mode once it moves enough, so a one-handed pinch (whose
+            // centroid drifts ~half the spread) can't leak thrust and a pan can't wobble the speed (TG-2).
+            if (tf.mode === null) tf.mode = classifyGesture(tf.origin, cen, tf.startDist, d);
+            if (tf.mode === "pan") {
+              touchThrust.current = thrustFromDrag(tf.origin, cen);
+            } else if (tf.mode === "pinch") {
+              const sm = pinchSpeed(speedMul.current, tf.prevDist, d);
+              if (sm !== speedMul.current) {
+                speedMul.current = sm;
+                st().setSpeed(sm);
+              }
             }
           }
           tf.prevDist = d;
@@ -203,8 +214,9 @@ export function FlyControls() {
         drag.current.lastX = e.clientX;
         drag.current.lastY = e.clientY;
         drag.current.moved += Math.abs(dx) + Math.abs(dy);
-        if (st().lockPoetId) {
-          // locked → drag ORBITS the view around the target (does NOT release the lock)
+        if (st().lockPoetId || !st().freeMove) {
+          // orbit mode (a locked poet/poem, OR galaxy-lock with nothing selected) → drag ORBITS the view
+          // around the target (yaw/pitch); it does NOT release the lock or free-fly.
           lock.current.yaw -= dx * 0.005;
           lock.current.pitch = Math.max(-1.4, Math.min(1.4, lock.current.pitch + dy * 0.005));
           return;
@@ -293,6 +305,11 @@ export function FlyControls() {
         st().hopToPoet(giftHop);
         fetchPoetPoems(giftHop.id);
       } else {
+        // 生成随机诗 关闭 → 点虚空不再拉随机诗(只看现存的诗)。锁定模式下顺手解除锁定 → 回到诗云整体。
+        if (!st().allowRandomPoem) {
+          if (st().lockPoetId) st().unlock();
+          return;
+        }
         const v = ndc(e.clientX, e.clientY);
         ray.current.setFromCamera(v, camera);
         const pt = ray.current.ray.origin.clone().addScaledVector(ray.current.ray.direction, 260);
@@ -310,9 +327,10 @@ export function FlyControls() {
       }
     };
     const onWheel = (e: WheelEvent) => {
-      if (st().lockPoetId) {
-        // locked → wheel adjusts the orbit DISTANCE (zoom in/out on the target)
-        lock.current.dist = Math.min(6000, Math.max(40, lock.current.dist * (e.deltaY > 0 ? 1.12 : 0.89)));
+      if (st().lockPoetId || !st().freeMove) {
+        // orbit mode → wheel adjusts the orbit DISTANCE (zoom in/out on the target / the whole galaxy)
+        const max = st().lockPoetId ? ORBIT_MAX_POET : ORBIT_MAX_GALAXY;
+        lock.current.dist = Math.min(max, Math.max(ORBIT_MIN, lock.current.dist * (e.deltaY > 0 ? 1.12 : 0.89)));
         return;
       }
       speedMul.current = Math.min(80, Math.max(0.1, speedMul.current * (e.deltaY > 0 ? 0.82 : 1.22)));
@@ -391,6 +409,7 @@ export function FlyControls() {
     }
     const flyTarget = useStore.getState().flyTarget;
     if (flyTarget) {
+      lock.current.key = ""; // a fly animation moves the camera → invalidate the orbit seed so a lock reseeds on arrival (no snap)
       // flyTarget is LOCAL (a poet position / canonical void point) — rotate it into world by
       // the live spin so the camera homes onto the star as the galaxy turns.
       const [fwx, fwz] = spinXZ(flyTarget[0], flyTarget[2]);
@@ -411,6 +430,39 @@ export function FlyControls() {
       }
       return;
     }
+    // GALAXY-LOCK (自由移动 关 — 触屏默认 / 电脑可切): orbit the WHOLE galaxy as one object around the fixed
+    // origin. Single-finger drag / mouse-drag = rotate (yaw/pitch, set in onMove), pinch / wheel = zoom
+    // (orbit distance). The galaxy keeps spinning within (poets + decoration ride their own spin), so it
+    // reads as a turning whole you circle. Seeded from the CURRENT view on entry (no snap). A locked
+    // poet/poem (above) and an active flyTarget (above, which clears the seed) take priority.
+    if (!useStore.getState().freeMove) {
+      const target = _tgt.set(0, 0, 0);
+      if (lock.current.key !== "galaxy") {
+        lock.current.key = "galaxy";
+        const cur = _camOff.subVectors(camera.position, target); // _camOff ≠ _tgt → both read together OK
+        const d = cur.length();
+        lock.current.dist = Math.min(ORBIT_MAX_GALAXY, Math.max(ORBIT_MIN, d || GALAXY_SEED_DIST));
+        if (d > 1) {
+          lock.current.pitch = Math.asin(Math.max(-1, Math.min(1, cur.y / d)));
+          lock.current.yaw = Math.atan2(cur.x, cur.z);
+        } else {
+          lock.current.pitch = 0.3;
+          lock.current.yaw = 0;
+        }
+      }
+      const { yaw, pitch, dist } = lock.current;
+      const cp = Math.cos(pitch);
+      const desired = _desired.copy(target).add(_off.set(Math.sin(yaw) * cp * dist, Math.sin(pitch) * dist, Math.cos(yaw) * cp * dist));
+      const k = 1 - Math.pow(0.0025, dt);
+      camera.position.lerp(desired, k);
+      const m = _mat.lookAt(camera.position, target, tmpUp.current);
+      camera.quaternion.slerp(_quat.setFromRotationMatrix(m), k);
+      euler.current.setFromQuaternion(camera.quaternion); // so free-fly resumes cleanly on toggle/release
+      return;
+    }
+    // free-fly (freeMove ON, no lock / no fly): invalidate the orbit seed so re-entering a lock reseeds
+    // from the CURRENT camera (no snap).
+    lock.current.key = "";
     // 引力: once inside the galaxy, orbit the camera WITH the spin (same Δ as the galaxy this
     // frame) so the stars hold still on screen — otherwise close-up stars drift tangentially
     // faster than you can click. Outside the sphere you watch it turn from afar.

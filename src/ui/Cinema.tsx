@@ -30,6 +30,10 @@ export function Cinema() {
   const cinemaPoemIdx = useStore((s) => s.cinemaPoemIdx);
   const copyIdx = useStore((s) => s.cinemaCopy);
   const setCopy = useStore((s) => s.setCinemaCopy);
+  const cinemaLayout = useStore((s) => s.cinemaLayout);
+  const setCinemaLayout = useStore((s) => s.setCinemaLayout);
+  const hideTagline = useStore((s) => s.cinemaHideTagline);
+  const toggleTagline = useStore((s) => s.toggleCinemaTagline);
 
   // poem transform (composition): translate offset + scale. Local state — resets each time 留影 opens,
   // because App mounts <Cinema/> only while `cinema` is true.
@@ -54,6 +58,11 @@ export function Cinema() {
   const attribution = resolved?.attribution ?? "";
   const n = TAGLINES.length;
   const tag = TAGLINES[((copyIdx % n) + n) % n];
+
+  // 超长诗一张图放不下竖排 → 横排逐行。auto:按诗长自动切换;否则用用户在左下角主动选择的 横排/竖排。
+  const totalChars = lines ? lines.reduce((a, l) => a + [...l].length, 0) : 0;
+  const longPoem = totalChars > 100 || (lines?.length ?? 0) > 12;
+  const horizontal = cinemaLayout === "auto" ? longPoem : cinemaLayout === "horizontal";
 
   const onPointerDown = (e: React.PointerEvent) => {
     try {
@@ -113,11 +122,13 @@ export function Cinema() {
 
   return (
     <div className="cinema">
-      <div className="cinema-tag">
-        <button className="cinema-arrow" onClick={() => setCopy(copyIdx - 1)} aria-label="上一句">‹</button>
-        <span className="cinema-tag-text">{tag}</span>
-        <button className="cinema-arrow" onClick={() => setCopy(copyIdx + 1)} aria-label="下一句">›</button>
-      </div>
+      {!hideTagline && (
+        <div className="cinema-tag">
+          <button className="cinema-arrow" onClick={() => setCopy(copyIdx - 1)} aria-label="上一句">‹</button>
+          <span className="cinema-tag-text">{tag}</span>
+          <button className="cinema-arrow" onClick={() => setCopy(copyIdx + 1)} aria-label="下一句">›</button>
+        </div>
+      )}
 
       {/* resize / reset controls (top-right, opposite the exit). Drag the poem itself to move it. */}
       <div className="cinema-tools">
@@ -141,7 +152,7 @@ export function Cinema() {
         >
           {/* classical 竖排: each line is a column, columns flow RIGHT→LEFT (writing-mode in CSS) so a
               long poem spreads sideways instead of getting clipped at the bottom. */}
-          <div className="cinema-poem" lang="zh">
+          <div className={horizontal ? "cinema-poem horizontal" : "cinema-poem"} lang="zh">
             {lines.map((l, i) => (
               <div key={i} className="cinema-line">{l}</div>
             ))}
@@ -157,6 +168,20 @@ export function Cinema() {
       )}
 
       {lines && !touched && <div className="cinema-hint">拖动诗句移动 · 滚轮 / 双指缩放</div>}
+
+      {/* 左下角设置:主动切换 横排/竖排(长诗自动横排)+ 开关顶部文案 */}
+      <div className="cinema-settings">
+        <button
+          className="cinema-set-btn"
+          onClick={() => setCinemaLayout(horizontal ? "vertical" : "horizontal")}
+          title="竖排 / 横排 —— 超长诗自动横排,这里可主动切换"
+        >
+          排版 · {horizontal ? "横排" : "竖排"}
+        </button>
+        <button className="cinema-set-btn" onClick={toggleTagline} title="显示 / 隐藏顶部文案">
+          文案 · {hideTagline ? "已隐藏" : "显示中"}
+        </button>
+      </div>
 
       <div className="cinema-brand">诗云 · Poetry Cloud</div>
       <button className="cinema-exit" onClick={close} title="退出留影">截好图 · 退出 ✕</button>

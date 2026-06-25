@@ -2,13 +2,16 @@
 // touchscreen (headless swiftshader can't synthesize multi-touch — a pure helper is the only testable
 // surface for the touch-fly/pinch feature). No three.js / DOM imports here.
 //
-// Gesture model (free-fly): a two-finger gesture is LOCKED to one mode the moment its movement crosses a
-// threshold (classifyGesture), so the two intents never cross-talk (a one-handed pinch, where the thumb
-// is anchored, drifts the centroid ~half the spread and would otherwise leak thrust):
-//   • PAN  — centroid displacement off the gesture ORIGIN → analog thrust (joystick: hold to keep flying).
-//   • PINCH— finger-distance ratio between consecutive moves → speed multiplier (pinch out = faster).
-// (Locked-on-a-poet pinch-to-zoom is intentionally NOT a touch gesture: a two-finger gesture releases the
-// lock so the user can fly away — the lock auto-frames a good distance, and one-finger drag orbits it.)
+// TWO interaction modes (store.freeMove), so touch users can finally 放大缩小:
+//   • FREE-FLY (freeMove=true; desktop default) — a two-finger gesture LOCKS to one mode once its movement
+//     crosses a threshold (classifyGesture) so the intents never cross-talk (a one-handed pinch, thumb
+//     anchored, drifts the centroid ~half the spread and would otherwise leak thrust):
+//       PAN   — centroid displacement off the ORIGIN → analog thrust (joystick: hold to keep flying).
+//       PINCH — finger-distance ratio between moves → speed multiplier (pinch out = faster).
+//   • GALAXY-LOCK (freeMove=false; touch default) — the camera ORBITS a target (a locked poet/poem, else
+//     the whole galaxy at the origin): one-finger drag = yaw/pitch, two-finger pinch = ZOOM (orbit distance,
+//     orbitZoom below), tap a star = switch the locked target. (The OLD build had two fingers RELEASE the
+//     lock and offered no pinch-zoom of the galaxy — the "只能拖不能放大缩小" complaint.)
 
 export interface Pt {
   x: number;
@@ -69,4 +72,18 @@ export function classifyGesture(
   const pinchDisp = Math.abs(curDist - startDist);
   if (panDisp < threshold && pinchDisp < threshold) return null;
   return panDisp >= pinchDisp ? "pan" : "pinch";
+}
+
+// Galaxy-lock pinch-to-ZOOM: fingers spreading (curDist > prevDist) pull the orbit CLOSER (smaller dist);
+// pinching in pushes it away. Clamped to [min, max]. Guards reject 0 / negative / NaN distances (a
+// degenerate centroid) → dist unchanged. Mirrors the wheel's orbit-distance role in lock mode.
+export function orbitZoom(
+  dist: number,
+  prevDist: number,
+  curDist: number,
+  min: number,
+  max: number,
+): number {
+  if (!(prevDist > 0) || !(curDist > 0)) return dist;
+  return Math.max(min, Math.min(max, dist * (prevDist / curDist)));
 }

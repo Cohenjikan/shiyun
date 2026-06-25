@@ -153,6 +153,10 @@ export function SettingsMenu() {
   const toggleGifts = useStore((s) => s.toggleGifts);
   const gravity = useStore((s) => s.gravity);
   const toggleGravity = useStore((s) => s.toggleGravity);
+  const freeMove = useStore((s) => s.freeMove);
+  const setFreeMove = useStore((s) => s.setFreeMove);
+  const allowRandomPoem = useStore((s) => s.allowRandomPoem);
+  const toggleRandomPoem = useStore((s) => s.toggleRandomPoem);
   const shiyiCount = useStore((s) => s.shiyi.length);
   const openShiyi = useStore((s) => s.setShiyiOpen);
 
@@ -183,12 +187,15 @@ export function SettingsMenu() {
   if (!open) return null;
 
   const guideDefault = guideMode === "flash" && guideCoverage === "optimized" && guideSeconds === 10 && guideBrightness === 0.7 && guideStyle === "plane";
-  const allDefault = guideDefault && !showAllPoems && !showGifts && gravity;
+  const freeMoveDefault = !COARSE; // 触屏默认锁定整体,电脑默认自由移动
+  const allDefault = guideDefault && !showAllPoems && !showGifts && gravity && allowRandomPoem && freeMove === freeMoveDefault;
   const resetAll = () => {
     resetGuide();
     if (showAllPoems) toggleAllPoems();
     if (showGifts) toggleGifts();
     if (!gravity) toggleGravity();
+    if (!allowRandomPoem) toggleRandomPoem();
+    if (freeMove !== freeMoveDefault) setFreeMove(freeMoveDefault);
   };
 
   return (
@@ -286,6 +293,18 @@ export function SettingsMenu() {
         <label className="set-toggle">
           <input type="checkbox" checked={gravity} onChange={toggleGravity} />
           引力 · 摄像机随星系自转,恒星好点选
+        </label>
+      </div>
+
+      <div className="set-group">
+        <div className="set-label">漫游 · 交互</div>
+        <label className="set-toggle">
+          <input type="checkbox" checked={freeMove} onChange={() => setFreeMove(!freeMove)} />
+          自由移动 · {COARSE ? "双指飞行漫游" : "WASD 飞行漫游"}（关闭则锁定诗云整体:{COARSE ? "双指缩放 / 单指转角度" : "拖动转角度 / 滚轮缩放"},点诗人或诗歌换锁定目标）
+        </label>
+        <label className="set-toggle">
+          <input type="checkbox" checked={allowRandomPoem} onChange={toggleRandomPoem} />
+          生成随机诗 · 点虚空拉一首随机诗（关闭后点虚空不再生成,只看现存的诗）
         </label>
       </div>
 

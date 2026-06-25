@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { setDataset } from "../data/provider";
 import { makeFixtureLexicon } from "./lexicon.fixture";
-import { textBabelIndex, anyTextIndex, pullByIndex, inCharset, outOfCharset } from "./engineApi";
+import { textBabelIndex, anyTextIndex, pullByIndex, pulledFromIndex, inCharset, outOfCharset } from "./engineApi";
 
 // The 探诗 (compose/reverse) UI calls these. Since 2026-06-09 the displayed 全集编号 is the UNIVERSAL
 // anyRank over (chars + line-breaks): ONE globally-unique number per poem (a 五绝 and its 自由 twin share
@@ -45,6 +45,18 @@ describe("engineApi — universal 全集编号 (anyRank) ⇄ 反查", () => {
     expect(asFixed).toBe(asFree); // identical by construction (same chars+breaks → same anyRank)
     // and it is DISTINCT from the legacy per-form babelRank that used to cause the collision
     expect(asFixed).not.toBe(textBabelIndex("wujue", lines5.join(""))!.index);
+  });
+
+  it("pulledFromIndex (permalink/拾遗/定位虚空) infers the 诗体 too — a rebuilt fixed-form poem is NOT mislabeled 自由", () => {
+    // Regression: describeAny used to hardcode form:"ziyou", so a 七绝/七律 reconstructed from its 全集编号
+    // (permalink restore, 拾遗, 定位虚空) showed "自由" even though 探诗·凭编号 (pullByIndex) said 七绝 — the
+    // SAME poem got two different 诗体 labels. pulledFromIndex must agree with pullByIndex.
+    const idx = anyTextIndex(lines7)!.index; // 4×7
+    expect(pulledFromIndex("ziyou", idx)!.form).toBe("qijue"); // inferred, matches pullByIndex
+    expect(pulledFromIndex("ziyou", idx)!.form).toBe(pullByIndex("ziyou", idx)!.form);
+    // a genuinely irregular poem still infers 自由
+    const free = [charset.slice(0, 3).join(""), charset.slice(3, 9).join("")];
+    expect(pulledFromIndex("ziyou", anyTextIndex(free)!.index)!.form).toBe("ziyou");
   });
 
   it("自由: anyTextIndex(lines) → pullByIndex reproduces the exact lines + line breaks", () => {

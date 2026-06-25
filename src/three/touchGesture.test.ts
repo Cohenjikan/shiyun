@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { centroid, pinchDistance, thrustFromDrag, pinchSpeed, classifyGesture } from "./touchGesture";
+import { centroid, pinchDistance, thrustFromDrag, pinchSpeed, classifyGesture, orbitZoom } from "./touchGesture";
 
 describe("touchGesture — centroid / distance", () => {
   it("centroid is the midpoint", () => {
@@ -86,5 +86,24 @@ describe("touchGesture — classifyGesture (mode-lock: pan XOR pinch)", () => {
   it("a one-handed pinch (centroid drifts but distance dominates) → pinch, not pan", () => {
     // thumb anchored, index spreads 100px: centroid drifts ~50px, distance changes ~100px → pinch wins
     expect(classifyGesture(O, { x: 100, y: 150 }, 200, 300)).toBe("pinch");
+  });
+});
+
+describe("touchGesture — orbitZoom (galaxy-lock pinch-to-zoom, clamp [min,max])", () => {
+  it("spreading fingers (cur > prev) → orbit moves CLOSER (smaller dist)", () => {
+    expect(orbitZoom(1000, 100, 200, 40, 6000)).toBe(500); // 1000 * 100/200 = 500
+    expect(orbitZoom(1000, 100, 200, 40, 6000)).toBeLessThan(1000);
+  });
+  it("pinching in (cur < prev) → orbit moves FARTHER (larger dist)", () => {
+    expect(orbitZoom(500, 200, 100, 40, 6000)).toBe(1000);
+  });
+  it("clamps to the min/max", () => {
+    expect(orbitZoom(100, 100, 9999, 40, 6000)).toBe(40); // would go below min
+    expect(orbitZoom(5000, 9999, 100, 40, 6000)).toBe(6000); // would exceed max
+  });
+  it("guards zero / NaN / negative distances → dist unchanged", () => {
+    expect(orbitZoom(800, 0, 100, 40, 6000)).toBe(800);
+    expect(orbitZoom(800, 100, NaN, 40, 6000)).toBe(800);
+    expect(orbitZoom(800, -5, 100, 40, 6000)).toBe(800);
   });
 });

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { PulledPoem, PullForm } from "../engine/engineApi";
 import type { PoetRow, PoemRecord } from "../data/load";
 import { DYNASTIES } from "../data/dynasties";
-import { WEAK } from "../three/detectQuality";
+import { COARSE, WEAK } from "../three/detectQuality";
 import { listShiyi, addShiyi, removeShiyi, type ShiyiEntry } from "./shiyi";
 
 export interface Pull {
@@ -62,6 +62,10 @@ interface State {
   // per-poem 留影 button in PoetPanel. null = fall back to the void pull / 搜的这首 focus poem. Reset to
   // null whenever cinema closes or the selected poet changes, so a stale target never leaks.
   cinemaPoemIdx: number | null;
+  // 留影排版偏好(会话内保留):auto = 按诗长自动(超长 → 横排逐行,否则竖排 vertical-rl),或手动 horizontal /
+  // vertical 主动切换;cinemaHideTagline = 隐藏留影顶部的概念文案(tagline)。左下角设置面板控制这两项。
+  cinemaLayout: "auto" | "horizontal" | "vertical";
+  cinemaHideTagline: boolean;
   // owner-only feedback viewer (opened by a hidden gesture: 5 taps on the 诗云 logo within 10 s)
   feedbackOpen: boolean;
   // 拾遗: VOID-poem keepsakes (newest first), persisted to localStorage by the PURE state/shiyi.ts module.
@@ -81,6 +85,11 @@ interface State {
   pathDimEgo: boolean; // 路径查找时弱化(变暗)个体往来线,突出 path 本身
   giftHoverId: string | null; // 悬停高亮的赠诗往来线(对方 poetId) — easier to click (item 6)
   // camera
+  // 自由移动:true = 自由飞行(电脑 WASD / 触屏双指飞行);false = 锁定诗云整体 —— 单指拖=转视角、双指捏合=缩放,
+  // 点诗人/诗歌则把锁定目标换成它。触屏默认 false(解决"只能拖不能缩放"),电脑默认 true。更多菜单可切换。
+  freeMove: boolean;
+  // 生成随机诗:true(默认)点虚空拉一首随机诗;false 点虚空不再生成随机诗,只看现存的诗。更多菜单可关。
+  allowRandomPoem: boolean;
   gravity: boolean; // when inside the galaxy, co-rotate the camera with the spin (stars hold still)
   speed: number; // multiplier
   flyTarget: [number, number, number] | null;
@@ -123,10 +132,14 @@ interface State {
   toggleAllPoems: () => void;
   toggleQuality: () => void;
   toggleGravity: () => void;
+  setFreeMove: (b: boolean) => void;
+  toggleRandomPoem: () => void;
   toggleUI: () => void;
   toggleCinema: () => void;
   openCinemaFor: (poemIdx: number) => void; // open 留影 framing a SPECIFIC poem (its ORIGINAL index)
   setCinemaCopy: (n: number) => void;
+  setCinemaLayout: (m: "auto" | "horizontal" | "vertical") => void;
+  toggleCinemaTagline: () => void;
   setFeedbackOpen: (b: boolean) => void;
   setShiyiOpen: (b: boolean) => void;
   keepShiyi: (entry: { index: string; preview: string }) => void; // 收进拾遗 (a void poem)
@@ -178,9 +191,13 @@ export const useStore = create<State>((set) => ({
   cinema: false,
   cinemaCopy: 0,
   cinemaPoemIdx: null,
+  cinemaLayout: "auto",
+  cinemaHideTagline: false,
   feedbackOpen: false,
   shiyi: listShiyi(), // hydrate the keepsake list from localStorage at boot
   shiyiOpen: false,
+  freeMove: !COARSE, // 触屏默认锁定诗云整体(双指缩放/单指转),电脑默认自由移动(WASD)
+  allowRandomPoem: true,
   gravity: true,
   speed: 1,
   flyTarget: null,
@@ -252,12 +269,16 @@ export const useStore = create<State>((set) => ({
   toggleAllPoems: () => set((s) => (WEAK && !s.showAllPoems ? {} : { showAllPoems: !s.showAllPoems })),
   toggleQuality: () => set((s) => ({ quality: s.quality === "high" ? "low" : "high" })),
   toggleGravity: () => set((s) => ({ gravity: !s.gravity })),
+  setFreeMove: (freeMove) => set({ freeMove }),
+  toggleRandomPoem: () => set((s) => ({ allowRandomPoem: !s.allowRandomPoem })),
   toggleUI: () => set((s) => ({ uiHidden: !s.uiHidden })),
   // toggling cinema OFF clears the explicit per-poem target so reopening via the panel button (which
   // frames the 搜的这首 focus poem) doesn't leak the last 留影 row's poem.
   toggleCinema: () => set((s) => (s.cinema ? { cinema: false, cinemaPoemIdx: null } : { cinema: true })),
   openCinemaFor: (poemIdx) => set({ cinema: true, cinemaPoemIdx: poemIdx }),
   setCinemaCopy: (cinemaCopy) => set({ cinemaCopy }),
+  setCinemaLayout: (cinemaLayout) => set({ cinemaLayout }),
+  toggleCinemaTagline: () => set((s) => ({ cinemaHideTagline: !s.cinemaHideTagline })),
   setFeedbackOpen: (feedbackOpen) => set({ feedbackOpen }),
   // 拾遗: delegate the dedupe/cap/persistence to the pure module, then mirror its returned list into the
   // store so subscribed UI (PoemPanel toggle, the revisit panel) re-renders. No cross-domain reset.

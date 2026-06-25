@@ -180,10 +180,15 @@ function describeAny(syms: number[], pos: [number, number, number]): PulledPoem 
     } else cur += charset[s];
   }
   lines.push(cur);
+  const outLines = lines.length ? lines : [""];
   const b = anyRank(N, syms);
   return {
-    form: "ziyou",
-    lines: lines.length ? lines : [""],
+    // form is INFERRED from the reconstructed line structure (8×7 → 七律, 4×5 → 五绝, …) so a poem rebuilt
+    // from its 全集编号 — permalink restore, 拾遗 re-pull, 定位虚空 — is labeled CONSISTENTLY with 探诗·凭编号
+    // (pullByIndex, which already infers). A genuinely free/irregular poem (新诗/词) still infers "ziyou".
+    // lushi/valid never apply here (no tone check), only the display label is refined.
+    form: inferForm(outLines),
+    lines: outLines,
     babelIndex: b.toString(),
     babelDigits: b === 0n ? 1 : b.toString().length,
     lushiIndex: null,
