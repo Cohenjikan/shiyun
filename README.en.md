@@ -31,7 +31,7 @@
 
 ## What is this
 
-**32,657 poets and 933,857 poems** — all of Chinese poetry through history, placed into a 3D galaxy. The name and idea come from Liu Cixin's short story «Poetry Cloud» (诗云), about a super-civilization that tries to *write every possible poem by brute force*. I borrowed its name for this one.
+**33,458 poets and 970,319 poems** — all of Chinese poetry through history, placed into a 3D galaxy. The name and idea come from Liu Cixin's short story «Poetry Cloud» (诗云), about a super-civilization that tries to *write every possible poem by brute force*. I borrowed its name for this one.
 
 Each poet is a star; every poem has its own spatial coordinate. You can zoom and fly through the whole sky, click any star to read a poem, and trace the network of who dedicated poems to whom. From the *Book of Songs* to the modern era — three thousand years of poetry in one universe. **Li Bai is a very bright star, but most of it is people you've never heard of, each holding their own coordinate.**
 
@@ -52,7 +52,7 @@ And the **void** between stars holds something bigger still — it is *every pos
 <table>
 <tr>
 <td width="50%"><img src="docs/assets/poem.jpg" alt="Click a star: Li Bai's «Watching Lushan Waterfall» shown vertically, with its full catalog number" /><br/><sub><b>Click any star — and there's a poem</b>, together with its long unique address in the "complete catalog".</sub></td>
-<td width="50%"><img src="docs/assets/network.jpg" alt="Li Bai selected: golden arcs trace his dedication network; his works listed on the right" /><br/><sub><b>Dedication network</b> — poem titles + courtesy-name aliases parsed into 4,976 poet-to-poet arcs; select one to draw their ego-net.</sub></td>
+<td width="50%"><img src="docs/assets/network.jpg" alt="Li Bai selected: golden arcs trace his dedication network; his works listed on the right" /><br/><sub><b>Dedication network</b> — poem titles + courtesy-name aliases parsed into 5,165 poet-to-poet arcs; select one to draw their ego-net.</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/assets/compose.jpg" alt="Compose: fill in characters and the catalog number is computed live; or reverse a number back to a poem" /><br/><sub><b>Explore</b> — fill in characters and watch the number compute, or reverse a long number back to the one poem it encodes.</sub></td>
@@ -70,7 +70,7 @@ And the **void** between stars holds something bigger still — it is *every pos
 | **Five forms** | 5/7-char quatrains & regulated verse, plus **free-form / 词** (variable line lengths — the line breaks are part of the number too); a **格律 toggle** roams only the tonally-valid sub-catalog. |
 | **Search by any line** | Type *any* line (not just openings) → which real poet it belongs to (疑是地上霜 → 李白's «静夜思», a non-first line still resolves), plus the **half-number** that line pins in the random catalog. |
 | **Reverse lookup by number** | `unrank` a long number back to its poem, check the line index and full text, and find out whether that number maps to a *real* poem — the catalog↔poem loop, full untruncated numbers, one-click copy. |
-| **Dedication network** | Titles (寄/赠/和/次韵…) plus ~250 courtesy-name aliases (少陵→杜甫, 子瞻→苏轼, 香山→白居易…) parsed into **4,976** arcs, bundled toward the galactic core with a soft pulse flowing giver→receiver. |
+| **Dedication network** | Titles (寄/赠/和/次韵…) plus ~250 courtesy-name aliases (少陵→杜甫, 子瞻→苏轼, 香山→白居易…) parsed into **5,165** arcs, bundled toward the galactic core with a soft pulse flowing giver→receiver. |
 | **Shareable permalinks** | `#a=<poetId>` / `#p=<form>.<number>`; a 🔗 button on every poem and poet panel rebuilds the poem and restores the view on load. |
 | **Fully static** | All index math + rendering run client-side; the server only serves files — **no backend, ever** (the one optional backend is anonymous feedback collection). |
 
@@ -122,7 +122,7 @@ The repo ships the lightweight data (galaxy, author search, tonal rules, half-nu
 
 Poetry Cloud is a **vibecoding** project: I ([Cohen](https://cohenjikan.com)) designed and steered the direction, while the main code skeleton and iteration were written by **Claude** — the repo keeps the full human-AI development diary intact ([docs/DEVLOG.md](docs/DEVLOG.md) and [docs/devlog/](docs/devlog/)).
 
-It has earned **~600,000 likes** across Douyin / Xiaohongshu / Bilibili, and is one of a series of my **non-commercial, source-available** projects. The code is under the **PolyForm Noncommercial 1.0.0** license — learn from it, self-host it, remix it, all non-commercially. The poem corpora (especially modern/contemporary texts) remain the copyright of their authors; please don't use them commercially.
+It has earned **over 10 million views and 1.5 million likes** across Douyin / Xiaohongshu / Bilibili, and is one of a series of my **non-commercial, source-available** projects. The code is under the **PolyForm Noncommercial 1.0.0** license — learn from it, self-host it, remix it, all non-commercially. The poem corpora (especially modern/contemporary texts) remain the copyright of their authors; please don't use them commercially.
 
 More projects at **[cohenjikan.com](https://cohenjikan.com)** and GitHub **[@Cohenjikan](https://github.com/Cohenjikan)**.
 
@@ -133,7 +133,7 @@ More projects at **[cohenjikan.com](https://cohenjikan.com)** and GitHub **[@Coh
 **Built on the shoulders of these open-source works:**
 
 - **Rendering / framework** — [three.js](https://threejs.org), [@react-three/fiber · drei · postprocessing](https://github.com/pmndrs/react-three-fiber), [React](https://react.dev), [Vite](https://vitejs.dev), [zustand](https://github.com/pmndrs/zustand); the tonal lexicon build uses [opencc-js](https://github.com/nk2028/opencc-js) and [pinyin-pro](https://github.com/zh-lx/pinyin-pro).
-- **Poetry corpora** — [Werneror/Poetry](https://github.com/Werneror/Poetry) (MIT, pre-Qin → present, Simplified) as the backbone, layered with [sheepzh/poetry](https://github.com/sheepzh/poetry) and [yuxqiu/modern-poetry](https://github.com/yuxqiu/modern-poetry) (Apache-2.0) for modern verse; tonal rules from [charlesix59's 平水韵](https://github.com/charlesix59/chinese_word_rhyme) (MIT). Each corpus keeps its upstream license — see [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md) and [docs/DATA_AUDIT.md](docs/DATA_AUDIT.md).
+- **Poetry corpora** — from **[shiyun-corpus](https://github.com/Cohenjikan/shiyun-corpus)**, my standalone provenance-annotated database (source tags + 诗/词/曲/新诗 genre), which builds on [Werneror/Poetry](https://github.com/Werneror/Poetry) (MIT, pre-Qin → present, Simplified) as the backbone, layered with [sheepzh/poetry](https://github.com/sheepzh/poetry) and [yuxqiu/modern-poetry](https://github.com/yuxqiu/modern-poetry) (Apache-2.0) for modern verse; tonal rules from [charlesix59's 平水韵](https://github.com/charlesix59/chinese_word_rhyme) (MIT). Each corpus keeps its upstream license — see [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md) and [docs/DATA_AUDIT.md](docs/DATA_AUDIT.md).
 - **Inspiration** — Liu Cixin's «Poetry Cloud», Borges' «Library of Babel».
 - **Development** — the main code skeleton was written by **Anthropic's Claude** (vibecoding).
 

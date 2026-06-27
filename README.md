@@ -31,7 +31,7 @@
 
 ## 这是什么
 
-**32,657 位诗人、933,857 首诗**，我把中国全历史的诗歌放进了一片三维星系。灵感来自刘慈欣的短篇《诗云》—— 那本书讲述了一个想用穷举写尽所有诗的超级文明，我做的这个也叫「诗云」。
+**33,458 位诗人、970,319 首诗**，我把中国全历史的诗歌放进了一片三维星系。灵感来自刘慈欣的短篇《诗云》—— 那本书讲述了一个想用穷举写尽所有诗的超级文明，我做的这个也叫「诗云」。
 
 每位诗人是一颗星，每首诗都有自己的空间坐标，可以缩放、漫游整片星空，随手点开一颗星就是一首诗，还能看到诗人之间的关系网络。从《诗经》到近现代，三千年的诗都在这一片宇宙里。**李白是很亮的一颗星，但更多的是那些你从没听过名字的人，也各自占着一个坐标。**
 
@@ -52,7 +52,7 @@
 <table>
 <tr>
 <td width="50%"><img src="docs/assets/poem.jpg" alt="点开一颗星：李白《望庐山瀑布》竖排呈现，并显示它在全集目录里的完整编号" /><br/><sub><b>随手点开一颗星，就是一首诗</b> —— 连同它在「全集目录」里那个长长的唯一地址。</sub></td>
-<td width="50%"><img src="docs/assets/network.jpg" alt="选中李白：金色弧线汇出他与其他诗人的赠答网络，右侧列出全部作品" /><br/><sub><b>赠诗网络</b> —— 解析诗题与字号别名连出 4,976 条赠答弧线，选中一位即勾出其往来。</sub></td>
+<td width="50%"><img src="docs/assets/network.jpg" alt="选中李白：金色弧线汇出他与其他诗人的赠答网络，右侧列出全部作品" /><br/><sub><b>赠诗网络</b> —— 解析诗题与字号别名连出 5,165 条赠答弧线，选中一位即勾出其往来。</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/assets/compose.jpg" alt="探诗：左侧填字成诗实时算出编号，右侧可凭编号反查回一首诗" /><br/><sub><b>探诗</b> —— 填字成诗实时算出编号，或凭一串编号反查回唯一的那首诗。</sub></td>
@@ -70,7 +70,7 @@
 | **五种诗体** | 五绝 / 七绝 / 五律 / 七律，外加**自由格式 / 词**（变长断句，换行也由编号决定）；**格律开关**让你只在「合律子目录」里漫游。 |
 | **寻诗 · 逐句搜索** | 输入任意一句（不限开头）→ 它在「真实诗人」里属于谁（疑是地上霜 → 李白《静夜思》，非首句也命中），同时给出「纯随机」目录里那个被诗句锁定的**半编号**。 |
 | **探诗 · 编号反查** | 把一个长编号 `unrank` 回它的诗，核对行索引与全文，告诉你这串数字是否对应一首**真实存在**的诗 —— 目录 ↔ 诗的闭环，全程显示未截断的完整编号，一键复制。 |
-| **赠诗网络** | 解析诗题（寄 / 赠 / 和 / 次韵…）与 ~250 条字号别名（少陵 → 杜甫、子瞻 → 苏轼、香山 → 白居易…）连出 **4,976** 条赠答弧线，束状汇向银心，沿弧涌动柔光脉冲。 |
+| **赠诗网络** | 解析诗题（寄 / 赠 / 和 / 次韵…）与 ~250 条字号别名（少陵 → 杜甫、子瞻 → 苏轼、香山 → 白居易…）连出 **5,165** 条赠答弧线，束状汇向银心，沿弧涌动柔光脉冲。 |
 | **可分享的永久链接** | `#a=<诗人id>` / `#p=<诗体>.<编号>`，诗与诗人面板均有 🔗 分享，打开即从链接重建那首诗、复位那片星空。 |
 | **纯静态** | 所有索引运算与渲染都在浏览器里完成，服务器只发静态文件，**永不加后端**（唯一可选后端是匿名反馈收集）。 |
 
@@ -122,7 +122,7 @@ npm run build    # 类型检查 + 静态构建 → dist/
 
 诗云是一个 **vibecoding** 作品：由我（[Cohen](https://cohenjikan.com)）设计并把关方向，主要的代码骨架与迭代由 **Claude** 编写处理 —— 仓库里完整保留了这段人机协作的开发日记（[docs/DEVLOG.md](docs/DEVLOG.md) 与 [docs/devlog/](docs/devlog/)）。
 
-它在抖音 / 小红书 / 哔哩哔哩等平台**累计获得约 60 万点赞**，也是我一系列**非商业、源码公开**项目中的一个。代码以 **PolyForm Noncommercial 1.0.0** 许可发布，欢迎学习、自建与**非商业**二次创作；诗歌语料（尤其现当代新诗文本）的版权属于原作者，请勿用于商业用途。
+它在抖音 / 小红书 / 哔哩哔哩等平台**全网累计播放超 1000 万、点赞超 150 万**，也是我一系列**非商业、源码公开**项目中的一个。代码以 **PolyForm Noncommercial 1.0.0** 许可发布，欢迎学习、自建与**非商业**二次创作；诗歌语料（尤其现当代新诗文本）的版权属于原作者，请勿用于商业用途。
 
 更多项目见我的主页 **[cohenjikan.com](https://cohenjikan.com)** 与 GitHub **[@Cohenjikan](https://github.com/Cohenjikan)**。
 
@@ -133,7 +133,7 @@ npm run build    # 类型检查 + 静态构建 → dist/
 **站在这些开源工作之上：**
 
 - **渲染 / 框架** —— [three.js](https://threejs.org)、[@react-three/fiber · drei · postprocessing](https://github.com/pmndrs/react-three-fiber)、[React](https://react.dev)、[Vite](https://vitejs.dev)、[zustand](https://github.com/pmndrs/zustand)；格律字库构建用到 [opencc-js](https://github.com/nk2028/opencc-js) 与 [pinyin-pro](https://github.com/zh-lx/pinyin-pro)。
-- **诗歌语料** —— 以 [Werneror/Poetry](https://github.com/Werneror/Poetry)（MIT，先秦→当代，简体）全历代为骨，叠加 [sheepzh/poetry](https://github.com/sheepzh/poetry) 与 [yuxqiu/modern-poetry](https://github.com/yuxqiu/modern-poetry)（Apache-2.0）的现当代新诗；格律用 [charlesix59 平水韵](https://github.com/charlesix59/chinese_word_rhyme)（MIT）。各语料保留其上游许可，详见 [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md) 与 [docs/DATA_AUDIT.md](docs/DATA_AUDIT.md)。
+- **诗歌语料** —— 来自我单独维护的标注语料库 **[shiyun-corpus](https://github.com/Cohenjikan/shiyun-corpus)**（带 provenance 来源标注 + 诗 / 词 / 曲 / 新诗 体裁），它以 [Werneror/Poetry](https://github.com/Werneror/Poetry)（MIT，先秦→当代，简体）为骨干，叠加 [sheepzh/poetry](https://github.com/sheepzh/poetry) 与 [yuxqiu/modern-poetry](https://github.com/yuxqiu/modern-poetry)（Apache-2.0）的现当代新诗；格律用 [charlesix59 平水韵](https://github.com/charlesix59/chinese_word_rhyme)（MIT）。各语料保留其上游许可，详见 [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md) 与 [docs/DATA_AUDIT.md](docs/DATA_AUDIT.md)。
 - **灵感** —— 刘慈欣《诗云》、博尔赫斯《巴别图书馆》。
 - **开发协作** —— 主要代码骨架由 **Anthropic 的 Claude** 编写处理（vibecoding）。
 
