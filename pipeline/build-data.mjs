@@ -18,16 +18,27 @@ const OUT = fileURLToPath(new URL("../public/data", import.meta.url)); // this p
 // upstream drifted and is loudly warned). To intentionally re-derive the charset (a deliberate,
 // permalink-breaking major version), run with REFLOW_CHARSET=1.
 const REFLOW_CHARSET = process.env.REFLOW_CHARSET === "1";
-let frozenRaw = null; // exact bytes of the existing charset.json (re-emitted verbatim)
-let frozenSet = null; // Set<char> for the skip filter
-if (!REFLOW_CHARSET) {
-  try {
-    frozenRaw = readFileSync(join(OUT, "charset.json"), "utf8");
-    frozenSet = new Set(JSON.parse(frozenRaw).chars);
+const USE_CORPUS = process.env.CORPUS_SOURCE === "shiyun-corpus"; // 换源: ingest shiyun-corpus instead of raw C:/corpus
+const CORPUS_DIR = process.env.SHIYUN_CORPUS_DIR || "C:/Users/Cohen/Desktop/shiyun-corpus/data";
+const CORPUS_MAX = +(process.env.CORPUS_MAX || 0); // smoke-test cap on corpus poems (0 = no cap)
+// CJK Unified Ideographs basic block — the principled "all standard modern Chinese" alphabet
+// (锂/钠/镁/全元素/方言…). On REFLOW the new charset includes the WHOLE block so any real char is addressable.
+const CJK_BASIC = [];
+for (let cp = 0x4e00; cp <= 0x9fff; cp++) CJK_BASIC.push(String.fromCodePoint(cp));
+let frozenRaw = null;   // exact bytes of the existing charset.json (re-emitted verbatim when frozen)
+let frozenSet = null;   // Set<char> for the skip filter (only when NOT reflowing)
+let existingChars = []; // current charset chars — a SUPERSET floor on REFLOW (never drop an in-use char)
+try {
+  frozenRaw = readFileSync(join(OUT, "charset.json"), "utf8");
+  existingChars = [...JSON.parse(frozenRaw).chars];
+  if (!REFLOW_CHARSET) {
+    frozenSet = new Set(existingChars);
     console.log(`charset FROZEN: N=${frozenSet.size} (REFLOW_CHARSET=1 to re-derive — breaks all permalinks)`);
-  } catch {
-    console.warn("no existing charset.json — deriving fresh (first build)");
+  } else {
+    console.log(`REFLOW_CHARSET=1: re-deriving charset = SUPERSET(existing ${existingChars.length} ∪ corpus ∪ CJK基本块 ${CJK_BASIC.length}) — breaks all permalinks`);
   }
+} catch {
+  console.warn("no existing charset.json — deriving fresh (first build)");
 }
 let currentSource = "werneror"; // tag for per-source skip stats
 const skippedByCharset = new Map(); // source -> count
@@ -74,9 +85,10 @@ function parseCSV(text) {
 }
 
 const HAN = /\p{Script=Han}/u;
-const onlyHan = (s) => [...s].filter((c) => HAN.test(c)).join("");
+const nfc = (s) => (s || "").normalize("NFC"); // fold compatibility ideographs (U+F9xx→canonical) before indexing
+const onlyHan = (s) => [...nfc(s)].filter((c) => HAN.test(c)).join("");
 const splitLines = (content) =>
-  content.split(/[，。！？；、\s]+/).map(onlyHan).filter(Boolean);
+  nfc(content).split(/[，。！？；、\s]+/).map(onlyHan).filter(Boolean);
 
 const FORMS = [
   { id: "wujue", lines: 4, per: 5 },
@@ -157,8 +169,8 @@ function addPoem(title, author, dyn, dynRaw, lines) {
   }
 }
 
-console.log("reading CSVs from", SRC);
-const files = readdirSync(SRC).filter((f) => f.endsWith(".csv"));
+if (!USE_CORPUS) console.log("reading CSVs from", SRC);
+const files = USE_CORPUS ? [] : readdirSync(SRC).filter((f) => f.endsWith(".csv"));
 for (const file of files) {
   const rows = parseCSV(readFileSync(join(SRC, file), "utf8"));
   // header = 题目,朝代,作者,内容
@@ -201,7 +213,7 @@ const ALLOW_NO_MODERN = process.env.ALLOW_NO_MODERN === "1";
 // poems/+lines/ from the index (a modern poet then resolves to zero poems — the bug that hit a prior
 // agent). Fail loud unless explicitly opted into a Werneror-only build via ALLOW_NO_MODERN=1.
 let mfiles = [];
-try {
+if (!USE_CORPUS) try {
   mfiles = readdirSync(MODERN).filter((f) => /^\d/.test(f) && f.endsWith(".json"));
 } catch (e) {
   if (ALLOW_NO_MODERN) {
@@ -245,7 +257,7 @@ const ALLOW_NO_SHEEPZH = process.env.ALLOW_NO_SHEEPZH === "1";
 // to drop handle/junk folders like 666_666, Apple_apple, AT_at.
 const HAN_AUTHOR = /^[㐀-䶿一-鿿·]{1,8}$/;
 let sdirs = [];
-try {
+if (!USE_CORPUS) try {
   sdirs = readdirSync(SHEEPZH, { withFileTypes: true }).filter((d) => d.isDirectory());
 } catch (e) {
   if (ALLOW_NO_SHEEPZH) {
@@ -293,6 +305,34 @@ if (sdirs.length) {
       `charset-skipped=${skippedByCharset.get("sheepzh") || 0} (total=${total} poets=${poets.size})`,
   );
 }
+
+// ── 换源: shiyun-corpus JSONL (public + _restricted) — provenance/genre-annotated, 诗云-aligned poetId ──
+if (USE_CORPUS) {
+  const corpusFiles = [];
+  for (const dir of [CORPUS_DIR, join(CORPUS_DIR, "_restricted")]) {
+    let fs2 = [];
+    try { fs2 = readdirSync(dir).filter((f) => /^poems\..*\.jsonl$/.test(f)); } catch {}
+    for (const f of fs2) corpusFiles.push(join(dir, f));
+  }
+  if (!corpusFiles.length) throw new Error(`no shiyun-corpus poems under ${CORPUS_DIR} (set SHIYUN_CORPUS_DIR)`);
+  currentSource = "shiyun-corpus";
+  let cp = 0, cBad = 0;
+  outer: for (const fp of corpusFiles) {
+    for (const ln of readFileSync(fp, "utf8").split("\n")) {
+      if (!ln) continue;
+      let o; try { o = JSON.parse(ln); } catch { continue; }
+      if (!o.author || !o.body) { cBad++; continue; }
+      // corpus.dynasty is ALREADY a canonical key (tang/song/…) → poetId aligns with 诗云's fnv32(name|dynasty)
+      const dyn = o.dynasty || DYN[o.dynasty_raw] || "unknown";
+      addPoem(o.title || "", o.author, dyn, o.dynasty_raw || "", splitLines(o.body));
+      cp++;
+      if (CORPUS_MAX && cp >= CORPUS_MAX) { console.log(`  (CORPUS_MAX=${CORPUS_MAX} smoke cap hit)`); break outer; }
+    }
+    console.log(`  ${fp.split(/[\\/]/).pop()}: poems=${total} poets=${poets.size}`);
+  }
+  console.log(`  shiyun-corpus: poems=${cp} skipped-bad=${cBad} (total=${total} poets=${poets.size})`);
+}
+
 // loud per-source charset-skip report — legacy sources skipping ANYTHING means upstream drifted.
 for (const [src, n] of skippedByCharset) {
   const legacy = src === "werneror" || src === "yuxqiu";
@@ -311,14 +351,17 @@ if (frozenSet) {
   writeFileSync(join(OUT, "charset.json"), frozenRaw);
   console.log(`charset.json re-emitted FROZEN (N=${N}, byte-identical)`);
 } else {
-  const chars = [...freq.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].codePointAt(0) - b[0].codePointAt(0))
-    .map(([c]) => c);
+  // REFLOW SUPERSET: existing chars ∪ every corpus char (freq) ∪ CJK basic block. Ordered by desc
+  // frequency (chars unseen in the corpus get 0), ties by codepoint. Never drops a currently-used char.
+  const all = new Set([...existingChars, ...freq.keys(), ...CJK_BASIC]);
+  const chars = [...all].sort((a, b) => (freq.get(b) || 0) - (freq.get(a) || 0) || a.codePointAt(0) - b.codePointAt(0));
   N = chars.length;
   const charsStr = chars.join("");
   let hh = 0x811c9dc5;
   for (let i = 0; i < charsStr.length; i++) { hh ^= charsStr.charCodeAt(i); hh = Math.imul(hh, 0x01000193); }
-  writeFileSync(join(OUT, "charset.json"), JSON.stringify({ version: 1, n: N, hash: (hh >>> 0).toString(16), chars: charsStr }));
+  const newHash = (hh >>> 0).toString(16);
+  writeFileSync(join(OUT, "charset.json"), JSON.stringify({ version: 2, n: N, hash: newHash, chars: charsStr }));
+  console.log(`charset.json REFLOW SUPERSET: N=${N} (was ${existingChars.length}), hash=${newHash}`);
 }
 
 // poets.index.json (sorted by poemCount desc)
