@@ -10,7 +10,7 @@
 
 *Inspired by Liu Cixin's «Poetry Cloud» and Borges' «Library of Babel»: poems aren't stored — give a number and it computes which poem it is, and vice versa.*
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-orange.svg?style=flat-square)](LICENSE)
 [![Three.js](https://img.shields.io/badge/Three.js-r169-000000.svg?style=flat-square&logo=three.js&logoColor=white)](https://threejs.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg?style=flat-square&logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6.svg?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -122,7 +122,7 @@ The repo ships the lightweight data (galaxy, author search, tonal rules, half-nu
 
 Poetry Cloud is a **vibecoding** project: I ([Cohen](https://cohenjikan.com)) designed and steered the direction, while the main code skeleton and iteration were written by **Claude** — the repo keeps the full human-AI development diary intact ([docs/DEVLOG.md](docs/DEVLOG.md) and [docs/devlog/](docs/devlog/)).
 
-It has earned **~600,000 likes** across Douyin / Xiaohongshu / Bilibili, and is one of a series of my **non-commercial, open-source** projects. The code is MIT — learn from it, self-host it, remix it. Only the poem corpora (especially modern/contemporary texts) remain the copyright of their authors; please don't use them commercially.
+It has earned **~600,000 likes** across Douyin / Xiaohongshu / Bilibili, and is one of a series of my **non-commercial, source-available** projects. The code is under the **PolyForm Noncommercial 1.0.0** license — learn from it, self-host it, remix it, all non-commercially. The poem corpora (especially modern/contemporary texts) remain the copyright of their authors; please don't use them commercially.
 
 More projects at **[cohenjikan.com](https://cohenjikan.com)** and GitHub **[@Cohenjikan](https://github.com/Cohenjikan)**.
 
@@ -141,7 +141,7 @@ More projects at **[cohenjikan.com](https://cohenjikan.com)** and GitHub **[@Coh
 
 ## License
 
-The code is **[MIT](LICENSE)**. The poem corpora keep their own upstream licenses and rights; in particular, modern/contemporary poem **texts** remain the copyright of their original authors and are used here **non-commercially**. See [LICENSE](LICENSE) and the credits note in [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md).
+The code is under the **[PolyForm Noncommercial 1.0.0](LICENSE)** license — **source-available, noncommercial use only**; contact the author for commercial licensing (versions up to commit `0a64a5d` remain MIT-licensed for those versions). 诗云's own curated metadata (annotations / indexes) is offered under **CC BY-NC 4.0**. The poem corpora keep their upstream licenses and rights; modern/contemporary poem **texts** remain the copyright of their original authors and are used here **non-commercially**. See [LICENSE](LICENSE) and the credits note in [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md).
 
 <div align="center">
 <sub>From the Book of Songs to the modern era — three thousand years of poetry in one universe.</sub>

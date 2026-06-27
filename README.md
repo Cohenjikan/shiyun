@@ -10,7 +10,7 @@
 
 *灵感来自刘慈欣《诗云》与博尔赫斯《巴别图书馆》：诗不被储存 —— 给一个编号就能算出第几首诗，反之亦然。*
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-orange.svg?style=flat-square)](LICENSE)
 [![Three.js](https://img.shields.io/badge/Three.js-r169-000000.svg?style=flat-square&logo=three.js&logoColor=white)](https://threejs.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg?style=flat-square&logo=react&logoColor=white)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6.svg?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -122,7 +122,7 @@ npm run build    # 类型检查 + 静态构建 → dist/
 
 诗云是一个 **vibecoding** 作品：由我（[Cohen](https://cohenjikan.com)）设计并把关方向，主要的代码骨架与迭代由 **Claude** 编写处理 —— 仓库里完整保留了这段人机协作的开发日记（[docs/DEVLOG.md](docs/DEVLOG.md) 与 [docs/devlog/](docs/devlog/)）。
 
-它在抖音 / 小红书 / 哔哩哔哩等平台**累计获得约 60 万点赞**，也是我一系列**非商业开源**项目中的一个。代码以 MIT 开源，欢迎学习、自建与二次创作；唯独诗歌语料（尤其现当代新诗文本）的版权属于原作者，请勿用于商业用途。
+它在抖音 / 小红书 / 哔哩哔哩等平台**累计获得约 60 万点赞**，也是我一系列**非商业、源码公开**项目中的一个。代码以 **PolyForm Noncommercial 1.0.0** 许可发布，欢迎学习、自建与**非商业**二次创作；诗歌语料（尤其现当代新诗文本）的版权属于原作者，请勿用于商业用途。
 
 更多项目见我的主页 **[cohenjikan.com](https://cohenjikan.com)** 与 GitHub **[@Cohenjikan](https://github.com/Cohenjikan)**。
 
@@ -141,7 +141,7 @@ npm run build    # 类型检查 + 静态构建 → dist/
 
 ## 许可
 
-代码以 **[MIT](LICENSE)** 开源。诗歌语料各自保留上游许可与权利；尤其现 / 当代诗歌**文本**的版权归原作者所有，在此仅作**非商业**使用。详见 [LICENSE](LICENSE) 与 [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md) 中的开源致谢说明。
+代码以 **[PolyForm Noncommercial 1.0.0](LICENSE)** 许可发布 —— **源码公开、仅限非商业使用**；商用授权请联系作者（截至提交 `0a64a5d` 的旧版本仍按 MIT 授权，对那些版本继续有效）。诗云自有的整理性元数据（标注 / 索引）以 **CC BY-NC 4.0** 提供；诗歌语料各自保留上游许可与权利，尤其现 / 当代诗歌**文本**的版权归原作者所有，仅作**非商业**使用。详见 [LICENSE](LICENSE) 与 [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md)。
 
 <div align="center">
 <sub>从《诗经》到近现代，三千年的诗都在这一片宇宙里。</sub>
