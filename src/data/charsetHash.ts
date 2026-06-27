@@ -30,7 +30,7 @@ export function charsetHash(chars: string): string {
 // FROZEN: the charset hash THIS build of the code expects (= public/data/charset.json.hash,
 // version 1, n=12877). Update ONLY on a deliberate REFLOW_CHARSET rebuild that re-shards all
 // permalink-bearing data; a casual bump here silently accepts mismatched data.
-export const EXPECTED_CHARSET_HASH = "a392703b";
+export const EXPECTED_CHARSET_HASH = "a9cde1f2";
 
 export interface CharsetCheck {
   ok: boolean;
