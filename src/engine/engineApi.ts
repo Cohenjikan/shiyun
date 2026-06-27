@@ -8,7 +8,6 @@ import {
   FORMS,
   type FormId,
   type FormDef,
-  babelUnrank,
   babelRank,
   babelSize,
   regulatedSize,
@@ -203,6 +202,10 @@ function anySyms(b: bigint): number[] {
 }
 
 export const COMMON_K = 2500; // "常用字" = the top-K most-frequent chars (字库 is freq-ordered)
+// Default 虚空捞诗 alphabet cutoff: pulls weight (Zipf) over the top ~POEM_PULL_K common chars so a random
+// pull reads like poetry. The 22k charset's long rare tail stays addressable (造诗 / #p= / search) but is
+// excluded from random pulls — otherwise the ~9k never-in-a-poem CJK chars would turn pulls into noise.
+export const POEM_PULL_K = 3200;
 const FREE_GEN_L = 30; // max symbols a 自由 void-pull generates (chars + breaks) — keeps 词 readable
 
 // A 格律 lexicon restricted to common chars (ids < K), so 格律 × 常用字 composes into
@@ -243,6 +246,56 @@ function commonLexicon(K: number): Lexicon {
   return lx;
 }
 
+// ── 虚空捞诗 字频加权 (Zipf) ──────────────────────────────────────────────────────────────────
+// 字库按频率排序(index 0 = 最常用),所以 charId ≈ 频率排名。按 Zipf 律 P(id) ∝ 1/(id+1)^s 加权抽样,
+// 让随机捞诗偏向常用字("像诗"),稀有字低概率而非不可能(契合"穷尽一切"且不退化成乱码)。
+// 只改"随机选哪个字";#p= 仍由 describe 的 anyRank 从符号算出 → 解码/permalink 双射不变,round-trip 一致。
+// weight(rank i) = 1/(i + OFFSET)^S. OFFSET flattens the head so the top few-hundred common chars are
+// near-equal (classical variety — 月/山/风/花, not a 的/我 particle-flood from the modern层), while the
+// long tail stays rare (rare chars possible but unlikely → "穷尽一切" without lapsing into noise).
+const ZIPF_S = 1.15, ZIPF_OFFSET = 350;
+const _zipfCDF = new Map<number, Float64Array>();
+onDatasetChange(() => _zipfCDF.clear());
+function zipfCDF(K: number): Float64Array {
+  let c = _zipfCDF.get(K);
+  if (c) return c;
+  c = new Float64Array(K);
+  let sum = 0;
+  for (let i = 0; i < K; i++) { sum += 1 / Math.pow(i + ZIPF_OFFSET, ZIPF_S); c[i] = sum; }
+  for (let i = 0; i < K; i++) c[i] /= sum; // normalize to a [0,1] CDF
+  _zipfCDF.set(K, c);
+  return c;
+}
+function pickZipf(cdf: Float64Array, u: number): number {
+  let lo = 0, hi = cdf.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (u <= cdf[m]) hi = m; else lo = m + 1; }
+  return lo;
+}
+// mulberry32 — tiny deterministic PRNG seeded from the (quantized) void point, so a given point still
+// pulls the SAME poem (stable as the galaxy turns) — now weighted instead of uniform.
+function prng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const posSeed = (pos: [number, number, number], salt = 0) =>
+  (Number(indexFromPoint(pos, 0x7fffffffn) % 0x7fffffffn) ^ salt) >>> 0;
+// L Zipf-weighted char ids in [0,K) — fixed-form void-pull.
+function weightedSyms(pos: [number, number, number], L: number, K: number): number[] {
+  const rnd = prng(posSeed(pos));
+  const cdf = zipfCDF(K);
+  const out = new Array<number>(L);
+  for (let i = 0; i < L; i++) out[i] = pickZipf(cdf, rnd());
+  return out;
+}
+// 自由: each of L slots is a line-break (= N, ~1/6 prob) or a Zipf char in [0,M) → 词-like 变长.
+function weightedFreeSyms(pos: [number, number, number], L: number, M: number, N: number): number[] {
+  const rnd = prng(posSeed(pos, 0x9e3779b9));
+  const cdf = zipfCDF(M);
+  const out: number[] = [];
+  for (let i = 0; i < L; i++) out.push(rnd() < 1 / 6 ? N : pickZipf(cdf, rnd()));
+  return out;
+}
+
 // Pull a poem out of the void at a clicked world point. Filters compose inside the random
 // library: `commonK` shrinks the alphabet to common chars; `lushiOnly` constrains tone/rhyme.
 // The displayed 全集编号 is always the FULL-catalog address (a common-char poem is a real
@@ -260,11 +313,7 @@ export function pullAt(
     // catalog and round-trip exactly. A bounded length keeps a click readable, not a 500-char wall.
     const N = getDataset().lexicon.N;
     const M = opts.commonK ? Math.min(opts.commonK, N) : N;
-    const W = Math.max(1, Math.round(M / 5));
-    const radix = BigInt(M + W);
-    const k = indexFromPoint(pos, radix ** BigInt(FREE_GEN_L));
-    const syms = babelUnrank(FREE_GEN_L, radix, k).map((id) => (id >= M ? N : id)); // break → N
-    return describeAny(syms, pos);
+    return describeAny(weightedFreeSyms(pos, FREE_GEN_L, M, N), pos); // Zipf-weighted; break → N
   }
   const form = FORMS[formId];
   if (opts.lushiOnly) {
@@ -277,9 +326,8 @@ export function pullAt(
     // 格律 sub-catalog is empty under this (form × commonK) — no valid tone/rhyme picks left;
     // fall through to the random library rather than dividing by zero.
   }
-  const radix = opts.commonK ? BigInt(Math.min(opts.commonK, getDataset().lexicon.N)) : N();
-  const b = indexFromPoint(pos, radix ** BigInt(form.L));
-  return describe(form, babelUnrank(form.L, radix, b), pos);
+  const K = opts.commonK ? Math.min(opts.commonK, getDataset().lexicon.N) : Number(N());
+  return describe(form, weightedSyms(pos, form.L, K), pos); // Zipf-weighted random pull (was uniform)
 }
 
 // Canonical scattered position of a known babel index (for search / permalink).

@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import { useStore } from "../state/store";
-import { pullAt, COMMON_K } from "../engine/engineApi";
-import { getPoet, getManifest, type PoetRow } from "../data/load";
+import { pullAt, COMMON_K, POEM_PULL_K } from "../engine/engineApi";
+import { getPoet, type PoetRow } from "../data/load";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { giftLinks, giftGraphReady } from "../data/giftGraph";
 import { pickTargets } from "./picking";
@@ -321,10 +321,10 @@ export function FlyControls() {
         s.selectPoem(
           pullAt(s.form, [lx, pt.y, lz], {
             lushiOnly: s.lushiFilter,
-            // default 虚空捞诗 draws from the real-corpus alphabet (freq-ordered head, manifest.pullK) —
-            // NOT the full N, whose CJK-basic-block tail (锂/镁/…) is addressable but never in real poems.
-            // 常用字 narrows further to the top COMMON_K. Undefined pullK (old data) → full N (prior behavior).
-            commonK: s.commonOnly ? COMMON_K : (getManifest()?.pullK ?? undefined),
+            // default 虚空捞诗 weights (Zipf) over the top POEM_PULL_K common chars → reads like poetry;
+            // the 22k charset's rare tail (锂/镁/… + never-in-poem CJK) stays addressable but out of pulls.
+            // 常用字 narrows further to the top COMMON_K.
+            commonK: s.commonOnly ? COMMON_K : POEM_PULL_K,
           }),
         );
       }
