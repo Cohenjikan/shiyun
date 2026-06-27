@@ -11,11 +11,11 @@ export const FAMOUS_POETS: Landmark[] = [
   { name: "宋玉", dynasty: "xianqin" },
   { name: "项羽", dynasty: "qinhan" },
   { name: "司马相如", dynasty: "qinhan" },
-  { name: "蔡文姬", dynasty: "qinhan" },
+  { name: "蔡琰", dynasty: "qinhan" }, // 库内 canonical 本名(蔡文姬=字,搜索见 poetAliases)
   { name: "曹操", dynasty: "weijin" },
   { name: "曹植", dynasty: "weijin" },
   { name: "阮籍", dynasty: "weijin" },
-  { name: "陶渊明", dynasty: "weijin" },
+  { name: "陶潜", dynasty: "weijin" }, // 库内 canonical 本名(陶渊明 搜索见 poetAliases)
   { name: "谢灵运", dynasty: "nanbeichao" },
   { name: "鲍照", dynasty: "nanbeichao" },
   { name: "庾信", dynasty: "nanbeichao" },

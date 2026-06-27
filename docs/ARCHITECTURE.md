@@ -77,7 +77,7 @@ npm run typecheck  # tsc --noEmit
 ## Status
 
 - **Step 2** ✅ engine + 44 round-trip tests green (MSB index convention for 半编号).
-- **Step 3** ✅ data SHIPPED: real Werneror corpus → **29,808 poets · 857,877 poems · 字库
+- **Step 3** ✅ data SHIPPED: real Werneror corpus → **32,657 poets · 933,857 poems · 字库
   N=12,877** (`pipeline/build-data.mjs`, see [PIPELINE.md](PIPELINE.md)). Loaded via
   `data/load.ts` → `provider.setDataset`. Now includes **新诗 modern poets** (yuxqiu/modern-poetry,
   Apache-2.0: +4,494 free-verse poems / +508 poets — 徐志摩, 海子, 北岛, 顾城, 戴望舒…) as form
@@ -114,7 +114,7 @@ npm run typecheck  # tsc --noEmit
   **product-grade poem UI** (`--serif` Kaiti/Songti stack, gradient cards + gold accent);
   **ANY-line content search** (pipeline now indexes EVERY line → `public/data/lines/{bucket}.json`,
   256 shards, ~791 MB, git-ignored, renamed from `firstline/`; 疑是地上霜→李白《静夜思》 now resolves);
-  **赠诗 recall** boosted to **4,849 edges** via a ~250-entry 字号 alias table (~120 poets:
+  **赠诗 recall** boosted to **4,976 edges** via a ~250-entry 字号 alias table (~120 poets:
   少陵→杜甫, 子瞻→苏轼, 香山→白居易…) in `build-data.mjs::GIFT_ALIAS`.
 - **Step 7** ✅ SHIPPED (53/53 tests — 47 engine + 6 GPU-pick — + build + e2e DOM on a real GPU):
   **O(1) GPU colour-ID picking** (`three/gpuPick.ts` — poet index → `aPickColor` attribute → offscreen

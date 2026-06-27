@@ -14,8 +14,8 @@ The app loads these static assets, builds a `PoetryDataset`, and calls
 | `manifest.json` | initial | 1 KB | `Manifest` | versions, shard map, dynasty keys present |
 | `charset.json` | initial | ~25 KB | `CharsetAsset` | 字库, ordered by freq; index = base-N digit |
 | `lexicon.json` | initial | ~80–120 KB | `LexiconAsset` | tone + 平水韵 tables → `hydrateLexicon()` |
-| `poets.index.json` | initial | ~0.9–1.1 MB | `PoetIndexEntry[]` | 29,808 poets (all dynasties, incl. 新诗) |
-| `gifts.json` | initial | ~126 KB | `GiftsAsset` | 赠诗 edges `[fromId,toId,w]` (4,849); **tracked** (small) |
+| `poets.index.json` | initial | ~0.9–1.1 MB | `PoetIndexEntry[]` | 32,657 poets (all dynasties, incl. 新诗) |
+| `gifts.json` | initial | ~126 KB | `GiftsAsset` | 赠诗 edges `[fromId,toId,w]` (4,976); **tracked** (small) |
 | `dynasties.json` | initial | <1 KB | (see DYNASTIES) | optional; mirrors `src/data/dynasties.ts` |
 | `stars/{shard}.json` | lazy/region | ~20–60 KB ea | `StarShard` | histograms + sample refs |
 | `poems/{shard}.json` | lazy/poet | ~0.9 MB ea | `PoemShard` | real poem text, ONE valid JSON object (git-ignored, ~235 MB). Fetched by HTTP **Range** (one poet's slice), not whole |

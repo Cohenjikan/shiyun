@@ -11,7 +11,7 @@ loadData(base = "/data"): Promise<DataManifest>
 // PoetryDataset, and calls provider.setDataset() — engine math goes live.
 // Call once at boot; gate the 3D scene on completion (store.loaded).
 
-getPoets(): PoetRow[]                       // all ~29,808 poets, sorted by poemCount desc
+getPoets(): PoetRow[]                       // all ~32,657 poets, sorted by poemCount desc
 getPoet(id): PoetRow | undefined
 loadPoetPoems(id): Promise<PoemRecord[]>    // lazy — HTTP Range-fetches just this poet's slice
                                             //   (byte-offset sidecar poems/{b}.idx.json); per-poet cache.

@@ -51,12 +51,15 @@ if (!files.length) { console.error(`no poems buckets under ${POEMS} — provisio
 // rank score for the per-prefix cap: famous poets win big, then by poemCount (mirrors build-fuzzy/lines).
 const poets = JSON.parse(readFileSync(join(DATA, "poets.index.json"), "utf8"));
 const FAMOUS = new Set([
-  // NOTE: names must match the CORPUS canonical row (陶潜 not 陶渊明 — the latter never matched).
-  "屈原", "宋玉", "项羽", "司马相如", "蔡文姬", "曹操", "曹植", "阮籍", "陶潜", "谢灵运", "鲍照", "庾信",
+  // NOTE: names must match the CORPUS canonical row (陶潜 not 陶渊明; 蔡琰 not 蔡文姬 — the alt forms never matched).
+  "屈原", "宋玉", "项羽", "司马相如", "蔡琰", "曹操", "曹植", "阮籍", "陶潜", "谢灵运", "鲍照", "庾信",
   "杨广", "李白", "杜甫", "王维", "白居易", "李商隐", "杜牧", "李煜", "韦庄", "苏轼", "陆游", "李清照",
   "辛弃疾", "王安石", "萧观音", "元好问", "关汉卿", "马致远", "白朴", "高启", "唐寅", "于谦", "纳兰性德",
   "龚自珍", "袁枚", "秋瑾", "黄遵宪", "毛泽东", "徐志摩", "戴望舒", "闻一多", "艾青", "海子", "北岛", "顾城", "舒婷",
   "食指", "余秀华", "西川", "欧阳江河", "翟永明",
+  // 少产但文学史地标：招牌诗(春江花月夜/枫桥夜泊/黄鹤楼/凉州词…)否则被同题高产诗人挤出 MAXREF
+  "张若虚", "张继", "崔颢", "王之涣", "王翰", "张志和", "金昌绪", "王湾", "林升", "叶绍翁",
+  "王冕", "张养浩", "宋之问", "贺知章",
 ]);
 const score = new Map(poets.map((p) => [p.id, (FAMOUS.has(p.name) ? 1e9 : 0) + (p.poemCount || 0)]));
 

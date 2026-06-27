@@ -52,7 +52,7 @@ And the **void** between stars holds something bigger still — it is *every pos
 <table>
 <tr>
 <td width="50%"><img src="docs/assets/poem.jpg" alt="Click a star: Li Bai's «Watching Lushan Waterfall» shown vertically, with its full catalog number" /><br/><sub><b>Click any star — and there's a poem</b>, together with its long unique address in the "complete catalog".</sub></td>
-<td width="50%"><img src="docs/assets/network.jpg" alt="Li Bai selected: golden arcs trace his dedication network; his works listed on the right" /><br/><sub><b>Dedication network</b> — poem titles + courtesy-name aliases parsed into 4,849 poet-to-poet arcs; select one to draw their ego-net.</sub></td>
+<td width="50%"><img src="docs/assets/network.jpg" alt="Li Bai selected: golden arcs trace his dedication network; his works listed on the right" /><br/><sub><b>Dedication network</b> — poem titles + courtesy-name aliases parsed into 4,976 poet-to-poet arcs; select one to draw their ego-net.</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/assets/compose.jpg" alt="Compose: fill in characters and the catalog number is computed live; or reverse a number back to a poem" /><br/><sub><b>Explore</b> — fill in characters and watch the number compute, or reverse a long number back to the one poem it encodes.</sub></td>
@@ -70,7 +70,7 @@ And the **void** between stars holds something bigger still — it is *every pos
 | **Five forms** | 5/7-char quatrains & regulated verse, plus **free-form / 词** (variable line lengths — the line breaks are part of the number too); a **格律 toggle** roams only the tonally-valid sub-catalog. |
 | **Search by any line** | Type *any* line (not just openings) → which real poet it belongs to (疑是地上霜 → 李白's «静夜思», a non-first line still resolves), plus the **half-number** that line pins in the random catalog. |
 | **Reverse lookup by number** | `unrank` a long number back to its poem, check the line index and full text, and find out whether that number maps to a *real* poem — the catalog↔poem loop, full untruncated numbers, one-click copy. |
-| **Dedication network** | Titles (寄/赠/和/次韵…) plus ~250 courtesy-name aliases (少陵→杜甫, 子瞻→苏轼, 香山→白居易…) parsed into **4,849** arcs, bundled toward the galactic core with a soft pulse flowing giver→receiver. |
+| **Dedication network** | Titles (寄/赠/和/次韵…) plus ~250 courtesy-name aliases (少陵→杜甫, 子瞻→苏轼, 香山→白居易…) parsed into **4,976** arcs, bundled toward the galactic core with a soft pulse flowing giver→receiver. |
 | **Shareable permalinks** | `#a=<poetId>` / `#p=<form>.<number>`; a 🔗 button on every poem and poet panel rebuilds the poem and restores the view on load. |
 | **Fully static** | All index math + rendering run client-side; the server only serves files — **no backend, ever** (the one optional backend is anonymous feedback collection). |
 

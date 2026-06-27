@@ -28,6 +28,19 @@ describe("POET_ALIASES integrity (vs shipped poets.index.json)", () => {
     expect(names.has("陶潜")).toBe(true);
   });
 
+  it("帝王别名解析到本名 (乾隆→弘历 等)", () => {
+    expect(POET_ALIASES["乾隆"]).toBe("弘历");
+    expect(POET_ALIASES["隋炀帝"]).toBe("杨广");
+    expect(POET_ALIASES["宋徽宗"]).toBe("赵佶");
+  });
+
+  it("讹名/常用名解析到库内本名 (王禹偁→王禹称, 蔡文姬→蔡琰)", () => {
+    expect(POET_ALIASES["王禹偁"]).toBe("王禹称");
+    expect(POET_ALIASES["蔡文姬"]).toBe("蔡琰");
+    expect(names.has("王禹称")).toBe(true);
+    expect(names.has("蔡琰")).toBe(true);
+  });
+
   it("NOT_POETS entries are genuinely absent from the corpus", () => {
     const present = Object.keys(NOT_POETS).filter((k) => names.has(k));
     expect(present).toEqual([]);

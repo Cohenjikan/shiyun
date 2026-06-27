@@ -35,7 +35,7 @@ const MINLEN = 4, MAXLEN = 10, CAP = 5, FLUSH = 1_500_000;
 // many) must KEEP its famous author (李白《静夜思》) rather than evict it for a hyper-prolific minor poet
 // (王世贞 8009首). So the per-skeleton cap ranks by a score that puts famous poets far above poemCount.
 const FAMOUS = new Set([
-  "屈原", "宋玉", "项羽", "司马相如", "蔡文姬", "曹操", "曹植", "阮籍", "陶渊明", "谢灵运", "鲍照", "庾信",
+  "屈原", "宋玉", "项羽", "司马相如", "蔡琰", "曹操", "曹植", "阮籍", "陶潜", "谢灵运", "鲍照", "庾信",
   "杨广", "李白", "杜甫", "王维", "白居易", "李商隐", "杜牧", "李煜", "韦庄", "苏轼", "陆游", "李清照",
   "辛弃疾", "王安石", "萧观音", "元好问", "关汉卿", "马致远", "白朴", "高启", "唐寅", "于谦", "纳兰性德",
   "龚自珍", "袁枚", "秋瑾", "黄遵宪", "毛泽东", "徐志摩", "戴望舒", "闻一多", "艾青", "海子", "北岛", "顾城", "舒婷",

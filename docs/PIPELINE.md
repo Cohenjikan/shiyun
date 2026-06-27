@@ -65,11 +65,11 @@ read all *.csv (own RFC4180-ish parser, handles quotes/embedded newlines)
 | file | size | shape | git |
 |---|---|---|---|
 | `charset.json` | 38 KB | `{n:12877, hash, chars}` (字库 = engine radix N) | tracked |
-| `poets.index.json` | 2.6 MB | `PoetRow[]` — **29,808 poets**, sorted by poemCount desc | tracked |
-| `gifts.json` | ~126 KB | `{version, edgeCount, edges}` — **4,849 赠诗 edges** | tracked |
+| `poets.index.json` | 2.6 MB | `PoetRow[]` — **32,657 poets**, sorted by poemCount desc | tracked |
+| `gifts.json` | ~126 KB | `{version, edgeCount, edges}` — **4,976 赠诗 edges** | tracked |
 | `lexicon.json` | ~146 KB | `LexiconAsset` (real 格律, see below) | tracked |
 | `manifest.json` | ~1.5 KB | `{n, poetCount, poemCount, buckets, lineBuckets, giftEdges, dynCounts}` | tracked |
-| `poems/{bucket}.json` ×256 | 235 MB total | `{poetId: PoemRecord[]}` — **857,877 poems**, lazy per bucket | **ignored** |
+| `poems/{bucket}.json` ×256 | 235 MB total | `{poetId: PoemRecord[]}` — **933,857 poems**, lazy per bucket | **ignored** |
 | `lines/{bucket}.json` ×256 | ~791 MB total | `{line: [refs]}` — all-lines search index (see below) | **ignored** |
 
 **Data model:** the five small files (`charset.json`, `poets.index.json`, `lexicon.json`,
@@ -78,7 +78,7 @@ heavy sets — `poems/` (235 MB) and `lines/` (791 MB) — are **git-ignored**; 
 with `node pipeline/build-data.mjs`. (`N` changed this session, so `lexicon.json` was regenerated
 too — it's keyed by 字库.)
 
-Dynasty poet counts: 宋 9496 · 清 8980 · 明 4514 · 唐 2820 · 元 1209 · 近现代 967 · 当代 684 ·
+Dynasty poet counts: 宋 9496 · 清 8980 · 明 4514 · 当代 3532 · 唐 2820 · 元 1209 · 近现代 968 ·
 南北朝 434 · 金 269 · 魏晋 252 · 秦汉/隋 84 · 辽 7 · 先秦 8 (诗经/楚辞 mostly 无名氏). 五代十国 = 0
 (no 五代 file in Werneror; those poets fall under 唐). 近现代/当代 are inflated by the 新诗 import.
 
@@ -112,7 +112,7 @@ gifts.json                       {version, edgeCount, edges:[[fromId,toId,weight
    isn't truncated (王介甫↛王介, 李道士↛李道). resolveTarget: bare names SAME-DYNASTY only; a
    curated 号/字→本名 alias table (GIFT_ALIAS, now ~250 entries across ~120 poets — 少陵→杜甫,
    子瞻→苏轼, 香山→白居易, 晦庵→朱熹, 遗山→元好问…) resolves famous references across dynasties,
-   which lifts the edge count. **4,849 edges / ~126 KB → tracked in git** (network works out of
+   which lifts the edge count. **4,976 edges / ~126 KB → tracked in git** (network works out of
    the box). Top edges are real literary friendships: 苏辙→苏轼, 元稹→白居易, 刘禹锡→白居易, 黄庭坚→苏轼.
 ```
 

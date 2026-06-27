@@ -253,7 +253,7 @@ export async function loadPoetPoems(
 
 // Author search: substring match on name, ranked by poemCount, capped. Poet names are Han, so a
 // digit/latin-only query is ignored — otherwise typing "1"/"2" surfaces the corpus's same-name
-// disambiguation suffixes (张生1 / 张生2 …, 13 such names in 29,808) as noise.
+// disambiguation suffixes (张生1 / 张生2 …, 13 such names in 32,657) as noise.
 const HAN_CHAR = /\p{Script=Han}/u;
 export function searchPoets(q: string, limit = 40): PoetRow[] {
   const s = q.trim();
