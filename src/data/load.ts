@@ -48,6 +48,9 @@ export interface DataManifest {
   buckets: string[];
   dynCounts: Record<string, number>;
   poemSidecar?: boolean; // poems/{bucket}.idx.json byte-offset sidecars exist → Range-fetch per poet
+  pullK?: number; // chars that ACTUALLY appear in the corpus (= freq-ordered head). 虚空捞诗 draws from
+                  // these, NOT the full N — the CJK-basic-block tail is addressable (造诗/#p=) but never
+                  // appears in real poems, so pulling over it would just yield noise. Undefined → use N.
 }
 
 let _poets: PoetRow[] = [];

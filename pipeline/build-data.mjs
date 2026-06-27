@@ -609,7 +609,7 @@ const dynCounts = {};
 for (const p of poets.values()) dynCounts[p.dynasty] = (dynCounts[p.dynasty] || 0) + 1;
 
 writeFileSync(join(OUT, "manifest.json"), JSON.stringify({
-  version: 3, n: N, poetCount: poets.size, poemCount: total,
+  version: 3, n: N, pullK: freq.size, poetCount: poets.size, poemCount: total,
   buckets: [...buckets.keys()].sort(),
   lineBuckets: [...flBuckets.keys()].sort(),
   giftEdges: edges.length,

@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import { useStore } from "../state/store";
 import { pullAt, COMMON_K } from "../engine/engineApi";
-import { getPoet, type PoetRow } from "../data/load";
+import { getPoet, getManifest, type PoetRow } from "../data/load";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { giftLinks, giftGraphReady } from "../data/giftGraph";
 import { pickTargets } from "./picking";
@@ -321,7 +321,10 @@ export function FlyControls() {
         s.selectPoem(
           pullAt(s.form, [lx, pt.y, lz], {
             lushiOnly: s.lushiFilter,
-            commonK: s.commonOnly ? COMMON_K : undefined,
+            // default 虚空捞诗 draws from the real-corpus alphabet (freq-ordered head, manifest.pullK) —
+            // NOT the full N, whose CJK-basic-block tail (锂/镁/…) is addressable but never in real poems.
+            // 常用字 narrows further to the top COMMON_K. Undefined pullK (old data) → full N (prior behavior).
+            commonK: s.commonOnly ? COMMON_K : (getManifest()?.pullK ?? undefined),
           }),
         );
       }
