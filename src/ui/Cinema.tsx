@@ -28,6 +28,7 @@ const clampSlot = (w: number, h: number) => ({ w: clamp(w, 220, vw() * 0.92), h:
 export function Cinema() {
   const cinema = useStore((s) => s.cinema);
   const close = useStore((s) => s.toggleCinema);
+  const myClaims = useStore((s) => s.myClaims); // 认领分享卡: if the framed poem is claimed, stamp it
   const selected = useStore((s) => s.selected);
   const poet = useStore((s) => s.selectedPoet);
   const poems = useStore((s) => s.poetPoems);
@@ -65,6 +66,8 @@ export function Cinema() {
   const index = resolved?.index ?? null;
   const digits = resolved?.digits ?? 0;
   const attribution = resolved?.attribution ?? "";
+  // 认领分享卡: the card becomes a sharable claim certificate when THIS poem is claimed on this device.
+  const claim = index ? myClaims.find((c) => c.index === index && c.no != null) : undefined;
 
   // AUTO-FIT: pick the largest font-size at which the 竖排-wrapped poem fits the slot (width caps wrapping,
   // height is the binding constraint). Runs after every slot resize / poem change / 背景 toggle (padding).
@@ -227,6 +230,12 @@ export function Cinema() {
             <div className="cinema-idx">
               <div className="cinema-idx-k">全集编号 · {digits} 位 · 它在诗云里的唯一住址</div>
               <div className="cinema-idx-num">{index}</div>
+            </div>
+          )}
+          {claim && claim.no != null && (
+            <div className="cinema-claim">
+              <span className="cinema-claim-seal">认领</span>
+              <span>这是第 {claim.no.toLocaleString()} 首被诗人认领的诗 · 认领编号 #{claim.no}</span>
             </div>
           )}
         </div>

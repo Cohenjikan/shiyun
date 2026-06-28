@@ -1,0 +1,185 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  addLocalClaim,
+  setLocalClaimNo,
+  listClaims,
+  getClaim,
+  dayBucket,
+  isSameDay,
+  mergeClaims,
+  claimBadge,
+  type Storageish,
+  type FeedClaim,
+  type MyClaim,
+} from "./claims";
+
+// The PURE parts of the 认领 client: the local store (add / dedupe / patch-number / cap / corrupt
+// tolerance), the viewer-local day bucket (今日 vs 往日), and the feed↔local meteor-pool merge. A trivial
+// in-memory stub stands in for localStorage so this runs in node. The fetch/POST helpers are NOT covered
+// here (they're thin network wrappers; the contract they depend on is the server's, tested by hand).
+
+function memStore(): Storageish & { _v: Map<string, string> } {
+  const _v = new Map<string, string>();
+  return {
+    _v,
+    getItem: (k) => (_v.has(k) ? _v.get(k)! : null),
+    setItem: (k, v) => void _v.set(k, v),
+    removeItem: (k) => void _v.delete(k),
+  };
+}
+
+describe("claims — local store", () => {
+  let s: ReturnType<typeof memStore>;
+  beforeEach(() => {
+    s = memStore();
+  });
+
+  it("starts empty", () => {
+    expect(listClaims(s)).toEqual([]);
+    expect(getClaim("1", s)).toBeUndefined();
+  });
+
+  it("addLocalClaim records a pending (no=null) claim, newest first", () => {
+    addLocalClaim({ index: "10", ts: 100 }, s);
+    addLocalClaim({ index: "20", ts: 200 }, s);
+    const list = listClaims(s);
+    expect(list.map((c) => c.index)).toEqual(["20", "10"]);
+    expect(list[0]).toEqual({ index: "20", no: null, ts: 200 });
+  });
+
+  it("dedupes by index — a re-claim returns the existing record, no second entry/number", () => {
+    addLocalClaim({ index: "10", no: 5, ts: 100 }, s);
+    const again = addLocalClaim({ index: "10", ts: 999 }, s); // same poem again
+    expect(again).toHaveLength(1);
+    expect(again[0]).toEqual({ index: "10", no: 5, ts: 100 }); // unchanged (kept the number + original ts)
+  });
+
+  it("setLocalClaimNo patches the 认领编号 onto a pending claim", () => {
+    addLocalClaim({ index: "10", ts: 100 }, s);
+    setLocalClaimNo("10", 42, s);
+    expect(getClaim("10", s)).toEqual({ index: "10", no: 42, ts: 100 });
+  });
+
+  it("setLocalClaimNo does not overwrite an existing number, and is a no-op for missing/invalid", () => {
+    addLocalClaim({ index: "10", no: 7, ts: 100 }, s);
+    setLocalClaimNo("10", 99, s); // already numbered → keep 7
+    expect(getClaim("10", s)?.no).toBe(7);
+    expect(setLocalClaimNo("nope", 1, s)).toHaveLength(1); // missing index → no throw, list intact
+    setLocalClaimNo("10", -3, s); // invalid number → ignored
+    expect(getClaim("10", s)?.no).toBe(7);
+  });
+
+  it("caps at 500, dropping the OLDEST", () => {
+    for (let i = 0; i < 505; i++) addLocalClaim({ index: String(i), ts: i }, s);
+    const list = listClaims(s);
+    expect(list).toHaveLength(500);
+    expect(list[0].index).toBe("504"); // newest at front
+    expect(getClaim("4", s)).toBeUndefined(); // 0..4 dropped
+    expect(getClaim("5", s)).toBeDefined();
+  });
+
+  it("ignores empty/whitespace index", () => {
+    addLocalClaim({ index: "" }, s);
+    addLocalClaim({ index: "   " }, s);
+    expect(listClaims(s)).toEqual([]);
+  });
+
+  it("tolerates corrupt storage (non-JSON / non-array / garbage rows) → only valid survive", () => {
+    s.setItem("shiyun_claims_v1", "{not json");
+    expect(listClaims(s)).toEqual([]);
+    s.setItem("shiyun_claims_v1", JSON.stringify({ index: "1" }));
+    expect(listClaims(s)).toEqual([]);
+    s.setItem(
+      "shiyun_claims_v1",
+      JSON.stringify([
+        { index: "1", no: 3, ts: 10 }, // good
+        { index: "2", no: null, ts: 20 }, // good (pending)
+        { index: 5, no: 1, ts: 10 }, // bad index type
+        { index: "3", no: -1, ts: 10 }, // bad no (≤0)
+        { index: "4", no: 1, ts: "x" }, // bad ts
+        null,
+        "str",
+      ]),
+    );
+    expect(listClaims(s).map((c) => c.index)).toEqual(["1", "2"]);
+  });
+
+  it("null store → all ops are safe no-ops", () => {
+    expect(listClaims(null)).toEqual([]);
+    expect(addLocalClaim({ index: "1" }, null)).toEqual([]);
+    expect(setLocalClaimNo("1", 1, null)).toEqual([]);
+  });
+});
+
+describe("claims — viewer-local day bucket (今日 / 往日)", () => {
+  // UTC+8 (China): getTimezoneOffset() = -480. 2026-06-28 12:00 local.
+  const TZ = -480;
+  const noonLocal = Date.UTC(2026, 5, 28, 4, 0, 0); // 12:00 in UTC+8 == 04:00 UTC
+
+  it("two times in the same local day share a bucket", () => {
+    const morning = noonLocal - 3 * 3_600_000; // 09:00 local
+    const evening = noonLocal + 9 * 3_600_000; // 21:00 local
+    expect(isSameDay(morning, evening, TZ)).toBe(true);
+    expect(dayBucket(morning, TZ)).toBe(dayBucket(evening, TZ));
+  });
+
+  it("just before vs just after local midnight are different days", () => {
+    const beforeMidnight = Date.UTC(2026, 5, 28, 15, 59, 0); // 23:59 local (UTC+8)
+    const afterMidnight = Date.UTC(2026, 5, 28, 16, 1, 0); // 00:01 next local day
+    expect(isSameDay(beforeMidnight, afterMidnight, TZ)).toBe(false);
+    expect(dayBucket(afterMidnight, TZ) - dayBucket(beforeMidnight, TZ)).toBe(1);
+  });
+
+  it("tz matters: the same instant can fall on different days for different viewers", () => {
+    const instant = Date.UTC(2026, 5, 28, 17, 0, 0); // 17:00 UTC
+    // UTC+8 → 01:00 the 29th; UTC-8 (PST, offset +480) → 09:00 the 28th
+    expect(dayBucket(instant, -480)).not.toBe(dayBucket(instant, 480));
+  });
+});
+
+describe("claims — mergeClaims (feed ∪ local pool)", () => {
+  it("dedupes by index, prefers a real 认领编号, keeps the earliest ts, newest-first", () => {
+    const feed: FeedClaim[] = [
+      { no: 2, index: "B", ts: 200 },
+      { no: 1, index: "A", ts: 100 },
+    ];
+    const mine: MyClaim[] = [
+      { index: "A", no: null, ts: 90 }, // older ts, pending — should keep no:1 (feed) + ts:90 (earliest)
+      { index: "C", no: null, ts: 300 }, // local-only (feed hasn't echoed it) → still appears
+    ];
+    const merged = mergeClaims(feed, mine);
+    expect(merged.map((c) => c.index)).toEqual(["C", "B", "A"]); // newest ts first
+    expect(merged.find((c) => c.index === "A")).toEqual({ index: "A", no: 1, ts: 90 });
+    expect(merged.find((c) => c.index === "C")).toEqual({ index: "C", no: null, ts: 300 });
+  });
+
+  it("empty inputs → empty pool", () => {
+    expect(mergeClaims([], [])).toEqual([]);
+  });
+});
+
+describe("claims — claimBadge (milestones / early-adopter)", () => {
+  it("#1 is the founder", () => {
+    expect(claimBadge(1)).toEqual({ label: "诗云首位认领", tier: "founder" });
+  });
+  it("round milestones are 里程碑 (with grouped digits)", () => {
+    expect(claimBadge(100)).toEqual({ label: "第 100 首 · 里程碑", tier: "milestone" });
+    expect(claimBadge(1000)).toEqual({ label: "第 1,000 首 · 里程碑", tier: "milestone" });
+    expect(claimBadge(10000)?.tier).toBe("milestone");
+  });
+  it("the first 100 (non-milestone) are early adopters", () => {
+    expect(claimBadge(2)).toEqual({ label: "早期认领者", tier: "early" });
+    expect(claimBadge(99)?.tier).toBe("early");
+  });
+  it("ordinary numbers earn no badge", () => {
+    expect(claimBadge(101)).toBeNull();
+    expect(claimBadge(2026)).toBeNull();
+  });
+  it("null / pending / invalid → no badge", () => {
+    expect(claimBadge(null)).toBeNull();
+    expect(claimBadge(undefined)).toBeNull();
+    expect(claimBadge(0)).toBeNull();
+    expect(claimBadge(-5)).toBeNull();
+    expect(claimBadge(3.5)).toBeNull();
+  });
+});

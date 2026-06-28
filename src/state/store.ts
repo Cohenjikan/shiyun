@@ -4,6 +4,7 @@ import type { PoetRow, PoemRecord } from "../data/load";
 import { DYNASTIES } from "../data/dynasties";
 import { COARSE, WEAK } from "../three/detectQuality";
 import { listShiyi, addShiyi, removeShiyi, type ShiyiEntry } from "./shiyi";
+import { listClaims, type ClaimFeed, type MyClaim } from "./claims";
 
 export interface Pull {
   id: number; // stable identity so PulledStars can track per-marker birth/death animation
@@ -72,13 +73,33 @@ interface State {
   cinemaTextColor: string;
   cinemaHideTagline: boolean;
   cinemaShowHandle: boolean;
-  // owner-only feedback viewer (opened by a hidden gesture: 5 taps on the 诗云 logo within 10 s)
-  feedbackOpen: boolean;
   // 拾遗: VOID-poem keepsakes (newest first), persisted to localStorage by the PURE state/shiyi.ts module.
   // A standalone slice — NO existing action (selectPoem/selectPoet/clearPoet/…) touches it: a kept poem
   // survives every selection change, so it deliberately sits OUTSIDE the cross-domain reset discipline.
   shiyi: ShiyiEntry[];
   shiyiOpen: boolean; // the revisit panel (opened from 更多)
+  // 认领 (poem-claim): a void poem the visitor declares as theirs → a GLOBAL 认领编号 (from the backend) +
+  // the poem化作流星 into the galaxy. See state/claims.ts + three/Meteors.tsx.
+  //   meteorsOn      = draw the 认领 meteors (更多 → 流星 toggle; default on)
+  //   claimFeed      = the public meteor feed (total + recent claims) — null until fetched / no backend
+  //   myClaims       = THIS device's claims (hydrated from localStorage; the source of "I claimed this")
+  //   claimCeremony  = a one-shot launch of the just-claimed poem from where it was located (id-gated so
+  //                    Meteors fires it exactly once; null = nothing pending)
+  meteorsOn: boolean;
+  claimFeed: ClaimFeed | null;
+  myClaims: MyClaim[];
+  myClaimsOpen: boolean; // 我的认领 gallery (opened from 更多) — a LOCAL keepsake of this device's claims
+  claimCeremony: { id: number; index: string; pos: [number, number, number]; ts: number } | null;
+  // 开发者工具(隐藏:5 连点 诗云 logo 打开)—— 手动控流星,免去干等自动生成。
+  //   meteorMinGap/MaxGap = 自动生成的随机间隔(秒)区间(产品默认 2 / 10);
+  //   meteorSpawnReq      = 立即生成一颗指定类型流星的一次性请求(id-gated,Meteors 消费一次)。
+  devToolOpen: boolean;
+  meteorMinGap: number;
+  meteorMaxGap: number;
+  meteorSpawnReq: { id: number; kind: "today" | "past" | "ceremony" } | null;
+  // dev: LIVE look multipliers so the owner can dial the meteor in on the real 5199 browser (headless
+  // preview can't render the animation). All default 1×. len=拖尾长度, width=线宽, bright=亮度, head=头部大小.
+  meteorLook: { len: number; width: number; bright: number; head: number };
   // 赠诗漫游 (gift-network roaming): a breadcrumb of poets you've HOPPED through along 赠诗 edges.
   // trail[last] = the current poet; consecutive nodes are drawn as persistent "return lines" (GiftTrail).
   // Capped at 11 nodes (= 10 return edges). Reset to [poet] on a NORMAL selectPoet (= 点无关诗人清除);
@@ -148,10 +169,18 @@ interface State {
   setCinemaTextColor: (c: string) => void;
   toggleCinemaTagline: () => void;
   toggleCinemaHandle: () => void;
-  setFeedbackOpen: (b: boolean) => void;
   setShiyiOpen: (b: boolean) => void;
   keepShiyi: (entry: { index: string; preview: string }) => void; // 收进拾遗 (a void poem)
   dropShiyi: (index: string) => void; // 从拾遗移除
+  toggleMeteors: () => void; // 更多 → 流星显示
+  setClaimFeed: (f: ClaimFeed | null) => void; // store the fetched public feed
+  setMyClaims: (c: MyClaim[]) => void; // mirror the persisted local claim list into the store
+  setMyClaimsOpen: (b: boolean) => void;
+  launchClaimCeremony: (c: { index: string; pos: [number, number, number]; ts: number }) => void;
+  setDevToolOpen: (b: boolean) => void;
+  setMeteorGaps: (min: number, max: number) => void; // dev: auto-spawn interval (seconds)
+  requestMeteor: (kind: "today" | "past" | "ceremony") => void; // dev: spawn one NOW
+  setMeteorLook: (patch: Partial<{ len: number; width: number; bright: number; head: number }>) => void;
   setSpeed: (s: number) => void;
   setFlyTarget: (t: [number, number, number] | null) => void;
   lockPoet: (id: string) => void;
@@ -162,6 +191,8 @@ interface State {
 const MAX_PULLS = 24; // small buffer; PulledStars caps the ALIVE markers at 20 + animates removal
 const ALL_KEYS = DYNASTIES.map((d) => d.key);
 let _pullSeq = 0;
+let _ceremonySeq = 0; // stable id so Meteors launches each claim ceremony exactly once
+let _meteorReqSeq = 0; // stable id so Meteors consumes each dev spawn-request exactly once
 
 export const useStore = create<State>((set) => ({
   loaded: false,
@@ -203,9 +234,18 @@ export const useStore = create<State>((set) => ({
   cinemaTextColor: "#fbf7ec",
   cinemaHideTagline: false,
   cinemaShowHandle: false,
-  feedbackOpen: false,
   shiyi: listShiyi(), // hydrate the keepsake list from localStorage at boot
   shiyiOpen: false,
+  meteorsOn: true,
+  claimFeed: null,
+  myClaims: listClaims(), // hydrate this device's claims at boot (so my meteor shows before any fetch)
+  myClaimsOpen: false,
+  claimCeremony: null,
+  devToolOpen: false,
+  meteorMinGap: 2,
+  meteorMaxGap: 10,
+  meteorSpawnReq: null,
+  meteorLook: { len: 1, width: 1, bright: 1, head: 1 },
   freeMove: !COARSE, // 触屏默认锁定诗云整体(双指缩放/单指转),电脑默认自由移动(WASD)
   allowRandomPoem: true,
   gravity: true,
@@ -291,12 +331,20 @@ export const useStore = create<State>((set) => ({
   setCinemaTextColor: (cinemaTextColor) => set({ cinemaTextColor }),
   toggleCinemaTagline: () => set((s) => ({ cinemaHideTagline: !s.cinemaHideTagline })),
   toggleCinemaHandle: () => set((s) => ({ cinemaShowHandle: !s.cinemaShowHandle })),
-  setFeedbackOpen: (feedbackOpen) => set({ feedbackOpen }),
   // 拾遗: delegate the dedupe/cap/persistence to the pure module, then mirror its returned list into the
   // store so subscribed UI (PoemPanel toggle, the revisit panel) re-renders. No cross-domain reset.
   setShiyiOpen: (shiyiOpen) => set({ shiyiOpen }),
   keepShiyi: (entry) => set({ shiyi: addShiyi(entry) }),
   dropShiyi: (index) => set({ shiyi: removeShiyi(index) }),
+  toggleMeteors: () => set((s) => ({ meteorsOn: !s.meteorsOn })),
+  setClaimFeed: (claimFeed) => set({ claimFeed }),
+  setMyClaims: (myClaims) => set({ myClaims }),
+  setMyClaimsOpen: (myClaimsOpen) => set({ myClaimsOpen }),
+  launchClaimCeremony: ({ index, pos, ts }) => set({ claimCeremony: { id: _ceremonySeq++, index, pos, ts } }),
+  setDevToolOpen: (devToolOpen) => set({ devToolOpen }),
+  setMeteorGaps: (meteorMinGap, meteorMaxGap) => set({ meteorMinGap, meteorMaxGap }),
+  requestMeteor: (kind) => set({ meteorSpawnReq: { id: _meteorReqSeq++, kind } }),
+  setMeteorLook: (patch) => set((s) => ({ meteorLook: { ...s.meteorLook, ...patch } })),
   setSpeed: (speed) => set({ speed }),
   setFlyTarget: (flyTarget) => set({ flyTarget }),
   lockPoet: (id) => set({ lockPoetId: id, lockPoemIdx: null }),

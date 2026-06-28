@@ -24,3 +24,11 @@ public/data/*_v1_backup/
 # Cold-backup tarballs produced by `npm run pack:data` (pipeline/pack-data.mjs) — never commit these;
 # they're the multi-hundred-MB GitHub-release assets, regenerated from public/data on demand.
 backup-pack/
+
+# Runtime ledgers appended by the self-hosted backends (deploy/{claim,feedback}-server.mjs, default
+# CLAIM_FILE=./claims.jsonl). NEVER commit: a stray local test ledger must not carry test 认领编号 into
+# the repo or a deploy — the authoritative global counter lives ONLY on the prod server.
+claims.jsonl
+**/claims.jsonl
+feedback.jsonl
+**/feedback.jsonl

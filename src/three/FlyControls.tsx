@@ -2,11 +2,12 @@ import * as THREE from "three";
 import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import { useStore } from "../state/store";
-import { pullAt, COMMON_K, POEM_PULL_K } from "../engine/engineApi";
+import { pullAt, pulledFromIndex, COMMON_K, POEM_PULL_K } from "../engine/engineApi";
 import { getPoet, type PoetRow } from "../data/load";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { giftLinks, giftGraphReady } from "../data/giftGraph";
 import { pickTargets } from "./picking";
+import { meteorPick } from "./meteorPick";
 import { spinXZ, unspinXZ, SPIN_RATE, GALAXY } from "./galaxyParams";
 import { poemPosition, poetPosition, poemSystemRadius } from "./positions";
 import { COARSE } from "./detectQuality";
@@ -286,9 +287,16 @@ export function FlyControls() {
       drag.current.active = false;
       if (!wasClick) return;
       const hit = screenPick(e.clientX, e.clientY, true); // click = poets + poem planets
+      // a bright (今日) 认领 meteor under the cursor → open its poem ("耀眼的流星 → 看到诗本身"). Only when
+      // nothing solid was hit; takes priority over a 赠诗 arc / void pull. Weak (往日) meteors aren't registered.
+      let meteorIndex: string | null = null;
+      if (!hit) {
+        const r = el.getBoundingClientRect();
+        meteorIndex = meteorPick.pick(e.clientX - r.left, e.clientY - r.top, camera, r.width, r.height);
+      }
       // void click → the hovered (already-highlighted) 赠诗 arc if any, else a fresh pick at click range
       const hov = useStore.getState().giftHoverId;
-      const giftHop = hit ? null : ((hov ? getPoet(hov) ?? null : null) ?? pickGiftEdge(e.clientX, e.clientY));
+      const giftHop = hit || meteorIndex ? null : ((hov ? getPoet(hov) ?? null : null) ?? pickGiftEdge(e.clientX, e.clientY));
       if (hit?.kind === "poet") {
         st().selectPoet(hit.poet);
         st().lockPoet(hit.poet.id); // lock the star in the centre + follow it
@@ -300,6 +308,13 @@ export function FlyControls() {
         st().lockPoem(poet.id, poemIdx);
         fetchPoetPoems(poet.id);
         st().pulseAt(poemPosition(poet, poemIdx), true);
+      } else if (meteorIndex) {
+        // clicked a today's-claim meteor → rebuild its poem from the 全集编号 + open it (no random pull)
+        const poem = pulledFromIndex("ziyou", meteorIndex);
+        if (poem) {
+          st().selectPoem(poem);
+          st().setFlyTarget(poem.pos);
+        }
       } else if (giftHop) {
         // clicked a 赠诗 arc of the selected poet → fly across it to the other poet (hop + trail)
         st().hopToPoet(giftHop);

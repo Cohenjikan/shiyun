@@ -19,7 +19,14 @@ export default defineConfig(({ mode }) => {
     ],
     // Fixed reference port. strictPort → fail loudly instead of silently hopping to another
     // port (a sibling worktree's stale dev server on a hopped port would serve the WRONG code).
-    server: { port: 5199, strictPort: true },
+    // Dev-only proxy: forward the 认领 claim API to a locally-run deploy/claim-server.mjs (port 8788) so
+    // the feature is testable end-to-end in `npm run dev` without nginx. In prod nginx does this routing;
+    // if no local claim server is running the proxy just errors and the client falls back (local-only).
+    server: {
+      port: 5199,
+      strictPort: true,
+      proxy: { "/api/claim": "http://127.0.0.1:8788" },
+    },
     build: {
       target: "es2022",
       // three.js is irreducibly ~680 KB min (176 KB gz) and the app IS the canvas — code-splitting

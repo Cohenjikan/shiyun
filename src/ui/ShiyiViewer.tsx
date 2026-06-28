@@ -4,7 +4,7 @@ import { pulledFromIndex } from "../engine/engineApi";
 // 拾遗 — "我捞起的诗": the revisit panel for VOID-poem keepsakes. Opened from the 更多 menu. Each row
 // re-surfaces a kept poem the same way state/permalink.ts::applyHash does for `#p=`: rebuild it from its
 // universal 全集编号 (pulledFromIndex — a bijection, so the SAME number always returns the SAME poem),
-// select it, and fly the camera to its canonical void point. Mirrors FeedbackViewer's overlay structure.
+// select it, and fly the camera to its canonical void point. A simple overlay panel.
 // (localStorage = this browser only; the footer says so.)
 function fmt(ts: number): string {
   const d = new Date(ts);

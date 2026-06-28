@@ -20,7 +20,7 @@ export function HUD() {
   const toggleLushi = useStore((s) => s.toggleLushi);
   const settingsOpen = useStore((s) => s.settingsOpen);
   const toggleSettings = useStore((s) => s.toggleSettings);
-  const setFeedbackOpen = useStore((s) => s.setFeedbackOpen);
+  const setDevToolOpen = useStore((s) => s.setDevToolOpen);
   const quality = useStore((s) => s.quality);
   const toggleQuality = useStore((s) => s.toggleQuality);
   const toggleUI = useStore((s) => s.toggleUI);
@@ -33,7 +33,7 @@ export function HUD() {
   // font size / orientation. Desktop ignores --hud-h (the search keeps its fixed top there).
   const topRef = useRef<HTMLDivElement>(null);
 
-  // hidden owner gesture: 5 taps on the 诗云 logo within 10 s → open the feedback viewer (see FeedbackViewer)
+  // hidden owner gesture: 5 taps on the 诗云 logo within 10 s → open the 开发者工具 (see ui/DevTool)
   const taps = useRef<number[]>([]);
   const onLogoTap = () => {
     const now = Date.now();
@@ -41,7 +41,7 @@ export function HUD() {
     taps.current.push(now);
     if (taps.current.length >= 5) {
       taps.current = [];
-      setFeedbackOpen(true);
+      setDevToolOpen(true);
     }
   };
 

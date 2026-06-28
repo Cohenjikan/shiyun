@@ -385,6 +385,281 @@ canvas {
   color: var(--muted);
 }
 
+/* ── 认领 (claim a void poem → it becomes a meteor) ── */
+.poem-claim {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 210, 122, 0.16);
+  text-align: center;
+}
+.claim-btn {
+  background: linear-gradient(180deg, rgba(255, 214, 130, 0.28), rgba(255, 196, 92, 0.14));
+  border: 1px solid rgba(255, 210, 122, 0.6);
+  border-radius: 8px;
+  color: #ffe6b8;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  padding: 8px 22px;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.claim-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(255, 214, 130, 0.4), rgba(255, 196, 92, 0.22));
+  box-shadow: 0 0 16px rgba(255, 200, 110, 0.35);
+}
+.claim-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.claim-note {
+  margin-top: 9px;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.claim-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.claim-seal {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: #1a1206;
+  background: linear-gradient(180deg, #ffe2a0, #f6c462);
+  border-radius: 5px;
+  padding: 2px 9px;
+  font-weight: 700;
+}
+.claim-no {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #ffe6b8;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+.claim-id {
+  font-size: 11px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+.claim-total {
+  display: block;
+  font-size: 12px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  margin-top: 2px;
+}
+.claim-sub {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* 里程碑 / 早期印记 徽记 (PoemPanel claimed state + 我的认领 rows) */
+.claim-badge {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 210, 122, 0.4);
+  color: var(--gold);
+  background: rgba(255, 210, 122, 0.1);
+}
+.claim-badge.founder,
+.claim-badge.milestone {
+  color: #1a1206;
+  background: linear-gradient(180deg, #ffe2a0, #f6c462);
+  border-color: rgba(255, 210, 122, 0.7);
+  font-weight: 600;
+}
+.claim-badge.early {
+  color: #bcd4ff;
+  border-color: rgba(130, 180, 255, 0.4);
+  background: rgba(130, 180, 255, 0.1);
+}
+.claim-badge.mini {
+  font-size: 10px;
+  padding: 1px 7px;
+}
+
+/* 右上角「已有 N 首诗被认领」—— 故意低存在感:小、淡、不抢戏(计数增长不是诗云的目的)。
+   进入时出现 1 分钟,随后 .fading 渐隐消失(组件在淡出后卸载) */
+.claim-counter {
+  position: fixed;
+  top: calc(var(--hud-h, 48px) + 8px);
+  right: 14px;
+  z-index: 12;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  opacity: 0.5;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.35s;
+}
+.claim-counter b {
+  color: var(--gold);
+  font-weight: 600;
+  opacity: 0.9;
+}
+.claim-counter:hover {
+  opacity: 0.85;
+}
+/* 一分钟后渐隐消失:更慢的曲线让它温柔退场,期间不再拦截指针 */
+.claim-counter.fading {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.1s ease;
+}
+
+/* 我的认领 rows — built on the shiyi list, two-line layout */
+.myclaim-item .shiyi-open {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+}
+.myclaim-row1 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.myclaim-row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.myclaim-no {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  flex: none;
+}
+
+/* 留影 认领分享卡 banner — stamped inside the cinema card when the framed poem is claimed */
+.cinema-claim {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #ffe6b8;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+.cinema-claim-seal {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: #1a1206;
+  background: linear-gradient(180deg, #ffe2a0, #f6c462);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-weight: 700;
+  flex: none;
+}
+
+/* ── 开发者工具(隐藏:5 连点 诗云 logo 打开)── */
+.devtool {
+  position: fixed;
+  top: 56px;
+  left: 16px;
+  z-index: 60;
+  width: min(300px, calc(100vw - 32px));
+  background: rgba(12, 14, 22, 0.96);
+  border: 1px solid rgba(120, 140, 200, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  color: #cdd6ee;
+  font-size: 12px;
+}
+.dev-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+  color: #e6ecff;
+}
+.dev-group {
+  margin-top: 10px;
+}
+.dev-label {
+  font-size: 11px;
+  color: #8fa0c8;
+  margin-bottom: 6px;
+  letter-spacing: 0.05em;
+}
+.dev-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dev-btns button {
+  flex: 1 1 auto;
+  background: rgba(120, 150, 230, 0.14);
+  border: 1px solid rgba(130, 160, 230, 0.4);
+  border-radius: 6px;
+  color: #d7e0ff;
+  font-size: 11px;
+  padding: 5px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dev-btns button:hover {
+  background: rgba(120, 150, 230, 0.26);
+}
+.dev-hint {
+  font-size: 10px;
+  color: #6f7ea6;
+  margin-top: 5px;
+}
+.dev-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+.dev-row input[type="range"] {
+  flex: 1;
+}
+.dev-k {
+  width: 28px;
+  color: #8fa0c8;
+}
+.dev-v {
+  width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #d7e0ff;
+}
+.dev-stat {
+  font-size: 11px;
+  color: #aab6d8;
+  margin: 3px 0;
+}
+.dev-link {
+  background: none;
+  border: none;
+  color: #8fb4ff;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  text-decoration: underline;
+}
+
 /* HUD additions */
 .stat {
   margin-left: auto;

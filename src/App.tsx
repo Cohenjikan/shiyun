@@ -8,6 +8,7 @@ import { PoemGuides } from "./three/PoemGuides";
 import { GiftLines } from "./three/GiftLines";
 import { GiftTrail } from "./three/GiftTrail";
 import { PulledStars } from "./three/PulledStars";
+import { Meteors } from "./three/Meteors";
 import { FlyControls } from "./three/FlyControls";
 import { HUD } from "./ui/HUD";
 import { PoemPanel } from "./ui/PoemPanel";
@@ -18,10 +19,13 @@ import { SettingsMenu } from "./ui/SettingsMenu";
 import { PoemHoverLabel } from "./ui/PoemHoverLabel";
 import { Onboarding } from "./ui/Onboarding";
 import { Cinema } from "./ui/Cinema";
-import { FeedbackViewer } from "./ui/FeedbackViewer";
+import { DevTool } from "./ui/DevTool";
+import { ClaimCounter } from "./ui/ClaimCounter";
+import { ClaimsViewer } from "./ui/ClaimsViewer";
 import { useStore } from "./state/store";
 import { applyHash, syncHash } from "./state/permalink";
 import { loadData, getCharsetCheck } from "./data/load";
+import { fetchFeed, hasClaimServer } from "./state/claims";
 import { WEAK } from "./three/detectQuality";
 
 // dpr is keyed to the INITIAL device seed, not the live 画质 toggle: dpr 1→2 quadruples the additive
@@ -38,6 +42,7 @@ export default function App() {
   const selectedPoet = useStore((s) => s.selectedPoet);
   const uiHidden = useStore((s) => s.uiHidden);
   const cinema = useStore((s) => s.cinema);
+  const setClaimFeed = useStore((s) => s.setClaimFeed);
   // boot-data failure (network/CDN) — without this the user faces an eternal 正在点亮… spinner
   const [loadError, setLoadError] = useState(false);
   // data↔code version mismatch (wrong/mixed deploy, stale CDN): the 字库 the server sent differs from
@@ -77,6 +82,18 @@ export default function App() {
     if (loaded) syncHash();
   }, [loaded, selected, selectedPoet]);
 
+  // 认领 meteors: pull the PUBLIC claim feed at boot + refresh periodically so newly-claimed poems start
+  // streaking without a reload. No-op when this build has no claim backend (VITE_CLAIM_ENDPOINT unset) —
+  // the app stays 100% static and a visitor still sees only their OWN claims (hydrated from localStorage).
+  useEffect(() => {
+    if (!hasClaimServer) return;
+    let alive = true;
+    const load = () => void fetchFeed().then((f) => { if (alive && f) setClaimFeed(f); });
+    load();
+    const id = setInterval(load, 90_000);
+    return () => { alive = false; clearInterval(id); };
+  }, [setClaimFeed]);
+
   return (
     <div className="app">
       <Canvas
@@ -94,6 +111,7 @@ export default function App() {
         {loaded && <GiftLines />}
         {loaded && <GiftTrail />}
         <PulledStars />
+        {loaded && <Meteors />}
         <FlyControls />
         {/* HDR additive bloom — turns discrete bright particles into continuous nebulosity and
             makes the core glow fade smoothly (the single biggest "real galaxy" cue). Disabled on
@@ -114,6 +132,7 @@ export default function App() {
       {!uiHidden && !cinema && (
         <>
           <HUD />
+          <ClaimCounter />
           <SettingsMenu />
           {loaded && <SearchPanel />}
           {loaded && <GiftRoam />}
@@ -168,8 +187,11 @@ export default function App() {
         </div>
       )}
 
-      {/* owner-only feedback inbox (opened by the hidden 5-tap-on-logo gesture); self-gates on the store */}
-      <FeedbackViewer />
+      {/* owner-only developer tool (opened by the hidden 5-tap-on-logo gesture); self-gates on the store */}
+      <DevTool />
+
+      {/* 我的认领: this device's claimed-poem keepsake (opened from 更多); self-gates on the store */}
+      <ClaimsViewer />
 
       {loaded && <Onboarding />}
 

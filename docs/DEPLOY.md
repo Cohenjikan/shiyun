@@ -351,3 +351,100 @@ generic card — **纯静态行为与今天完全一致**. (Note: once the `if`-
 request while the backend is *down* returns a 502 for that one request — add `proxy_intercept_errors on;`
 + an `error_page 502 = @static;` named location if you want it to fall back to static instead. The static
 SPA at every other path is never affected either way.)
+
+## 7. Optional: 认领 (poem-claim) backend — the GLOBAL 认领编号
+
+**不部署时,纯静态行为不变** — without this, the 认领 button still works (the poem becomes a meteor, recorded
+in the visitor's localStorage), but its 认领编号 reads **"待联网确认"** instead of a number, and other
+visitors don't see each other's meteors. This is the **one** feature a static client genuinely cannot do
+alone: hand out a **globally monotonic 认领编号 (claim number, from 1, shared across ALL users)**.
+
+The collector ([deploy/claim-server.mjs](../deploy/claim-server.mjs), `node:http` only, **zero deps**) is a
+SIBLING of the feedback collector — kept separate on purpose: its feed is **public** (every visitor reads it
+to draw meteors) whereas the feedback inbox is token-gated. The global counter is allocated through a tiny
+promise-chain mutex (atomic under concurrent POSTs) and recovered from the JSONL at boot (a restart never
+reuses or skips a number).
+
+> ⚖️ **COMPLIANCE — store only numbers, never text/identity.** Each claim appends **EXACTLY three numbers:
+> `{no, index, ts}`** (claim number · poem's 全集编号 · timestamp). It **NEVER stores the poem text or any
+> 文字内容, user identity, IP, or User-Agent** — the poem is recomputed client-side from `index`
+> (`pulledFromIndex`) and never touches the server; the client sends only `{index, ts}` and the server
+> ignores any other field. Rationale: persisting poem text would make this user-generated content (论坛性质)
+> → ICP 备案 / 内容审核 obligations in 中国; storing only numbers is a set of mathematical coordinates, not a
+> content service. Back up `claims.jsonl`, but know it contains no text. (UA is used only for the in-memory
+> rate limiter, never written to disk.)
+
+```
+POST /api/claim        {index:"<全集编号>", ts?}  (any other field is ignored) → {ok, no, index, ts}
+GET  /api/claim/feed   ?limit=<n>   (PUBLIC) → {total, serverNow, claims:[{no,index,ts}…]}  (newest-first)
+GET  /api/claim/health → {ok:true}
+```
+
+The app shows the visitor two numbers at claim time: **「已有 X 人认领」** (`feed.total`) and **「你是第 N 个 ·
+认领编号 #N」** (the backend `no`).
+
+### 7a. Stand up the collector (same box as nginx)
+
+```bash
+sudo mkdir -p /opt/shiyun /var/lib/shiyun
+sudo cp deploy/claim-server.mjs /opt/shiyun/
+sudo tee /etc/systemd/system/shiyun-claim.service >/dev/null <<'EOF'
+[Unit]
+Description=shiyun 认领 (poem-claim) collector
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /opt/shiyun/claim-server.mjs
+Environment=PORT=8788
+Environment=HOST=127.0.0.1
+Environment=CLAIM_FILE=/var/lib/shiyun/claims.jsonl
+Restart=on-failure
+DynamicUser=yes
+StateDirectory=shiyun
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable --now shiyun-claim
+curl -s localhost:8788/api/claim/health   # → {"ok":true}
+```
+
+> Note: `claims.jsonl` is the **only durable state** — it IS the global counter. Back it up like
+> `feedback.jsonl`. (`DynamicUser=yes` + `StateDirectory=shiyun` already place it under `/var/lib/private/shiyun`.)
+
+### 7b. nginx — one same-origin location (no CORS)
+
+Add to the site `server {}` block ([deploy/nginx.conf](../deploy/nginx.conf)). `/api/claim` covers the POST,
+`/feed`, and `/health` (prefix match):
+
+```nginx
+location /api/claim {
+    proxy_pass http://127.0.0.1:8788;
+    proxy_set_header Host $host;
+    # optional: cap the public feed read so a scraper can't hammer it (define zone in http{}):
+    # limit_req zone=claim burst=10 nodelay;
+}
+```
+
+`sudo nginx -t && sudo systemctl reload nginx`.
+
+### 7c. Wire the client + verify
+
+```bash
+# .env.local:  VITE_CLAIM_ENDPOINT="/api/claim"     ← same-origin relative path (git-ignored)
+npm run deploy:build       # baked into dist/ at build time; unset ⇒ claims stay local-only
+```
+
+```bash
+# POST a claim → a number, then it shows in the feed:
+curl -s -X POST "https://你的域名/api/claim" -H 'Content-Type: application/json' \
+  -d '{"source":"shiyun","index":"123456789","ts":1781000000000}'
+#   → {"ok":true,"no":1,"index":"123456789","ts":1781000000000}
+curl -s "https://你的域名/api/claim/feed?limit=5"
+#   → {"total":1,"serverNow":…,"claims":[{"no":1,"index":"123456789","ts":1781000000000}]}
+```
+
+In the live app: open a void poem → **认领这首诗** → the panel shows **认领编号 #N** and the poem streaks off
+as a meteor. Today's claims render as bright, clickable meteors; older ones as faint glints. 更多 → 流星
+toggles the whole layer off.

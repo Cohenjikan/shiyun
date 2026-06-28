@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useStore } from "../state/store";
 import { CopyButton, ShareButton } from "./CopyButton";
 import { useSheet } from "./useSheet";
+import { addLocalClaim, setLocalClaimNo, listClaims, postClaim, hasClaimServer, claimBadge } from "../state/claims";
 
 const FORM_LABEL: Record<string, string> = {
   wujue: "五言绝句",
@@ -20,11 +22,51 @@ export function PoemPanel() {
   const keep = useStore((s) => s.keepShiyi);
   const drop = useStore((s) => s.dropShiyi);
   const kept = useStore((s) => !!selected && s.shiyi.some((e) => e.index === selected.babelIndex));
+  // 认领: this device's claim on THIS poem (if any), and whether anyone has claimed it (public feed).
+  const myClaims = useStore((s) => s.myClaims);
+  const claimFeed = useStore((s) => s.claimFeed);
+  const setMyClaims = useStore((s) => s.setMyClaims);
+  const setFlyTarget = useStore((s) => s.setFlyTarget);
+  const launchClaimCeremony = useStore((s) => s.launchClaimCeremony);
+  const [claimingIdx, setClaimingIdx] = useState<string | null>(null);
   const sheet = useSheet(selected?.babelIndex ?? null);
   if (!selected) return null;
   const isFree = selected.form === "ziyou";
   const toggleKeep = () =>
     kept ? drop(selected.babelIndex) : keep({ index: selected.babelIndex, preview: selected.lines[0] ?? "" });
+
+  // claim state for the currently-shown poem
+  const myClaim = myClaims.find((c) => c.index === selected.babelIndex);
+  const claiming = claimingIdx === selected.babelIndex;
+  const badge = claimBadge(myClaim?.no); // 里程碑 / 早期印记 (null for ordinary numbers)
+  // 截至此刻全站被认领的诗的总数 ——「诗云中已有 X 首诗被认领」(feed.total). After MY claim, my `no` IS the
+  // count at that moment, so derive a fresh total even before the periodic feed refresh catches up. null
+  // (→ hide) when there's no backend or the feed hasn't loaded; never blocks claiming.
+  const feedTotal = claimFeed?.total ?? null;
+  const displayTotal = myClaim?.no != null ? Math.max(feedTotal ?? 0, myClaim.no) : feedTotal;
+  const showTotal = hasClaimServer && displayTotal != null && displayTotal > 0;
+  // 认领: record locally (so a static build / offline still works + my meteor shows), locate the poem in
+  // the void, launch it as a meteor, and POST for the authoritative 全站唯一 认领编号 (patched back on reply).
+  // Only {index, ts} go to the server — never the poem text (compliance; see state/claims.ts).
+  const doClaim = async () => {
+    if (!selected || claiming || myClaim) return;
+    const { babelIndex: index, pos } = selected;
+    const ts = Date.now();
+    setClaimingIdx(index);
+    addLocalClaim({ index, ts, preview: selected.lines[0] ?? "" }); // preview stored LOCAL-only (keepsake)
+    setMyClaims(listClaims());
+    setFlyTarget(pos); // 在虚空中定位
+    launchClaimCeremony({ index, pos, ts }); // …然后化作流星没入银河
+    try {
+      const { no } = await postClaim(index, ts);
+      if (no != null) {
+        setLocalClaimNo(index, no);
+        setMyClaims(listClaims());
+      }
+    } finally {
+      setClaimingIdx((cur) => (cur === index ? null : cur));
+    }
+  };
 
   // mobile: a fresh void-pull stays stashed as a bottom peek bar until tapped (never covers the galaxy)
   if (sheet.collapsed) {
@@ -79,6 +121,37 @@ export function PoemPanel() {
               <span className="meta-v muted">非格律 · 虚空目录</span>
             )}
           </div>
+        )}
+      </div>
+
+      <div className="poem-claim">
+        {myClaim ? (
+          <div className="claim-done">
+            <span className="claim-seal">认领</span>
+            {myClaim.no != null ? (
+              <>
+                <span className="claim-no">这是第 {myClaim.no.toLocaleString()} 首被诗人认领的诗</span>
+                <span className="claim-id">认领编号 #{myClaim.no}</span>
+              </>
+            ) : (
+              <>
+                <span className="claim-no">你已认领这首诗</span>
+                <span className="claim-id">认领编号 · 待联网确认</span>
+              </>
+            )}
+            {badge && <span className={`claim-badge ${badge.tier}`}>✦ {badge.label}</span>}
+            <span className="claim-sub">你从虚空里认下了它 —— 此刻它在此定位，化作流星，没入银河。</span>
+          </div>
+        ) : (
+          <>
+            <button className="claim-btn" onClick={doClaim} disabled={claiming}>
+              {claiming ? "认领中…" : "认领这首诗"}
+            </button>
+            {showTotal && <div className="claim-total">诗云中已有 {displayTotal!.toLocaleString()} 首诗被认领</div>}
+            <div className="claim-note">
+              即使这首诗前人已写过，你依然可以认领它 —— 认领后它会成为诗云里又一首被认领的诗，得到一个从 1 起算、全站唯一的认领编号；随即在虚空中定位，化作流星，没入银河。
+            </div>
+          </>
         )}
       </div>
 
