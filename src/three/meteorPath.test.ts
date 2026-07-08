@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ambientPath, ceremonyPath, hashU32, METEOR, type V3 } from "./meteorPath";
+import { ambientPath, ceremonyPath, ceremonyRemap, hashU32, METEOR, type V3 } from "./meteorPath";
 
 const mag = (v: V3) => Math.hypot(v[0], v[1], v[2]);
 const planarR = (v: V3) => Math.hypot(v[0], v[2]);
@@ -63,6 +63,64 @@ describe("meteorPath — deterministic claim trajectories", () => {
 
   it("ceremonyPath falls back to an ambient path when launched from the origin", () => {
     expect(ceremonyPath([0, 0, 0], "42")).toEqual(ambientPath("42"));
+  });
+});
+
+// ── S1 时间重映射 (ceremonyRemap) ── the ceremony streak's PROGRESS along its path is a pure remap of raw
+// life-fraction u∈[0,1] → distance-fraction∈[0,1], so the brightness flash (which reads raw u) lands during
+// a near-hover 蓄力 段 and the plunge ACCELERATES afterward (fixes 根因②: 匀速 lerp diluted the burst).
+// 测试即形状契约 — the curve implementation is free to change as long as these hold.
+describe("ceremonyRemap — 蓄力→奔赴→余韵 time remap (S1)", () => {
+  it("pins the endpoints", () => {
+    expect(ceremonyRemap(0)).toBeCloseTo(0, 9);
+    expect(ceremonyRemap(1)).toBeCloseTo(1, 9);
+  });
+
+  it("clamps out-of-range input to [0,1]", () => {
+    expect(ceremonyRemap(-0.5)).toBe(0);
+    expect(ceremonyRemap(-1e9)).toBe(0);
+    expect(ceremonyRemap(1.5)).toBe(1);
+    expect(ceremonyRemap(1e9)).toBe(1);
+  });
+
+  it("is monotonic non-decreasing (≥1000 samples)", () => {
+    let prev = ceremonyRemap(0);
+    for (let i = 1; i <= 1000; i++) {
+      const cur = ceremonyRemap(i / 1000);
+      expect(cur).toBeGreaterThanOrEqual(prev - 1e-12);
+      prev = cur;
+    }
+  });
+
+  it("蓄力: the first 18% of TIME travels ≤6% of the PATH (near-hover charge-up)", () => {
+    expect(ceremonyRemap(0.18)).toBeLessThanOrEqual(0.06);
+  });
+
+  it("奔赴: peak instantaneous speed lands in u∈[0.35,0.80] and is ≥2× the average speed", () => {
+    const h = 1e-3;
+    let peakU = 0, peakV = -Infinity;
+    for (let i = 0; i <= 1000; i++) {
+      const u = i / 1000;
+      const a = Math.min(1, Math.max(0, u - h / 2));
+      const b = Math.min(1, Math.max(0, u + h / 2));
+      const v = (ceremonyRemap(b) - ceremonyRemap(a)) / (b - a);
+      if (v > peakV) { peakV = v; peakU = u; }
+    }
+    expect(peakU).toBeGreaterThanOrEqual(0.35);
+    expect(peakU).toBeLessThanOrEqual(0.8);
+    expect(peakV).toBeGreaterThanOrEqual(2); // average speed over [0,1] is exactly 1
+  });
+
+  it("余韵: the last 15% of TIME travels ≤10% of the PATH (decelerated glide-in)", () => {
+    expect(ceremonyRemap(0.85)).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it("stays within [0,1] across the whole domain", () => {
+    for (let i = 0; i <= 1000; i++) {
+      const y = ceremonyRemap(i / 1000);
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(y).toBeLessThanOrEqual(1);
+    }
   });
 });
 

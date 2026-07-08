@@ -89,3 +89,18 @@ export function ceremonyPath(from: V3, index: string): MeteorTrajectory {
   const k = METEOR.CEREMONY_END_R / m;
   return { start: from, end: [from[0] * k, from[1] * k * 0.5, from[2] * k] };
 }
+
+/**
+ * 仪式流星的时间重映射(纯函数,无状态):把 raw 生命进度 u∈[0,1] 映射为**路程进度**∈[0,1]。
+ * 匀速 lerp(根因②)让爆发感被稀释——亮度 flash 吃 raw u,高潮却落在几乎没动的起步瞬间。重映射后位移
+ * 是「蓄力→奔赴→余韵」三段:前段近乎悬停(flash 最亮时正好蓄力,彗尾自然缩成亮点),中段瞬时速度冲峰
+ * (彗尾被速度自然拉长——速度驱动尾长,免费的物理正确),末段减速滑入落点(彗尾自然收缩)。
+ *
+ * 形状 = 前段偏斜 + smootherstep:pow(u,1.5) 把陡峭段推后并加剧,再过五次 smootherstep(两端零导数)。
+ * 两者都单调增 ⇒ 复合单调;端点 pow/S 都保 0→0、1→1。参数/曲线可微调,**meteorPath.test.ts 是形状契约**。
+ */
+export function ceremonyRemap(u: number): number {
+  const x = u < 0 ? 0 : u > 1 ? 1 : u; // clamp: delay 段(u<0)与越界都夹到端点
+  const s = Math.pow(x, 1.5); // 前段偏斜:蓄力更久、奔赴更猛
+  return s * s * s * (s * (s * 6 - 15) + 10); // smootherstep(两端速度→0 ⇒ 起步悬停、落点滑入)
+}

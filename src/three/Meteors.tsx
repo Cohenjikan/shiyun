@@ -4,8 +4,9 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useStore } from "../state/store";
 import { spinXZ } from "./galaxyParams";
 import { mergeClaims, isSameDay, type MeteorClaim } from "../state/claims";
-import { ambientPath, ceremonyPath, hashU32, type V3 } from "./meteorPath";
+import { ambientPath, ceremonyPath, ceremonyRemap, hashU32, type V3 } from "./meteorPath";
 import { meteorPick } from "./meteorPick";
+import { ceremonyCam } from "./ceremonyCam";
 
 // 认领的诗 → 流星. The look must belong to 诗云's painterly sky (soft glowing colored particles + bloom),
 // NOT a hard white scratch. Real meteors (research): a bright COLOURED head + a fading train that shifts
@@ -26,7 +27,9 @@ const N4 = MAX_ALIVE * 4; // ribbon vertices (one quad per meteor)
 const TAIL_SPAN = 0.56; // 0.75 base × 0.75 (len)
 const END_FADE = 0.24; // fraction of life over which it quickly disappears
 const CEREMONY_DELAY = 0.4; // s — let the 定位 flare read before the claimer's streak launches
-const DUR = { today: 2.0, past: 1.8, ceremony: 3.0 }; // seconds
+const REPLAY_COOLDOWN = 150; // s — once every claim has streaked, wait this long then REPLAY the pool at low
+// frequency, so an early sky (few claims) doesn't fall permanently dead after one pass (夜空冷却后低频重演)。
+const DUR = { today: 2.0, past: 1.8, ceremony: 3.6 }; // seconds (ceremony longer: the 蓄力→奔赴→余韵 remap needs room)
 
 // per-kind look. head/tail = the streak's COMET COLOUR GRADIENT (white head → pale-blue tail). flashBright
 // = head brightness at the instant (smoothstep glow + bloom ⇒ star-like flash); baseHead = the PERSISTENT
@@ -50,6 +53,8 @@ interface Meteor {
   dur: number;
   bright: boolean; // 今日 (clickable). ceremony is also bright.
   ceremony: boolean;
+  cerId: number; // ceremony id (claimCeremony.id, or a synthetic id for dev spawns); -1 for ambient. The
+  // camera (ceremonyCam) follows the NEWEST live ceremony = the largest cerId (连续认领跟最新).
   seed: number; // [0,1) per-meteor sparkle phase
 }
 
@@ -92,6 +97,8 @@ export function Meteors() {
   const meteors = useRef<Meteor[]>([]);
   const seenCeremony = useRef<Set<number>>(new Set());
   const seenReq = useRef<number>(-1);
+  const devCerId = useRef(1e9); // synthetic ceremony ids for DevTool spawns — offset above real claimCeremony.id
+  // so a dev ceremony always sorts as "newest" for the camera and never collides with a real ceremony id.
   const res = useRef<[number, number]>([1, 1]);
   res.current = [size.width || 1, size.height || 1];
   const tz = useRef(0);
@@ -102,6 +109,10 @@ export function Meteors() {
   useEffect(() => {
     if (!meteorsOn) meteorPick.alive = [];
   }, [meteorsOn]);
+
+  // release the camera hand-off if this layer unmounts mid-ceremony (otherwise FlyControls would keep
+  // chasing a stale head forever — the render loop that clears `active` would no longer run).
+  useEffect(() => () => { ceremonyCam.active = false; }, []);
 
   const obj = useMemo(() => {
     // ── head: a soft glowing knot per meteor (smoothstep halo like the poet stars) with a gentle sparkle ──
@@ -216,9 +227,10 @@ export function Meteors() {
   }, []);
 
   useFrame((_, dt) => {
-    if (useStore.getState().cinema) return;
+    if (useStore.getState().cinema) return; // 留影冻结:不改 ceremonyCam.active(与 meteorPick 同样的冻结自洽)
     if (!meteorsOn) {
       if (meteorPick.alive.length) meteorPick.alive = [];
+      if (ceremonyCam.active) ceremonyCam.active = false; // 流星关 → 交还相机
       if (meteors.current.length) {
         meteors.current = [];
         obj.hg.setDrawRange(0, 0);
@@ -239,7 +251,7 @@ export function Meteors() {
       seenCeremony.current.add(cer.id);
       spawned.current.add(cer.index);
       const { start, end } = ceremonyPath(cer.pos, cer.index);
-      meteors.current.push({ index: cer.index, start, end, birth: t + CEREMONY_DELAY, dur: DUR.ceremony, bright: true, ceremony: true, seed: seedOf(cer.index) });
+      meteors.current.push({ index: cer.index, start, end, birth: t + CEREMONY_DELAY, dur: DUR.ceremony, bright: true, ceremony: true, cerId: cer.id, seed: seedOf(cer.index) });
     }
 
     // ── dev tool: spawn ONE meteor of a chosen kind RIGHT NOW (bypasses the cap/throttle; synthetic index) ──
@@ -251,31 +263,61 @@ export function Meteors() {
         const a = Math.random() * Math.PI * 2, r = 900 + Math.random() * 1600;
         const from: V3 = [Math.cos(a) * r, (Math.random() - 0.5) * 280, Math.sin(a) * r];
         const { start, end } = ceremonyPath(from, index);
-        meteors.current.push({ index, start, end, birth: t, dur: DUR.ceremony, bright: true, ceremony: true, seed: seedOf(index) });
+        meteors.current.push({ index, start, end, birth: t, dur: DUR.ceremony, bright: true, ceremony: true, cerId: devCerId.current++, seed: seedOf(index) });
       } else {
         const bright = req.kind === "today";
         const { start, end } = ambientPath(index);
-        meteors.current.push({ index, start, end, birth: t, dur: bright ? DUR.today : DUR.past, bright, ceremony: false, seed: seedOf(index) });
+        meteors.current.push({ index, start, end, birth: t, dur: bright ? DUR.today : DUR.past, bright, ceremony: false, cerId: -1, seed: seedOf(index) });
       }
     }
 
     // ── ambient spawn: random gap in [minGap, maxGap] (dev-adjustable; product default 2–10 s) ──
     if (t >= nextSpawn.current) {
-      nextSpawn.current = t + st.meteorMinGap + Math.random() * Math.max(0, st.meteorMaxGap - st.meteorMinGap);
-      const burst = Math.random() < 0.3 ? 2 : 1;
-      for (let k = 0; k < burst; k++) {
-        if (appearances.current >= total || meteors.current.length >= MAX_ALIVE) break;
-        const cand = pickNext(pool, spawned.current, now, tz.current);
-        if (!cand) break;
-        spawned.current.add(cand.index);
-        appearances.current++;
-        const bright = isSameDay(cand.ts, now, tz.current);
-        const { start, end } = ambientPath(cand.index);
-        meteors.current.push({ index: cand.index, start, end, birth: t, dur: bright ? DUR.today : DUR.past, bright, ceremony: false, seed: seedOf(cand.index) });
+      if (pool.length > 0 && !pickNext(pool, spawned.current, now, tz.current)) {
+        // pool exhausted (every claim already streaked once) but pool NON-EMPTY → REPLAY: after a long cooldown
+        // reset the spawned set so the sky keeps breathing (夜空冷却后低频重演,不再永久死寂). Empty pool never
+        // enters (guard) so it can't spin every frame. Ceremony-claimed indices replay as ambient — 本就是一条认领。
+        spawned.current.clear();
+        appearances.current = 0;
+        nextSpawn.current = t + REPLAY_COOLDOWN;
+      } else {
+        nextSpawn.current = t + st.meteorMinGap + Math.random() * Math.max(0, st.meteorMaxGap - st.meteorMinGap);
+        const burst = Math.random() < 0.3 ? 2 : 1;
+        for (let k = 0; k < burst; k++) {
+          if (appearances.current >= total || meteors.current.length >= MAX_ALIVE) break;
+          const cand = pickNext(pool, spawned.current, now, tz.current);
+          if (!cand) break;
+          spawned.current.add(cand.index);
+          appearances.current++;
+          const bright = isSameDay(cand.ts, now, tz.current);
+          const { start, end } = ambientPath(cand.index);
+          meteors.current.push({ index: cand.index, start, end, birth: t, dur: bright ? DUR.today : DUR.past, bright, ceremony: false, cerId: -1, seed: seedOf(cand.index) });
+        }
       }
     }
 
     meteors.current = meteors.current.filter((m) => (t - m.birth) / m.dur < 1);
+
+    // ── camera hand-off: publish the NEWEST live ceremony's WORLD geometry to ceremonyCam so FlyControls can
+    // fly the hero-frame WITH the plunge (fixes 根因①). Must run even in the u<0 delay段 (head parked at start
+    // → the camera pre-frames the streak before it launches), so it lives BEFORE the render loop's `u<0`
+    // continue. Positions are toWorld'd HERE — FlyControls uses them raw (RED LINE: never spinXZ again). A new
+    // ceremony (larger cerId) resets `cancelled` so the camera re-engages for the fresh streak; when no
+    // ceremony is alive we release control (active=false) so normal camera resumes with no snap. ceremony head
+    // rides the SAME remap as the render (蓄力→奔赴→余韵) so the camera tracks where the streak actually is.
+    let newest: Meteor | null = null;
+    for (const m of meteors.current) if (m.ceremony && (!newest || m.cerId > newest.cerId)) newest = m;
+    if (newest) {
+      const u = (t - newest.birth) / newest.dur;
+      const hu = u < 0 ? 0 : ceremonyRemap(u); // delay段 head parked at start (u<0 → 0)
+      const h = toWorld(lerp(newest.start, newest.end, hu));
+      const s = toWorld(newest.start);
+      const e = toWorld(newest.end);
+      if (ceremonyCam.id !== newest.cerId) { ceremonyCam.id = newest.cerId; ceremonyCam.cancelled = false; }
+      ceremonyCam.head = h; ceremonyCam.start = s; ceremonyCam.end = e; ceremonyCam.u = u; ceremonyCam.active = true;
+    } else if (ceremonyCam.active) {
+      ceremonyCam.active = false; // no ceremony alive → hand the camera back (FlyControls resumes, no snap)
+    }
 
     // ── rebuild head + tail + the bright-meteor pick list (look = live dev multipliers) ──
     const look = st.meteorLook;
@@ -292,8 +334,12 @@ export function Meteors() {
       const headSize = (p.headSmall + p.headFlash * flash) * look.head;
       const lineAmp = (p.lineAmp + p.flashBright * flash * 0.12) * endFade * look.bright;
       const width = p.width * look.width;
-      const [hx, hy, hz] = toWorld(lerp(m.start, m.end, u)); // head
-      const tu = Math.max(0, u - tailSpan);
+      // ceremony 位移吃 remap(蓄力→奔赴→余韵);ambient 保持匀速线性(owner 已锁定其外观,不动)。彗尾锚也过同一
+      // remap ⇒ 尾长由**瞬时速度**决定:悬停段尾缩成亮点(此时 flash 最亮)、奔赴段尾拉长、落点段尾收缩(免费的物理正确)。
+      const hu = m.ceremony ? ceremonyRemap(u) : u; // head 路程进度
+      const [hx, hy, hz] = toWorld(lerp(m.start, m.end, hu)); // head
+      const tuRaw = Math.max(0, u - tailSpan);
+      const tu = m.ceremony ? ceremonyRemap(tuRaw) : tuRaw; // tail anchor 路程进度
       const [tx, ty, tz2] = toWorld(lerp(m.start, m.end, tu)); // tail anchor (line draws out)
       // head point (head hue)
       obj.hPos[n * 3] = hx; obj.hPos[n * 3 + 1] = hy; obj.hPos[n * 3 + 2] = hz;

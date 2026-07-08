@@ -8,6 +8,7 @@ import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { giftLinks, giftGraphReady } from "../data/giftGraph";
 import { pickTargets } from "./picking";
 import { meteorPick } from "./meteorPick";
+import { ceremonyCam, ceremonyFrame } from "./ceremonyCam";
 import { spinXZ, unspinXZ, SPIN_RATE, GALAXY } from "./galaxyParams";
 import { poemPosition, poetPosition, poemSystemRadius } from "./positions";
 import { COARSE } from "./detectQuality";
@@ -145,10 +146,14 @@ export function FlyControls() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTyping()) return;
       keys.current[e.code] = true;
-      if (MOVE_KEYS.has(e.code)) st().unlock(); // a movement key frees the locked camera
+      if (MOVE_KEYS.has(e.code)) {
+        st().unlock(); // a movement key frees the locked camera
+        ceremonyCam.cancelled = true; // …and hands the ceremony camera back (打断即还政,不回抢)
+      }
     };
     const onKeyUp = (e: KeyboardEvent) => (keys.current[e.code] = false);
     const onDown = (e: PointerEvent) => {
+      ceremonyCam.cancelled = true; // any pointer landing on the canvas = user grabbing control → 还政(不回抢)
       pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
       if (pointers.current.size === 1) {
         drag.current = { active: true, lastX: e.clientX, lastY: e.clientY, moved: 0, type: e.pointerType };
@@ -345,6 +350,7 @@ export function FlyControls() {
       }
     };
     const onWheel = (e: WheelEvent) => {
+      ceremonyCam.cancelled = true; // scroll = user driving → 还政(不回抢)
       if (st().lockPoetId || !st().freeMove) {
         // orbit mode → wheel adjusts the orbit DISTANCE (zoom in/out on the target / the whole galaxy)
         const max = st().lockPoetId ? ORBIT_MAX_POET : ORBIT_MAX_GALAXY;
@@ -389,7 +395,44 @@ export function FlyControls() {
   }, [camera, gl]);
 
   const tmpUp = useRef(new THREE.Vector3(0, 1, 0));
+  const lastCerId = useRef(-1); // last ceremony id whose residual flyTarget we cleared — keyed by ID (not an
+  // "engaged" boolean) so BACK-TO-BACK claims (A driving → claim B sets flyTarget(posB) without the block ever
+  // exiting) still clear B's residual; otherwise B's natural end would let the flyTarget block yank the camera
+  // back to posB (定位点).
+  const cerSide = useRef<-1 | 0 | 1>(0); // last frame's ceremonyFrame side, fed back as stickySide so the
+  // end-on dead zone can't flip the desired machine position frame-to-frame; 0 = fresh ceremony, no preference.
   useFrame((_, dt) => {
+    // ── CEREMONY CAMERA (highest priority) ── fly a hero-frame that plunges WITH the claimer's own streak
+    // toward the heart (fixes 根因①: the camera used to lock onto the streak's START and never follow). The
+    // geometry (head/start/end) is published every frame by Meteors in WORLD space — RED LINE: use it RAW, do
+    // NOT spinXZ again (opposite of flyTarget, which is LOCAL). 打断即还政: cancelled is set by the input
+    // handlers; once set we never re-grab THIS ceremony. Natural end (active=false) leaves the camera where it
+    // is (no snap) so normal control resumes seamlessly.
+    if (ceremonyCam.active && !ceremonyCam.cancelled && !useStore.getState().cinema) {
+      if (ceremonyCam.id !== lastCerId.current) {
+        lastCerId.current = ceremonyCam.id;
+        cerSide.current = 0; // fresh ceremony → re-pick the framing side from the live geometry
+        useStore.getState().setFlyTarget(null); // clear THIS claim's residual 定位 fly so it can't yank us back on exit
+      }
+      lock.current.key = ""; // a camera move invalidates the orbit seed → a later lock reseeds (no snap)
+      const cam = camera as THREE.PerspectiveCamera;
+      const fov = cam.isPerspectiveCamera ? cam.fov : 60; // R3F's default camera is a PerspectiveCamera
+      const aspect = cam.isPerspectiveCamera ? cam.aspect : 1.6;
+      const camPos: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z];
+      const { pos, side } = ceremonyFrame(ceremonyCam.start, ceremonyCam.end, camPos, fov, aspect, cerSide.current);
+      cerSide.current = side; // feed back next frame (sticky inside the end-on dead zone)
+      const desired = _desired.set(pos[0], pos[1], pos[2]);
+      const kp = 1 - Math.pow(0.0015, dt); // SAME family as flyTarget's approach (不发明新手感)
+      camera.position.lerp(desired, kp);
+      // lookAt the streak head, dt-damped (never a hard per-frame lookAt → no jitter)
+      const head = _tgt.set(ceremonyCam.head[0], ceremonyCam.head[1], ceremonyCam.head[2]);
+      const m = _mat.lookAt(camera.position, head, tmpUp.current);
+      const kl = 1 - Math.pow(0.0025, dt); // gentle orientation damping (lock块同族)
+      camera.quaternion.slerp(_quat.setFromRotationMatrix(m), kl);
+      euler.current.setFromQuaternion(camera.quaternion); // so free-fly resumes cleanly when the ceremony ends
+      return;
+    }
+
     // camera LOCK: keep the selected poet (or one of its orbiting poems) centred + followed. The
     // target's LOCAL position is recomputed every frame (poetPosition / time-aware poemPosition) and
     // rotated into world by the live galaxy spin, so the camera tracks it as the galaxy turns and the
