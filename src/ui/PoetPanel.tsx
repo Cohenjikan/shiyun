@@ -76,6 +76,7 @@ function PoemsLoading({ progress }: { progress: { received: number; total: numbe
 
 export function PoetPanel() {
   const poet = useStore((s) => s.selectedPoet);
+  const aliasNote = useStore((s) => s.poetAliasNote);
   const poems = useStore((s) => s.poetPoems);
   const poemsError = useStore((s) => s.poetPoemsError);
   const progress = useStore((s) => s.poetPoemsProgress);
@@ -166,6 +167,7 @@ export function PoetPanel() {
           </button>
         </span>
       </div>
+      {aliasNote && <div className="poet-alias-note">{aliasNote}</div>}
       {poems === null && poemsError === poet.id ? (
         <div className="loading-row error">
           作品载入失败,可能是网络波动。

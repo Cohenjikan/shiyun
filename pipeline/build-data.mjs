@@ -4,6 +4,7 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { chooseCanonicalBucket, resolveZone } from "./canonicalRules.mjs";
 
 const SRC = process.env.WERNEROR_DIR || "C:/corpus/Werneror-Poetry"; // Werneror/Poetry clone (MIT). Override path via WERNEROR_DIR.
 const OUT = fileURLToPath(new URL("../public/data", import.meta.url)); // this project's data dir
@@ -307,6 +308,24 @@ if (sdirs.length) {
 }
 
 // ── 换源: shiyun-corpus JSONL (public + _restricted) — provenance/genre-annotated, 诗云-aligned poetId ──
+// canonical 别名层 (G2, corpus 已在 G1 落地标注): corpus 是数据层全保留 (Wikidata 模式 — 重复/组诗总题合并行
+// 一行不删,只加字段), 但诗云是统计/浏览层,只走正身。缺省(无 canonical 字段) = canonical = true. 一行只会有
+// canonical_id (精确重复 → 指向正身诗行 id) 或 canonical_note (组诗总题合并行) 恰居其一 — 两者都表示"此行
+// 不计入诗云统计", 排除只判 canonical===false; canonical_id 另被记录用于 AUTO 别名 (下方 chooseCanonicalBucket)。
+let cSkipped = 0;
+// AUTO-alias bookkeeping (see the poets.index.json emission below): cross-dynasty exact dedup can zero
+// an ENTIRE (name,dynasty) bucket (801 in the 2026-07 rebuild, 97% jinxiandai↔dangdai double-source
+// dups) — the poet lives on in the other bucket, but this bucket's poetId would vanish from the index
+// and break its old #a= permalink. Record per-bucket (a) that ≥1 line was excluded and (b) which
+// canonical_id targets the excluded lines point at, plus WHICH bucket owns每 canonical line, so the
+// emission step can majority-vote the mergedInto target entirely from data.
+const excludedBuckets = new Map(); // "author|dyn" -> [canonical_id, …] (ids optional — 组诗总题 rows have none)
+const lineOwner = new Map(); // corpus canonical line id -> interned "author|dyn" bucket key
+const keyIntern = new Map(); // bucket-key string interning (~936k lines share ~33k keys — saves ~50MB)
+let corpusCapped = false; // CORPUS_MAX smoke cap tripped → auto-alias skipped (partial data = mass false aliases)
+const MERGED_POETS_FILES = USE_CORPUS
+  ? [join(CORPUS_DIR, "poets.jsonl"), join(CORPUS_DIR, "_restricted", "poets.jsonl")]
+  : [];
 if (USE_CORPUS) {
   const corpusFiles = [];
   for (const dir of [CORPUS_DIR, join(CORPUS_DIR, "_restricted")]) {
@@ -324,13 +343,28 @@ if (USE_CORPUS) {
       if (!o.author || !o.body) { cBad++; continue; }
       // corpus.dynasty is ALREADY a canonical key (tang/song/…) → poetId aligns with 诗云's fnv32(name|dynasty)
       const dyn = o.dynasty || DYN[o.dynasty_raw] || "unknown";
+      const rawKey = o.author + "|" + dyn;
+      let bkey = keyIntern.get(rawKey);
+      if (!bkey) { keyIntern.set(rawKey, rawKey); bkey = rawKey; }
+      if (o.canonical === false) { // 别名诗行 (精确重复 / 组诗总题合并行) — 统计层跳过, 但记账供 AUTO 别名
+        cSkipped++;
+        let ex = excludedBuckets.get(bkey);
+        if (!ex) { ex = []; excludedBuckets.set(bkey, ex); }
+        if (o.canonical_id) ex.push(o.canonical_id);
+        continue;
+      }
+      if (o.id) lineOwner.set(o.id, bkey); // canonical line → its bucket (charset-skips don't matter here)
       addPoem(o.title || "", o.author, dyn, o.dynasty_raw || "", splitLines(o.body));
       cp++;
-      if (CORPUS_MAX && cp >= CORPUS_MAX) { console.log(`  (CORPUS_MAX=${CORPUS_MAX} smoke cap hit)`); break outer; }
+      if (CORPUS_MAX && cp >= CORPUS_MAX) {
+        console.log(`  (CORPUS_MAX=${CORPUS_MAX} smoke cap hit)`);
+        corpusCapped = true;
+        break outer;
+      }
     }
     console.log(`  ${fp.split(/[\\/]/).pop()}: poems=${total} poets=${poets.size}`);
   }
-  console.log(`  shiyun-corpus: poems=${cp} skipped-bad=${cBad} (total=${total} poets=${poets.size})`);
+  console.log(`  shiyun-corpus: poems=${cp} skipped-bad=${cBad} skipped-alias(canonical:false)=${cSkipped} (total=${total} poets=${poets.size})`);
 }
 
 // loud per-source charset-skip report — legacy sources skipping ANYTHING means upstream drifted.
@@ -369,6 +403,77 @@ const clusterSize = (n) => Math.min(60, Math.max(2, +(2 + 1.4 * Math.sqrt(n)).to
 const index = [...poets.values()]
   .sort((a, b) => b.count - a.count)
   .map((p) => ({ id: p.id, name: p.name, dynasty: p.dynasty, poemCount: p.count, clusterSize: clusterSize(p.count) }));
+
+// canonical 别名诗人行 (G1 merges.jsonl → poets.jsonl mergedInto rows): each is a REDIRECT, not a poet —
+// poemCount:0/clusterSize:0 so it never renders a star (PoetStars/gpuPick gate on aSize<0.001) and never
+// contributes to dynCounts/poemCount below. `id` is emitted VERBATIM from corpus (== fnv32(name|dynasty),
+// same formula as this pipeline's own poetId()) so an existing `#a=<id>` permalink to the alias still
+// resolves — the frontend then redirects id → mergedInto (the canonical poet's id, which we resolve HERE
+// from mergedInto.author/dynasty via the SAME poetId() so it points at a real row in this build).
+let mergedCount = 0;
+if (USE_CORPUS) {
+  const byIndexId = new Set(index.map((p) => p.id));
+  const emittedAliasIds = new Set(); // manual rows win — the AUTO path below must not double-emit an id
+  for (const fp of MERGED_POETS_FILES) {
+    let text;
+    try { text = readFileSync(fp, "utf8"); } catch { continue; } // e.g. no _restricted/poets.jsonl in a public-only build
+    for (const ln of text.split("\n")) {
+      if (!ln) continue;
+      let o; try { o = JSON.parse(ln); } catch { continue; }
+      if (!o.mergedInto || !o.id) continue;
+      const canonicalId = poetId(o.mergedInto.author, o.mergedInto.dynasty);
+      if (!byIndexId.has(canonicalId)) {
+        console.warn(`  ⚠ mergedInto dead target: ${o.name}|${o.dynasty} → ${o.mergedInto.author}|${o.mergedInto.dynasty} (not a poet row in this build)`);
+      }
+      index.push({ id: o.id, name: o.name, dynasty: o.dynasty, poemCount: 0, clusterSize: 0, mergedInto: canonicalId });
+      emittedAliasIds.add(o.id);
+      mergedCount++;
+    }
+  }
+  console.log(`  canonical 别名诗人行 (手工 merges): +${mergedCount} (mergedInto → 正身 poetId)`);
+
+  // ── AUTO 别名 (cross-dynasty dedup 清零桶): any (name,dynasty) bucket with ZERO canonical poems but
+  // ≥1 line excluded as canonical:false lost its poetId from the index — every old #a= permalink to it
+  // would die, even though the poet is alive in another bucket (97% jinxiandai↔dangdai double-source
+  // dups; 801 buckets in the 2026-07 rebuild). Re-emit each as an alias row via the SAME mergedInto
+  // infrastructure as the manual rows above. Target choice is chooseCanonicalBucket (canonicalRules.mjs):
+  // majority vote over the excluded lines' canonical_id owners → tie/no-vote falls back to the most-poems
+  // same-name live bucket → nothing qualifies (theoretically 0 cases) emits a PLAIN 0-row without
+  // mergedInto (permalink alive, panel empty). Data-driven end to end — no hardcoded names.
+  let autoAlias = 0, plainZero = 0;
+  if (corpusCapped) {
+    console.warn("  ⚠ AUTO 别名 skipped: CORPUS_MAX smoke cap truncated ingestion (zero-bucket detection would be garbage)");
+  } else {
+    const aliveKeys = new Set(); // "name|dynasty" buckets with ≥1 ingested canonical poem
+    const byNameAlive = new Map(); // name -> [{key, count}] (same-name fallback candidates)
+    for (const p of poets.values()) {
+      const k = p.name + "|" + p.dynasty;
+      aliveKeys.add(k);
+      let a = byNameAlive.get(p.name);
+      if (!a) { a = []; byNameAlive.set(p.name, a); }
+      a.push({ key: k, count: p.count });
+    }
+    for (const [bkey, cids] of excludedBuckets) {
+      if (aliveKeys.has(bkey)) continue; // bucket still has canonical poems → not zeroed, no alias needed
+      const cut = bkey.lastIndexOf("|"); // Han author names can't contain "|" (onlyHan filter upstream)
+      const name = bkey.slice(0, cut), dyn = bkey.slice(cut + 1);
+      const id = poetId(name, dyn); // == the OLD build's id for this bucket → #a= preserved verbatim
+      if (emittedAliasIds.has(id) || byIndexId.has(id)) continue; // manual row / live row already owns this id
+      const targetKeys = cids.map((cid) => lineOwner.get(cid)).filter(Boolean);
+      const winner = chooseCanonicalBucket(targetKeys, byNameAlive.get(name) || [], aliveKeys);
+      if (winner) {
+        const wCut = winner.lastIndexOf("|");
+        index.push({ id, name, dynasty: dyn, poemCount: 0, clusterSize: 0, mergedInto: poetId(winner.slice(0, wCut), winner.slice(wCut + 1)) });
+        autoAlias++;
+      } else {
+        index.push({ id, name, dynasty: dyn, poemCount: 0, clusterSize: 0 }); // 防御: 链活, 面板空
+        plainZero++;
+      }
+      emittedAliasIds.add(id);
+    }
+    console.log(`  canonical 别名诗人行 (AUTO 清零桶): +${autoAlias} mergedInto, +${plainZero} plain-zero (无同名有诗桶)`);
+  }
+}
 writeFileSync(join(OUT, "poets.index.json"), JSON.stringify(index));
 
 // poems bucketed by id[0:2] (256 buckets) -> {id: [{t,f,p}]}
@@ -424,14 +529,16 @@ if (!SKIP_HEAVY)
   for (const [b, obj] of flBuckets) writeFileSync(join(OUT, "lines", `${b}.json`), JSON.stringify(obj));
 
 // ── 赠诗 network: parse titles for 寄/赠/和/次韵… + a known poet NAME → poet→poet edges ──
-// name -> poets with that name (each {id, dynId, count}).
-const DYN_ORDER = ["xianqin","qinhan","weijin","nanbeichao","sui","tang","wudai","song","liao","jin","yuan","ming","qing","jinxiandai","dangdai"];
-const dynId = (k) => { const i = DYN_ORDER.indexOf(k); return i < 0 ? 99 : i; };
+// name -> poets with that name (each {id, zone, count}). `zone` replaces the old per-dynasty dynId gate:
+// bare names resolve within a RESOLUTION ZONE (resolveZone, canonicalRules.mjs) — jinxiandai+dangdai are
+// ONE zone (the modern era is split into two buckets purely by upstream source labels, and canonical
+// dedup moves poets wholesale across them — see resolveZone's doc for the full rationale + examples),
+// every other dynasty remains its own zone (bare cross-dynasty namesakes are almost always collisions).
 const byName = new Map();
 for (const p of poets.values()) {
   let a = byName.get(p.name);
   if (!a) { a = []; byName.set(p.name, a); }
-  a.push({ id: p.id, dynId: dynId(p.dynasty), count: p.count });
+  a.push({ id: p.id, zone: resolveZone(p.dynasty), count: p.count });
 }
 
 // 字号/别称 → 本名: famous, near-unambiguous studio-names (号 collide far less than 字). When a
@@ -561,17 +668,22 @@ function findName(after) {
   if (stripped.length !== win.length) { n = nameAt(stripped, 0); if (n) return n; }
   return nameAt(win, 1);
 }
-// resolve a name (or 号/字 alias) to a poet id. Bare names: SAME dynasty only (precision — a bare
-// namesake across dynasties is almost always a collision). Aliases: cross-dynasty allowed (the
-// reference is unambiguous — a 清人 和东坡 really means 苏轼). Pick the most prolific match.
-function resolveTarget(name, authorDynId, fromId) {
+// resolve a name (or 号/字 alias) to a poet id. Bare names: SAME RESOLUTION ZONE only (precision — a
+// bare namesake across zones is almost always a collision). Zones == dynasties EXCEPT jinxiandai and
+// dangdai, which are one zone: the modern era is split into two buckets purely by upstream source
+// labels (Werneror 近现代 vs yuxqiu/sheepzh 当代), and canonical dedup moves a poet's surviving bucket
+// wholesale across that boundary while the poems referencing them stay put — the old same-dynasty rule
+// broke 22 real edges (龙榆生[dangdai]→陈寅恪[jinxiandai], 郁达夫[dangdai]→鲁迅[jinxiandai], …) and had
+// always missed genuine cross-bucket modern edges. See resolveZone (canonicalRules.mjs). Aliases (号/字):
+// cross-dynasty allowed as before (a 清人 和东坡 really means 苏轼). Pick the most prolific match.
+function resolveTarget(name, authorZone, fromId) {
   const aliased = name in GIFT_ALIAS;
   const cands = byName.get(aliased ? GIFT_ALIAS[name] : name);
   if (!cands) return null;
   let best = null, bestCount = -1;
   for (const c of cands) {
     if (c.id === fromId) continue;
-    if (!aliased && c.dynId !== authorDynId) continue;
+    if (!aliased && c.zone !== authorZone) continue;
     if (c.count > bestCount) { bestCount = c.count; best = c; }
   }
   return best ? best.id : null;
@@ -580,7 +692,7 @@ function resolveTarget(name, authorDynId, fromId) {
 // their occurrences (no early break) so marker list-order can't drop the primary dedication.
 const edgeW = new Map(); // "from|to" -> weight
 for (const p of poets.values()) {
-  const aDyn = dynId(p.dynasty);
+  const aZone = resolveZone(p.dynasty);
   for (const poem of p.poems) {
     const title = poem.t;
     if (!title) continue;
@@ -590,7 +702,7 @@ for (const p of poets.values()) {
       while ((at = title.indexOf(mk, from)) >= 0) {
         from = at + mk.length;
         const name = findName(title.slice(at + mk.length));
-        if (name) { const to = resolveTarget(name, aDyn, p.id); if (to) targets.add(to); }
+        if (name) { const to = resolveTarget(name, aZone, p.id); if (to) targets.add(to); }
       }
     }
     for (const to of targets) {

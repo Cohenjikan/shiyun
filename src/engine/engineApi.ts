@@ -112,6 +112,13 @@ function inferForm(lines: string[]): PullForm {
     if (lines.length === 4 && lens[0] === 7) return "qijue";
     if (lines.length === 8 && lens[0] === 5) return "wulu";
     if (lines.length === 8 && lens[0] === 7) return "qilu";
+    // 两句连写: couplets typed/reconstructed as fewer, longer lines (each line = two 格律 lines glued
+    // together) — e.g. a 五绝 typed as 2 lines of 10, or a 七律 typed as 4 lines of 14. Label-only:
+    // does not touch anyRank/anyUnrank/lineBreakSyms or the 编号 those merged lines still produce.
+    if (lines.length === 2 && lens[0] === 10) return "wujue";
+    if (lines.length === 2 && lens[0] === 14) return "qijue";
+    if (lines.length === 4 && lens[0] === 10) return "wulu";
+    if (lines.length === 4 && lens[0] === 14) return "qilu";
   }
   return "ziyou";
 }

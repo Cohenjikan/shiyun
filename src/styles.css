@@ -997,6 +997,15 @@ canvas {
   font-size: 12px;
   color: var(--muted);
 }
+/* canonical 别名层 (G2): 低调提示「唐温如」已并入「唐珙」— muted, no border/background chrome (unlike
+   .search-note) since this sits inside an already-framed panel, not floating under a bare input. */
+.poet-alias-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  opacity: 0.72;
+  margin: -4px 0 10px;
+  font-style: italic;
+}
 .loading-row {
   color: var(--muted);
   font-size: 13px;

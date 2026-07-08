@@ -28,6 +28,11 @@ interface State {
   hoverPoetId: string | null;
   hoverPoem: { title: string; x: number; y: number } | null; // 诗名指引: hovered planet's title near cursor
   selectedPoet: PoetRow | null;
+  // canonical 别名层 (G2): set ONLY when selectedPoet was reached by resolving an alias row's mergedInto
+  // (e.g. clicking a #a= link to 唐温如, or a search hit on the alias name) — PoetPanel shows a low-key
+  // "「唐温如」已并入「唐珙」" notice. null on every normal selection; cleared by clearPoet/hopToPoet/a fresh
+  // selectPoet call that doesn't pass one.
+  poetAliasNote: string | null;
   poetPoems: PoemRecord[] | null;
   // poetId whose poem fetch FAILED (network) — PoetPanel turns the eternal 载入作品… into an error + 重试
   poetPoemsError: string | null;
@@ -137,7 +142,7 @@ interface State {
   clearSelection: () => void;
   setHover: (id: string | null) => void;
   setHoverPoem: (h: { title: string; x: number; y: number } | null) => void;
-  selectPoet: (p: PoetRow, focus?: { poemIdx: number; title: string; firstLine: string } | null) => void;
+  selectPoet: (p: PoetRow, focus?: { poemIdx: number; title: string; firstLine: string } | null, aliasNote?: string | null) => void;
   setPoetPoems: (id: string, poems: PoemRecord[]) => void;
   setPoetPoemsError: (id: string | null) => void;
   setPoetPoemsProgress: (p: { id: string; received: number; total: number } | null) => void;
@@ -205,6 +210,7 @@ export const useStore = create<State>((set) => ({
   hoverPoetId: null,
   hoverPoem: null,
   selectedPoet: null,
+  poetAliasNote: null,
   poetPoems: null,
   poetPoemsError: null,
   poetPoemsProgress: null,
@@ -270,6 +276,7 @@ export const useStore = create<State>((set) => ({
     set((s) => ({
       selected: p,
       selectedPoet: null,
+      poetAliasNote: null,
       poetPoems: null,
       poetFocus: null,
       cinemaPoemIdx: null, // the explicit 留影 target belonged to the old poet — drop it
@@ -282,9 +289,9 @@ export const useStore = create<State>((set) => ({
   clearSelection: () => set({ selected: null }),
   setHover: (hoverPoetId) => set({ hoverPoetId }),
   setHoverPoem: (hoverPoem) => set({ hoverPoem }),
-  selectPoet: (selectedPoet, focus = null) =>
+  selectPoet: (selectedPoet, focus = null, aliasNote = null) =>
     // a NORMAL selection (3D star / search / planet) starts a FRESH trail at this poet (点无关诗人清除)
-    set({ selectedPoet, poetPoems: null, poetPoemsError: null, poetPoemsProgress: null, poetFocus: focus, selected: null, cinemaPoemIdx: null, giftTrail: [selectedPoet.id] }),
+    set({ selectedPoet, poetAliasNote: aliasNote, poetPoems: null, poetPoemsError: null, poetPoemsProgress: null, poetFocus: focus, selected: null, cinemaPoemIdx: null, giftTrail: [selectedPoet.id] }),
   setPoetPoems: (id, poems) =>
     set((s) => (s.selectedPoet?.id === id ? { poetPoems: poems, poetPoemsError: null, poetPoemsProgress: null } : {})),
   setPoetPoemsError: (id) =>
@@ -292,14 +299,14 @@ export const useStore = create<State>((set) => ({
   // progress carries its own poetId → ignore late ticks from a previous poet's in-flight download.
   setPoetPoemsProgress: (p) =>
     set((s) => (p === null || s.selectedPoet?.id === p.id ? { poetPoemsProgress: p } : {})),
-  clearPoet: () => set({ selectedPoet: null, poetPoems: null, poetPoemsError: null, poetPoemsProgress: null, poetFocus: null, cinemaPoemIdx: null, lockPoetId: null, lockPoemIdx: null, giftTrail: [], hoverPoem: null }),
+  clearPoet: () => set({ selectedPoet: null, poetAliasNote: null, poetPoems: null, poetPoemsError: null, poetPoemsProgress: null, poetFocus: null, cinemaPoemIdx: null, lockPoetId: null, lockPoemIdx: null, giftTrail: [], hoverPoem: null }),
   hopToPoet: (poet) =>
     set((s) => {
       const id = poet.id;
       const i = s.giftTrail.indexOf(id);
       // already on the trail → trim back to it (返回); else append, capping at 11 nodes (= 10 return lines)
       const giftTrail = i >= 0 ? s.giftTrail.slice(0, i + 1) : [...s.giftTrail, id].slice(-11);
-      return { selectedPoet: poet, poetPoems: null, poetPoemsError: null, poetPoemsProgress: null, poetFocus: null, selected: null, cinemaPoemIdx: null, lockPoetId: id, lockPoemIdx: null, giftTrail };
+      return { selectedPoet: poet, poetAliasNote: null, poetPoems: null, poetPoemsError: null, poetPoemsProgress: null, poetFocus: null, selected: null, cinemaPoemIdx: null, lockPoetId: id, lockPoemIdx: null, giftTrail };
     }),
   clearTrail: () => set((s) => ({ giftTrail: s.selectedPoet ? [s.selectedPoet.id] : [], pathResult: null })),
   setPath: (pathStart, pathEnd, pathResult) => set({ pathStart, pathEnd, pathResult }),

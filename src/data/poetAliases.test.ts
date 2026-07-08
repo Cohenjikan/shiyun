@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { POET_ALIASES, NOT_POETS } from "./poetAliases";
@@ -44,5 +44,97 @@ describe("POET_ALIASES integrity (vs shipped poets.index.json)", () => {
   it("NOT_POETS entries are genuinely absent from the corpus", () => {
     const present = Object.keys(NOT_POETS).filter((k) => names.has(k));
     expect(present).toEqual([]);
+  });
+});
+
+// ── canonical 别名层 (G2): searchPoetsSmart redirects a mergedInto hit → the canonical poet + a
+// data-driven note ("「唐温如」即「唐珙」"), mirroring the POET_ALIASES mechanism but WITHOUT a hardcoded
+// name table — the redirect is driven entirely by the PoetRow.mergedInto field build-data.mjs emits from
+// corpus poets.jsonl. Poets are loaded via loadData() against a stubbed fetch (searchPoets reads the
+// module-level _poets cache, so there's no lighter-weight injection point — matches load.test.ts's
+// existing pattern for exercising searchPoems/searchByLine).
+describe("searchPoetsSmart — canonical mergedInto redirect (data-driven, G2)", () => {
+  const TANGWENRU = { id: "4a282690", name: "唐温如", dynasty: "tang", poemCount: 0, clusterSize: 0, mergedInto: "28a217e3" };
+  const TANGGONG_MING = { id: "1c8a158b", name: "唐珙", dynasty: "ming", poemCount: 0, clusterSize: 0, mergedInto: "28a217e3" };
+  const TANGGONG_YUAN = { id: "28a217e3", name: "唐珙", dynasty: "yuan", poemCount: 4, clusterSize: 4 };
+  const LIBAI = { id: "libai0001", name: "李白", dynasty: "tang", poemCount: 1000, clusterSize: 30 };
+  const POETS = [LIBAI, TANGGONG_YUAN, TANGWENRU, TANGGONG_MING];
+
+  const okJson = (o: unknown) => ({ ok: true, status: 200, json: async () => o, text: async () => JSON.stringify(o) });
+  const notOk = (s: number) => ({ ok: false, status: s, json: async () => ({}), text: async () => "" });
+
+  function install() {
+    const charset = { chars: "唐温如珙李白", n: 6, hash: "deadbeef" };
+    const manifest = { n: 6, poetCount: POETS.length, poemCount: 1004, buckets: [], lineBuckets: [], dynCounts: {} };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown) => {
+        const url = String(input);
+        if (url.includes("/charset.json")) return okJson(charset);
+        if (url.includes("/poets.index.json")) return okJson(POETS);
+        if (url.includes("/manifest.json")) return okJson(manifest);
+        if (url.includes("/lexicon.json")) return notOk(404);
+        return okJson({});
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    vi.resetModules(); // fresh module → _poets/_byId reset per test
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("searching the ALIAS name (唐温如) redirects to the canonical row + a 「X」即「Y」 note", async () => {
+    install();
+    const { loadData } = await import("./load");
+    const { searchPoetsSmart } = await import("./poetAliases");
+    await loadData();
+
+    const { results, note } = searchPoetsSmart("唐温如");
+    expect(note).toBe("「唐温如」即「唐珙」");
+    expect(results.some((p) => p.id === "28a217e3")).toBe(true); // 正身 present
+    expect(results.some((p) => p.mergedInto)).toBe(false); // no dead 0-poem alias row leaks into results
+  });
+
+  it("searching the CANONICAL name (唐珙) surfaces it with no note, and drops the SAME-NAME alias row (唐珙|ming)", async () => {
+    install();
+    const { loadData } = await import("./load");
+    const { searchPoetsSmart } = await import("./poetAliases");
+    await loadData();
+
+    const { results, note } = searchPoetsSmart("唐珙");
+    expect(note).toBeNull();
+    expect(results.map((p) => p.id)).toContain("28a217e3");
+    expect(results.some((p) => p.mergedInto)).toBe(false); // 唐珙|ming (mergedInto, poemCount 0) filtered out
+  });
+
+  it("an unrelated query (李白) is unaffected — no alias machinery triggers", async () => {
+    install();
+    const { loadData } = await import("./load");
+    const { searchPoetsSmart } = await import("./poetAliases");
+    await loadData();
+
+    const { results, note } = searchPoetsSmart("李白");
+    expect(note).toBeNull();
+    expect(results.map((p) => p.id)).toEqual(["libai0001"]);
+  });
+
+  it("a SAME-NAME merge surfaced via substring (珙) dynasty-suffixes the note — never 「唐珙」即「唐珙」", async () => {
+    // querying 珙 has no exact-name row, so redirectMerged fires on the 唐珙|ming alias; both sides of the
+    // note share the display name 唐珙 → disambiguated with DYNASTIES labels (ming→明, yuan→元), like the
+    // PoetPanel 已并入 notice.
+    install();
+    const { loadData } = await import("./load");
+    const { searchPoetsSmart } = await import("./poetAliases");
+    await loadData();
+
+    const { results, note } = searchPoetsSmart("珙");
+    expect(note).toBe("「唐珙(明)」即「唐珙(元)」");
+    expect(results.map((p) => p.id)).toContain("28a217e3"); // 正身 唐珙|yuan present
+    expect(results.some((p) => p.mergedInto)).toBe(false);
   });
 });

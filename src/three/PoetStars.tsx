@@ -17,6 +17,15 @@ export { poetPosition }; // back-compat: callers still import poetPosition from 
 const FAMOUS = new Set(FAMOUS_POETS.map((f) => f.name));
 const WHITE = new THREE.Color("#ffffff");
 
+/** Star point-size for a poet (both the visual shader's aSize AND the shared gpuPick geometry). A
+ *  canonical 别名层 (G2) row — `mergedInto` set, poemCount:0/clusterSize:0, a redirect not a poet —
+ *  is forced to exactly 0: both PoetStars' vertex shader and gpuPick's picker gate on `aSize < 0.001`
+ *  to hide/exclude a star, so 0 here means the alias is INVISIBLE and UNPICKABLE, not just tiny. */
+export function poetStarSize(p: Pick<PoetRow, "clusterSize" | "mergedInto">, famous: boolean): number {
+  if (p.mergedInto) return 0;
+  return (1.4 + p.clusterSize * 0.32) * (famous ? 2.4 : 1);
+}
+
 export function PoetStars() {
   const hidden = useStore((s) => s.hidden);
   const hoverId = useStore((s) => s.hoverPoetId);
@@ -48,7 +57,7 @@ export function PoetStars() {
       col[i * 3] = tmp.r;
       col[i * 3 + 1] = tmp.g;
       col[i * 3 + 2] = tmp.b;
-      const s = (1.4 + p.clusterSize * 0.32) * (fam ? 2.4 : 1);
+      const s = poetStarSize(p, fam);
       size[i] = s;
       baseSize[i] = s;
       seed[i] = (hashStr(p.id) & 0xffff) / 0xffff;
