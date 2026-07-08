@@ -10,7 +10,7 @@
 // Panels copy `location.href` (it now carries both).
 import { useStore } from "./store";
 import { pulledFromIndex } from "../engine/engineApi";
-import { getPoet } from "../data/load";
+import { getPoet, resolveCanonicalPoet, poetAliasRedirectNote } from "../data/load";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { poetPosition } from "../three/PoetStars";
 
@@ -94,11 +94,15 @@ export function applyHash(): void {
   if (!t) return;
   const st = useStore.getState();
   if (t.kind === "a") {
-    const poet = getPoet(t.value);
-    if (poet) {
-      st.selectPoet(poet);
-      st.setFlyTarget(poetPosition(poet));
-      fetchPoetPoems(poet.id);
+    const row = getPoet(t.value);
+    if (row) {
+      // canonical 别名层 (G2): a #a= link to an alias (e.g. 唐温如) resolves to its canonical poet
+      // (唐珙) — syncHash then writes the CANONICAL id (= a 301-redirect semantic), so the address bar
+      // self-heals to the durable link on the very next update.
+      const { canonical } = resolveCanonicalPoet(row);
+      st.selectPoet(canonical, null, poetAliasRedirectNote(row));
+      st.setFlyTarget(poetPosition(canonical));
+      fetchPoetPoems(canonical.id);
     }
   } else if (t.kind === "p") {
     // universal: `p=<index>`. Tolerate a legacy `form.index` by taking the part after the dot.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { lineSkeletons } from "./load";
+import { lineSkeletons, resolveCanonicalPoet, poetAliasRedirectNote, aliasNoticeNames, type PoetRow } from "./load";
 
 // ── 方案 A:下载进度反馈(流式读取 Response body,按 Content-Length 报告 received/total)──────────────
 // 大诗人切片可达 2.6MB(陆游),poems/ 不压缩、首访回源,等待时长。readWithProgress 边收边回调进度,
@@ -461,5 +461,70 @@ describe("searchPoems — Plan C 对抗边角", () => {
     const hits = await searchByLine("黄河入海流，花落知多少"); // 两句同桶
     expect(lineFetches).toBe(1); // 去重:该 content-bucket 只抓一次(未去重会是 2)
     expect(hits.length).toBe(2); // 两句各命中一首,都在
+  });
+});
+
+// ── canonical 别名层 (G2): resolveCanonicalPoet — pure redirect helper behind #a= restore + 诗人搜索 ──
+// corpus (G1) emits a poemCount:0 PoetRow carrying `mergedInto:<正身poetId>` for a merged identity
+// (唐温如 → 唐珙|yuan; 唐珙|ming → 唐珙|yuan; 毛泽东|dangdai → 毛泽东|jinxiandai). This is stub data (no
+// fetch/loadData needed) — resolveCanonicalPoet takes the lookup map explicitly for exactly that reason.
+describe("resolveCanonicalPoet (canonical 别名层, G2)", () => {
+  const tangwenru: PoetRow = { id: "4a282690", name: "唐温如", dynasty: "tang", poemCount: 0, clusterSize: 0, mergedInto: "28a217e3" };
+  const tanggongMing: PoetRow = { id: "1c8a158b", name: "唐珙", dynasty: "ming", poemCount: 0, clusterSize: 0, mergedInto: "28a217e3" };
+  const tanggongYuan: PoetRow = { id: "28a217e3", name: "唐珙", dynasty: "yuan", poemCount: 4, clusterSize: 4 };
+  const byId = new Map([tangwenru, tanggongMing, tanggongYuan].map((p) => [p.id, p]));
+
+  it("a normal (non-merged) row passes through unchanged, no aliasName", () => {
+    const r = resolveCanonicalPoet(tanggongYuan, byId);
+    expect(r.canonical).toBe(tanggongYuan);
+    expect(r.aliasName).toBeUndefined();
+  });
+
+  it("an alias row resolves to the canonical row + carries its OWN name as aliasName", () => {
+    const r = resolveCanonicalPoet(tangwenru, byId);
+    expect(r.canonical).toBe(tanggongYuan);
+    expect(r.aliasName).toBe("唐温如");
+  });
+
+  it("a DIFFERENT alias (唐珙|ming) merged into the SAME canonical also resolves correctly", () => {
+    const r = resolveCanonicalPoet(tanggongMing, byId);
+    expect(r.canonical).toBe(tanggongYuan);
+    expect(r.aliasName).toBe("唐珙"); // alias's OWN name — same string as canonical but a DIFFERENT row/id
+    expect(r.canonical.id).toBe("28a217e3");
+  });
+
+  it("a dead mergedInto target (data desync) degrades to the alias row itself, not a crash/vanish", () => {
+    const orphan: PoetRow = { id: "deadbeef", name: "孤儿", dynasty: "tang", poemCount: 0, clusterSize: 0, mergedInto: "not-in-index" };
+    const r = resolveCanonicalPoet(orphan, byId);
+    expect(r.canonical).toBe(orphan);
+    expect(r.aliasName).toBeUndefined();
+  });
+
+  // poetAliasRedirectNote is the ONE place the "「X」已并入「Y」" copy is formatted — permalink.ts's
+  // applyHash calls it directly (rather than inlining the template), so this is the actual coverage for
+  // the #a= redirect notice PoetPanel renders.
+  it("poetAliasRedirectNote formats the PoetPanel notice for an alias row", () => {
+    expect(poetAliasRedirectNote(tangwenru, byId)).toBe("「唐温如」已并入「唐珙」");
+  });
+
+  it("SAME-name merge (唐珙|ming → 唐珙|yuan) dynasty-suffixes both sides — never the self-referential 「唐珙」已并入「唐珙」", () => {
+    // labels come from DYNASTIES (dynasties.ts: ming→明, yuan→元), not a hardcoded map in load.ts
+    expect(poetAliasRedirectNote(tanggongMing, byId)).toBe("「唐珙(明)」已并入「唐珙(元)」");
+  });
+
+  it("aliasNoticeNames: different names pass through untouched; same names get dynasty labels; unknown dynasty key degrades to the raw key", () => {
+    expect(aliasNoticeNames(tangwenru, tanggongYuan)).toEqual(["唐温如", "唐珙"]);
+    expect(aliasNoticeNames(tanggongMing, tanggongYuan)).toEqual(["唐珙(明)", "唐珙(元)"]);
+    const weird: PoetRow = { id: "x1", name: "唐珙", dynasty: "nosuchkey", poemCount: 0, clusterSize: 0, mergedInto: "28a217e3" };
+    expect(aliasNoticeNames(weird, tanggongYuan)).toEqual(["唐珙(nosuchkey)", "唐珙(元)"]); // no crash on a bad key
+  });
+
+  it("poetAliasRedirectNote is null for a normal row (no notice on an ordinary #a= visit)", () => {
+    expect(poetAliasRedirectNote(tanggongYuan, byId)).toBeNull();
+  });
+
+  it("poetAliasRedirectNote is null for a dead-target alias (degrades silently, no confusing self-referential note)", () => {
+    const orphan: PoetRow = { id: "deadbeef", name: "孤儿", dynasty: "tang", poemCount: 0, clusterSize: 0, mergedInto: "not-in-index" };
+    expect(poetAliasRedirectNote(orphan, byId)).toBeNull();
   });
 });

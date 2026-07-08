@@ -86,3 +86,58 @@ describe("engineApi — universal 全集编号 (anyRank) ⇄ 反查", () => {
     expect(outOfCharset("")).toEqual([]);
   });
 });
+
+// inferForm 两句连写识别: a poem typed/reconstructed with couplets merged into fewer, longer lines
+// (2 lines of 10 = two 5-char lines glued pairwise; 4 lines of 14 = eight 7-char lines glued pairwise)
+// should still infer its 诗体 label — display-only, does not touch anyRank/anyUnrank/lineBreakSyms.
+describe("engineApi — inferForm 两句连写识别 (label-only)", () => {
+  it("2×10 uniform → wujue (两句连写的五绝/五言, 4×5 merged pairwise)", () => {
+    const lines = [charset.slice(0, 10).join(""), charset.slice(10, 20).join("")];
+    expect(pullByIndex("ziyou", anyTextIndex(lines)!.index)!.form).toBe("wujue");
+  });
+
+  it("2×14 uniform → qijue (两句连写的七绝, 4×7 merged pairwise)", () => {
+    const lines = [charset.slice(0, 14).join(""), charset.slice(14, 28).join("")];
+    expect(pullByIndex("ziyou", anyTextIndex(lines)!.index)!.form).toBe("qijue");
+  });
+
+  it("4×10 uniform → wulu (两句连写的五律, 8×5 merged pairwise)", () => {
+    const lines = [
+      charset.slice(0, 10).join(""), charset.slice(10, 20).join(""),
+      charset.slice(20, 30).join(""), charset.slice(30, 40).join(""),
+    ];
+    expect(pullByIndex("ziyou", anyTextIndex(lines)!.index)!.form).toBe("wulu");
+  });
+
+  it("4×14 uniform → qilu (两句连写的七律, 8×7 merged pairwise)", () => {
+    const lines = [
+      charset.slice(0, 14).join(""), charset.slice(14, 28).join(""),
+      charset.slice(28, 42).join(""), charset.slice(42, 56).join(""),
+    ];
+    expect(pullByIndex("ziyou", anyTextIndex(lines)!.index)!.form).toBe("qilu");
+  });
+
+  it("3×14 uniform stays ziyou (line COUNT doesn't match any merged-couplet shape)", () => {
+    const lines = [
+      charset.slice(0, 14).join(""), charset.slice(14, 28).join(""), charset.slice(28, 42).join(""),
+    ];
+    expect(pullByIndex("ziyou", anyTextIndex(lines)!.index)!.form).toBe("ziyou");
+  });
+
+  it("4×13 uniform stays ziyou (line LENGTH doesn't match any merged-couplet shape)", () => {
+    const lines = [
+      charset.slice(0, 13).join(""), charset.slice(13, 26).join(""),
+      charset.slice(26, 39).join(""), charset.slice(39, 52).join(""),
+    ];
+    expect(pullByIndex("ziyou", anyTextIndex(lines)!.index)!.form).toBe("ziyou");
+  });
+
+  it("2×20 uniform stays ziyou (length 20 matches no couplet-merge rule: not 10/14)", () => {
+    const lines = [charset.slice(0, 20).join(""), charset.slice(20, 40).join("")];
+    expect(pullByIndex("ziyou", anyTextIndex(lines)!.index)!.form).toBe("ziyou");
+  });
+
+  it("4×5 (already-split 五绝, unmerged) still infers wujue — pre-existing rule untouched", () => {
+    expect(pullByIndex("ziyou", anyTextIndex(lines5)!.index)!.form).toBe("wujue");
+  });
+});

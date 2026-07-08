@@ -1,4 +1,4 @@
-import { searchPoets, type PoetRow } from "./load";
+import { searchPoets, resolveCanonicalPoet, aliasNoticeNames, type PoetRow } from "./load";
 
 // 诗人别名层 — fixes the "搜「陶渊明」落空" class of misses: the corpus keys poets by ONE canonical
 // name (陶潜, not 陶渊明; 唐寅, not 唐伯虎), but people search by 字/号/俗称. This maps the common
@@ -136,15 +136,42 @@ export interface PoetSearchSmart {
   note: string | null;
 }
 
+// canonical 别名层 (G2, data-driven — NOT a hardcoded name table like POET_ALIASES/GIFT_ALIAS above):
+// a corpus-merged identity (e.g. 唐温如 → 唐珙) ships as a poemCount:0 PoetRow carrying `mergedInto`
+// (build-data.mjs, from corpus poets.jsonl). Substring search still MATCHES the alias's own name (it's
+// a real row with a real `name`), so without this redirect a search for 唐温如 would surface a dead
+// 0-poem entry. Mirrors the POET_ALIASES note mechanism ("「X」即「Y」") but keyed off the DATA, so a
+// future merge needs zero code changes here.
+function redirectMerged(rows: PoetRow[], limit: number): PoetSearchSmart | null {
+  const alias = rows.find((p) => p.mergedInto);
+  if (!alias) return null;
+  const { canonical, aliasName } = resolveCanonicalPoet(alias);
+  if (!aliasName) return null; // dead mergedInto target (data desync) — degrade to normal results below
+  const exact = searchPoets(canonical.name, limit).filter((p) => p.name === canonical.name && !p.mergedInto);
+  const rest = rows.filter((p) => !p.mergedInto && !exact.some((e) => e.id === p.id));
+  // same-name merge (唐珙|ming → 唐珙|yuan): aliasNoticeNames dynasty-suffixes both sides so the note
+  // isn't self-referential (「唐珙(明)」即「唐珙(元)」); different names pass through untouched.
+  const [aName, cName] = aliasNoticeNames(alias, canonical);
+  return { results: [...exact, ...rest].slice(0, limit), note: `「${aName}」即「${cName}」` };
+}
+
 /** Poet search with the alias layer + graceful-miss copy. Drop-in for searchPoets in the UI. */
 export function searchPoetsSmart(q: string, limit = 24): PoetSearchSmart {
   const s = q.trim();
   if (!s) return { results: [], note: null };
-  // a REAL poet row with exactly this name always wins over the alias table (defensive: today no
-  // alias key collides with a row — poetAliases.test.ts asserts it — but future corpus updates
-  // could add e.g. a contemporary poet writing under 「小山」).
   const direct = searchPoets(s, limit);
-  if (direct.some((p) => p.name === s)) return { results: direct, note: null };
+  // a REAL, non-merged poet row with exactly this name always wins over the alias tables (defensive:
+  // today no alias key collides with a row — poetAliases.test.ts asserts it — but future corpus updates
+  // could add e.g. a contemporary poet writing under 「小山」). Still DROP any merged-alias rows mixed
+  // into the substring match (e.g. querying 唐珙 also substring-matches the 唐珙|ming alias row) so a
+  // 0-poem redirect entry never appears clickable in the results list.
+  if (direct.some((p) => p.name === s && !p.mergedInto)) {
+    return { results: direct.filter((p) => !p.mergedInto), note: null };
+  }
+  // data-driven merge redirect takes priority over the hardcoded POET_ALIASES table (a corpus-merged
+  // identity is authoritative provenance, not a mere 字/号 nicety).
+  const merged = redirectMerged(direct, limit);
+  if (merged) return merged;
   const canonical = POET_ALIASES[s];
   if (canonical) {
     // exact alias: surface the canonical poet(s) first, then any other substring matches

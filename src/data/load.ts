@@ -5,7 +5,7 @@
 import type { Lexicon } from "../engine/engine";
 import { setDataset } from "./provider";
 import { hydrateLexicon, type LexiconAsset, type FirstLineRef, type GiftEdge, type GiftsAsset } from "./contract";
-import { hashStr } from "./dynasties";
+import { hashStr, DYNASTY_BY_KEY } from "./dynasties";
 import { checkCharset, type CharsetCheck } from "./charsetHash";
 import { FAMOUS_POETS } from "./famousPoets";
 
@@ -35,6 +35,12 @@ export interface PoetRow {
   dynasty: string;
   poemCount: number;
   clusterSize: number;
+  /** canonical 别名层 (Wikidata-style redirect, G2): set ONLY on an alias row (poemCount:0/clusterSize:0)
+   *  emitted by build-data.mjs from the corpus's poets.jsonl `mergedInto` rows — the id of the CANONICAL
+   *  PoetRow this name was merged into (e.g. 唐温如 → 唐珙|yuan). Absent on every normal poet row. Callers
+   *  that resolve a poet by id (permalink #a=, search) should redirect through this to the canonical row;
+   *  renderers (PoetStars/gpuPick) must treat poemCount:0 rows as invisible/unpickable regardless. */
+  mergedInto?: string;
 }
 export interface PoemRecord {
   t: string;
@@ -64,6 +70,42 @@ let _rangeUnsupported = false; // a host that ignores Range (200, not 206) → s
 export const getPoets = (): PoetRow[] => _poets;
 export const getPoet = (id: string): PoetRow | undefined => _byId.get(id);
 export const getManifest = (): DataManifest | null => _manifest;
+
+/** canonical 别名层: resolve a possibly-alias PoetRow to its canonical row. Returns `{canonical}` when
+ *  `row` has no `mergedInto` (the common case — pass through unchanged), or `{canonical, aliasName}`
+ *  when it redirected (aliasName = the alias's OWN name, for a "「X」已并入「Y」" notice). If the
+ *  mergedInto target id isn't in the loaded index (a data-provisioning desync), falls back to `row`
+ *  itself rather than losing the selection. Pure — takes the row/lookup so it's unit-testable without
+ *  loadData()/fetch. */
+export function resolveCanonicalPoet(
+  row: PoetRow,
+  byId: Map<string, PoetRow> = _byId,
+): { canonical: PoetRow; aliasName?: string } {
+  if (!row.mergedInto) return { canonical: row };
+  const target = byId.get(row.mergedInto);
+  if (!target) return { canonical: row }; // dead target — degrade to the alias row itself, don't vanish
+  return { canonical: target, aliasName: row.name };
+}
+
+/** Display-name pair for an alias→canonical notice. When the two share the SAME display name
+ *  (唐珙|ming → 唐珙|yuan) the bare copy would be self-referential (「唐珙」已并入「唐珙」), so BOTH get a
+ *  dynasty-label suffix — 唐珙(明) / 唐珙(元) — labels read from DYNASTIES (dynasties.ts), never a
+ *  hardcoded map here. Different names pass through unchanged (the common case: 唐温如 → 唐珙). */
+export function aliasNoticeNames(alias: PoetRow, canonical: PoetRow): [string, string] {
+  if (alias.name !== canonical.name) return [alias.name, canonical.name];
+  const label = (key: string) => DYNASTY_BY_KEY[key]?.label ?? key;
+  return [`${alias.name}(${label(alias.dynasty)})`, `${canonical.name}(${label(canonical.dynasty)})`];
+}
+
+/** The low-key "「唐温如」已并入「唐珙」" notice PoetPanel shows after a #a= redirect (permalink.ts's
+ *  applyHash) — centralised here (not inlined at the call site) so the ONE format string is what
+ *  load.test.ts actually exercises. null when `row` isn't an alias (the common case). */
+export function poetAliasRedirectNote(row: PoetRow, byId: Map<string, PoetRow> = _byId): string | null {
+  const { canonical, aliasName } = resolveCanonicalPoet(row, byId);
+  if (!aliasName) return null;
+  const [a, c] = aliasNoticeNames(row, canonical);
+  return `「${a}」已并入「${c}」`;
+}
 
 function dummyLexicon(N: number): Lexicon {
   const half = N >> 1;
