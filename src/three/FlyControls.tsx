@@ -38,8 +38,8 @@ const BASE_SPEED = 140; // world units/sec at speed ×1 (slow, galactic feel)
 const MOVE_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ShiftLeft", "ShiftRight"]);
 // ── Q/E 滚转 (desktop, 电脑端) ── 按住 = 持续绕视线(前向)轴滚转,松开即停 —— 与 WASD 移动完全同款手感:
 // 状态记在 keys.current 里(onKeyDown 已对所有键置位,故 Q/E 无需进 MOVE_KEYS),useFrame 里线性 dt 积分。
-// Q 逆向、E 正向;初设「按 E → 星空整体顺时针转」(euler.z=+ 绕局部前向轴 → 相机 CCW → 场景 CW)。
-// 眼测若方向反了,翻转 ROLL_RATE 号(或积分处符号)即可。地平线/星空整体跟着滚,不改朝向(yaw/pitch)。
+// Q 正向、E 逆向;按住 Q → 机身左倾(euler.z=+ 绕局部前向轴 → 星空整体看起来顺时针转);
+// 按住 E → 机身右倾(euler.z=- → 星空逆时针)。地平线/星空整体跟着滚,不改朝向(yaw/pitch)。
 const ROLL_RATE = 1.2; // rad/s ≈ 70°/s,滚转角速度(owner 眼测可调)
 
 // ── per-frame scratch (hoisted out of useFrame so the hot camera loop allocates ZERO objects) ──
@@ -415,8 +415,8 @@ export function FlyControls() {
   useFrame((_, dt) => {
     // ── Q/E 滚转(hold-to-roll,线性)── 按住即每帧 dt 积分,松开即停,和 WASD 同款。roll 是唯一真值,下面各
     // 渲染分支(自由飞 / 环绕 / flyTarget)据它落地姿态。Q/E 已置 ceremonyCam.cancelled,故滚转发生在礼仪块之后。
-    if (keys.current["KeyQ"]) roll.current -= ROLL_RATE * dt; // Q 逆向
-    if (keys.current["KeyE"]) roll.current += ROLL_RATE * dt; // E 正向(初设:星空顺时针;翻号即反向)
+    if (keys.current["KeyQ"]) roll.current += ROLL_RATE * dt; // Q 正向:机身左倾(星空看起来顺时针)
+    if (keys.current["KeyE"]) roll.current -= ROLL_RATE * dt; // E 逆向:机身右倾(星空看起来逆时针)
     const rolling = !!(keys.current["KeyQ"] || keys.current["KeyE"]); // 这帧是否正在滚(决定自由飞是否需重提交姿态)
     // ── CEREMONY CAMERA (highest priority) ── fly a hero-frame that plunges WITH the claimer's own streak
     // toward the heart (fixes 根因①: the camera used to lock onto the streak's START and never follow). The
