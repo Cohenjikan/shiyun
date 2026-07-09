@@ -92,7 +92,7 @@ Pingshui_Rhyme.json ─→ build-lexicon ──┘                └ manifest.j
 | **UF-10** | 袁枚《所见》疑缺 | upstream-missing | ✅已补录(corpus additions,袁枚 81 首) |
 | **UF-11** | 高适《别董大》「十里黄云」讹字(用户反馈第二批) | upstream-typo | ✅已修(千里,expectHits=2 双记录) |
 | **UF-12** | 张居正缺《咏竹》《闻警》《述怀》(用户反馈第二批) | upstream-missing | ✅咏竹已补(轶闻类注记)·闻警/述怀考据不过不收(孤证/仅节选) |
-| **UF-13** | 「竟」显示成「竞」(用户反馈第二批) | 待定位 | ❓待用户提供具体诗目 |
+| **UF-13** | 「竟」显示成「竞」(用户反馈第二批) | not-an-error | 🧊 owner 确认误报,关闭(2026-07-09) |
 
 > **流水线自证清白**：`pipeline-dedup = 0`、`pipeline-charset-skip = 0` —— 用户反馈的问题**没有一条**是我方去重或字库跳过造成。详见 §4-UF。
 
@@ -235,7 +235,7 @@ Pingshui_Rhyme.json ─→ build-lexicon ──┘                └ manifest.j
 | **UF-10** 袁枚《所见》 | 确为袁枚真作 | `97.json[97cc074f]` 80 首无此诗，四句 lines 全空（非错挂他人） | 全 CSV 对诗句/标题 0 命中；袁枚作者行精确 80 = 我方 80 | **upstream-missing**（注：「樾」字在字库内，已排除 charset-skip） |
 | **UF-11** | 高适《别董大》「十里黄云」讹字(用户反馈第二批) | upstream-typo | ✅已修(千里,expectHits=2 双记录) |
 | **UF-12** | 张居正缺《咏竹》《闻警》《述怀》(用户反馈第二批) | upstream-missing | ✅咏竹已补(轶闻类注记)·闻警/述怀考据不过不收(孤证/仅节选) |
-| **UF-13** | 「竟」显示成「竞」(用户反馈第二批) | 待定位 | ❓待用户提供具体诗目 |
+| **UF-13** | 「竟」显示成「竞」(用户反馈第二批) | not-an-error | 🧊 owner 确认误报,关闭(2026-07-09) |
 
 ### 根因分布（10 条）
 
