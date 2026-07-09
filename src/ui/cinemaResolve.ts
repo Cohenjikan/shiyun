@@ -26,9 +26,9 @@ export interface AnyIndexLike {
 export interface CinemaResolveArgs {
   // void pull
   selected: { lines: string[]; babelIndex: string; babelDigits: number } | null;
-  // selected poet + its loaded poems (null while loading)
+  // selected poet + its loaded poems (null while loading). `d` = 含 □ 原貌展示句(见 PoemRecord)。
   poet: { name: string } | null;
-  poems: { t: string; p: string[] }[] | null;
+  poems: { t: string; p: string[]; d?: string[] }[] | null;
   // 搜的这首 focus (search hit)
   focus: { poemIdx: number } | null;
   // explicit per-poem 留影 target (PoetPanel row button)
@@ -39,12 +39,12 @@ export interface CinemaResolveArgs {
 
 function fromPoetPoem(
   poet: { name: string },
-  pm: { t: string; p: string[] },
+  pm: { t: string; p: string[]; d?: string[] },
   indexer: CinemaResolveArgs["indexer"],
 ): ResolvedCinemaPoem {
-  const a = indexer(pm.p);
+  const a = indexer(pm.p); // 编号永远算自 p(真值),d 只影响展示
   return {
-    lines: pm.p,
+    lines: pm.d ?? pm.p, // 展示含 □ 缺字的原貌
     index: a?.index ?? null,
     digits: a?.digits ?? 0,
     attribution: `${poet.name}《${pm.t || "无题"}》`,

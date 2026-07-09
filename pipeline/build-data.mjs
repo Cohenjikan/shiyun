@@ -91,6 +91,18 @@ const onlyHan = (s) => [...nfc(s)].filter((c) => HAN.test(c)).join("");
 const splitLines = (content) =>
   nfc(content).split(/[，。！？；、\s]+/).map(onlyHan).filter(Boolean);
 
+// ── 展示层 d (display lines) — 保留 □ 的正文原貌 ────────────────────────────────────────────────
+// □ (U+25A1) 是古籍缺字符号(如刘克庄《□□□□》,或句中「了翁自□不须多」)。它不是汉字,故 onlyHan 会把它
+// 剔除,导致 p(编号/星位/搜索/格律的真值)里正文缺句缺字。d 用 **同样的 NFC + 同样的标点切分正则**,但每句
+// 保留「汉字 OR □」的字符,得到含 □ 的原貌句 —— 仅供人眼展示,一切计算仍只读 p。□ 从不进 charset / freq /
+// lineIndex / p,所以 d 对既有的一切逻辑完全惰性。
+const BOX = "□";
+const onlyHanBox = (s) => [...nfc(s)].filter((c) => HAN.test(c) || c === BOX).join("");
+const splitDisplayLines = (content) =>
+  nfc(content).split(/[，。！？；、\s]+/).map(onlyHanBox).filter(Boolean);
+// d 逐句去掉 □、再丢空句后,必须与 p 逐句逐字相等(硬不变量,见 addPoem)。
+const stripBoxes = (dLines) => dLines.map((l) => [...l].filter((c) => c !== BOX).join("")).filter(Boolean);
+
 const FORMS = [
   { id: "wujue", lines: 4, per: 5 },
   { id: "qijue", lines: 4, per: 7 },
@@ -134,10 +146,11 @@ const poets = new Map(); // id -> {id,name,dynasty,dynastyRaw,count,poems:[]}
 const lineIndex = new Map(); // ANY line -> [{p:poetId, i:poemIdx, t:title, f:form}] (content search)
 const LINE_CAP = 6; // max poems indexed per identical line (avoid skew on ultra-common lines)
 let total = 0;
+let poemsWithD = 0; // 携带展示层 d(即正文含 □ 缺字)的诗数 — 构建日志输出
 
 // index every poem: charset freq, poet aggregation, and EVERY line (so any line is searchable —
-// 疑是地上霜 → 静夜思, not just the opening).
-function addPoem(title, author, dyn, dynRaw, lines) {
+// 疑是地上霜 → 静夜思, not just the opening). `dLines`(可选)= 含 □ 的展示原貌句(见上);缺省则不带 d。
+function addPoem(title, author, dyn, dynRaw, lines, dLines) {
   if (lines.length === 0) return;
   if (frozenSet) {
     // frozen-charset gate: a poem with ANY out-of-字库 char is skipped whole (dropping single chars
@@ -158,7 +171,22 @@ function addPoem(title, author, dyn, dynRaw, lines) {
   p.count++;
   const f = classifyForm(lines);
   const poemIdx = p.poems.length;
-  p.poems.push({ t: title || "", f, p: lines });
+  const rec = { t: title || "", f, p: lines };
+  if (dLines) {
+    // 硬不变量:d 去 □ 去空句后必须与 p 逐句逐字相等。违反 = 构建失败(绝不让 d 悄悄改动正文/与 p 脱节)。
+    const stripped = stripBoxes(dLines);
+    if (stripped.length !== lines.length || stripped.some((l, k) => l !== lines[k])) {
+      throw new Error(
+        `d/p 不变量违反 — ${author}《${title}》\n  p=${JSON.stringify(lines)}\n  d=${JSON.stringify(dLines)}`,
+      );
+    }
+    // 仅当 d 与 p 真的不同(即 body 含 □)才存 d,否则省体积不存 —— 绝大多数诗不含 □,不带 d。
+    if (dLines.length !== lines.length || dLines.some((l, k) => l !== lines[k])) {
+      rec.d = dLines;
+      poemsWithD++;
+    }
+  }
+  p.poems.push(rec);
   total++;
   const seen = new Set(); // dedupe repeated lines within one poem
   for (const ln of lines) {
@@ -178,7 +206,7 @@ for (const file of files) {
   for (let r = 1; r < rows.length; r++) {
     const [title, dynRaw, author, content] = rows[r];
     if (!author || !content) continue;
-    addPoem(title, author, DYN[dynRaw] || "unknown", dynRaw, splitLines(content));
+    addPoem(title, author, DYN[dynRaw] || "unknown", dynRaw, splitLines(content), splitDisplayLines(content));
   }
   console.log(`  ${file}: poems=${total} poets=${poets.size}`);
 }
@@ -238,8 +266,9 @@ if (mfiles.length) {
       const author = (poem.author || "").trim();
       if (!author || !Array.isArray(poem.paragraphs)) continue;
       const lines = poem.paragraphs.map(onlyHan).filter(Boolean);
+      const dLines = poem.paragraphs.map(onlyHanBox).filter(Boolean); // 原文可得 → 一并传展示层(含 □)
       const dyn = MODERN_JINXIANDAI.has(author) ? "jinxiandai" : "dangdai";
-      addPoem((poem.title || "").trim(), author, dyn, "现代", lines);
+      addPoem((poem.title || "").trim(), author, dyn, "现代", lines, dLines);
       recordModern(poetId(author, dyn), lines); // so sheepzh below won't re-add the same poem
       mp++;
     }
@@ -293,11 +322,12 @@ if (sdirs.length) {
       if (rows[bodyStart]?.startsWith("date:")) bodyStart++;
       const lines = rows.slice(bodyStart).map(onlyHan).filter(Boolean);
       if (!lines.length) { sNoBody++; continue; }
+      const dLines = rows.slice(bodyStart).map(onlyHanBox).filter(Boolean); // 原文可得 → 一并传展示层(含 □)
       const key = modernKey(lines);
       const seen = modernSeen.get(id);
       if (seen && seen.has(key)) { sDup++; continue; } // already shipped via yuxqiu (or an earlier file)
       const before = total;
-      addPoem(title, author, dyn, "现代", lines);
+      addPoem(title, author, dyn, "现代", lines, dLines);
       if (total > before) { recordModern(id, lines); sp++; } // not skipped by the charset gate
     }
   }
@@ -354,7 +384,7 @@ if (USE_CORPUS) {
         continue;
       }
       if (o.id) lineOwner.set(o.id, bkey); // canonical line → its bucket (charset-skips don't matter here)
-      addPoem(o.title || "", o.author, dyn, o.dynasty_raw || "", splitLines(o.body));
+      addPoem(o.title || "", o.author, dyn, o.dynasty_raw || "", splitLines(o.body), splitDisplayLines(o.body));
       cp++;
       if (CORPUS_MAX && cp >= CORPUS_MAX) {
         console.log(`  (CORPUS_MAX=${CORPUS_MAX} smoke cap hit)`);
@@ -731,4 +761,5 @@ writeFileSync(join(OUT, "manifest.json"), JSON.stringify({
 console.log(`\n诗句索引 lines=${lineIndex.size} buckets=${flBuckets.size}  赠诗 edges=${edges.length}`);
 
 console.log(`\nDONE  poets=${poets.size}  poems=${total}  字库 N=${N}  buckets=${buckets.size}`);
+console.log(`携带展示层 d(正文含 □ 缺字原貌)的诗:${poemsWithD}`);
 console.log("dynasty poet counts:", dynCounts);

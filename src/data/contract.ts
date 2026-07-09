@@ -68,7 +68,10 @@ export type StarShard = StarShardEntry[];
 export interface PoemRecord {
   t: string; // title
   f: FormId | "other"; // detected form (or non-近体诗)
-  p: string[]; // paragraphs (bare chars, punctuation stripped)
+  p: string[]; // paragraphs (bare chars, punctuation stripped) — the CANONICAL text: 编号/星位/搜索/格律 all read p
+  /** 原貌展示句,含 □(U+25A1 古籍缺字符号)。仅当正文含 □ 时 build-data.mjs 才写入,满足「d 去 □ 去空句 === p」。
+   *  展示专用(正文渲染 `d ?? p`);所有计算仍只读 p。 */
+  d?: string[];
 }
 export interface PoemShard {
   poets: Record<string, PoemRecord[]>; // poetId -> poems

@@ -209,10 +209,12 @@ export function PoetPanel() {
                 {isOpen && (
                   <div className="pi-detail">
                     <div className="pi-body">
-                      {pm.p.map((l, j) => (
+                      {/* 展示用 d ?? p:含 □ 缺字的原貌;编号/定位/格律等一切计算仍读 pm.p */}
+                      {(pm.d ?? pm.p).map((l, j) => (
                         <div key={j} className={pm.f === "other" ? "wrap" : ""}>{l}</div>
                       ))}
                     </div>
+                    {pm.d && <div className="pi-idx dim">□ 为原文缺字</div>}
                     {(() => {
                       const r = indexFor(i);
                       if (!r) return <div className="pi-idx dim">含字库外字符 · 无固定编号</div>;

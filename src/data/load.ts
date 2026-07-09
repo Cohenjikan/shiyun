@@ -45,7 +45,10 @@ export interface PoetRow {
 export interface PoemRecord {
   t: string;
   f: string; // "wujue" | "qijue" | "wulu" | "qilu" | "other"
-  p: string[]; // lines
+  p: string[]; // lines — 汉字真值:编号(#a=)/星位/搜索/格律 一切计算的唯一依据
+  /** 原貌展示句,含 □(U+25A1,古籍缺字符号)。仅当正文含 □ 时由 build-data.mjs 写入(否则缺省),且满足
+   *  「d 逐句去 □ 去空句 === p」。**仅供人眼展示**(正文渲染用 `d ?? p`);一切计算严格用 `p`,绝不用 d。 */
+  d?: string[];
 }
 export interface DataManifest {
   n: number;
