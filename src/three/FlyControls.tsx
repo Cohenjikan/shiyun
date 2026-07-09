@@ -36,6 +36,11 @@ const GIFT_HOVER_PX = 26; // hover within this → highlight the arc (so the use
 const BASE_SPEED = 140; // world units/sec at speed ×1 (slow, galactic feel)
 // pressing any of these releases the camera lock (随意按移动键解除锁定)
 const MOVE_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ShiftLeft", "ShiftRight"]);
+// ── Q/E 滚转 (desktop, 电脑端) ── 按住 = 持续绕视线(前向)轴滚转,松开即停 —— 与 WASD 移动完全同款手感:
+// 状态记在 keys.current 里(onKeyDown 已对所有键置位,故 Q/E 无需进 MOVE_KEYS),useFrame 里线性 dt 积分。
+// Q 逆向、E 正向;初设「按 E → 星空整体顺时针转」(euler.z=+ 绕局部前向轴 → 相机 CCW → 场景 CW)。
+// 眼测若方向反了,翻转 ROLL_RATE 号(或积分处符号)即可。地平线/星空整体跟着滚,不改朝向(yaw/pitch)。
+const ROLL_RATE = 1.2; // rad/s ≈ 70°/s,滚转角速度(owner 眼测可调)
 
 // ── per-frame scratch (hoisted out of useFrame so the hot camera loop allocates ZERO objects) ──
 // The lock and flyTarget blocks are mutually exclusive (each early-returns), so they SHARE these:
@@ -53,11 +58,15 @@ const _off = new THREE.Vector3();
 const _mat = new THREE.Matrix4();
 const _quat = new THREE.Quaternion();
 const _flyV = new THREE.Vector3();
+const _rollQuat = new THREE.Quaternion(); // Q/E 滚转:绕相机局部前向(Z)轴的姿态偏移,后乘到 lookAt 结果上
+const _zAxis = new THREE.Vector3(0, 0, 1); // camera local forward axis for the roll offset
 
 export function FlyControls() {
   const { camera, gl } = useThree();
   const keys = useRef<Record<string, boolean>>({});
   const euler = useRef(new THREE.Euler(0, 0, 0, "YXZ"));
+  // Q/E 滚转的唯一真值:当前绕视线轴累计的滚转角(rad)。自由飞时写进 euler.z;环绕/flyTarget 时后乘成姿态偏移。
+  const roll = useRef(0);
   const speedMul = useRef(1);
   const drag = useRef({ active: false, lastX: 0, lastY: 0, moved: 0, type: "" });
   const ray = useRef(new THREE.Raycaster());
@@ -145,11 +154,13 @@ export function FlyControls() {
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTyping()) return;
-      keys.current[e.code] = true;
+      keys.current[e.code] = true; // 按住状态(含 Q/E)记在这里,useFrame 每帧读 → hold-to-roll 无需额外状态机
       if (MOVE_KEYS.has(e.code)) {
         st().unlock(); // a movement key frees the locked camera
         ceremonyCam.cancelled = true; // …and hands the ceremony camera back (打断即还政,不回抢)
       }
+      // Q/E 滚转:按下即视作用户接管 → 还政(不回抢);但不 unlock(滚转不是移动,不该解跟随)、不入 MOVE_KEYS。
+      if (e.code === "KeyQ" || e.code === "KeyE") ceremonyCam.cancelled = true;
     };
     const onKeyUp = (e: KeyboardEvent) => (keys.current[e.code] = false);
     const onDown = (e: PointerEvent) => {
@@ -402,6 +413,11 @@ export function FlyControls() {
   const cerSide = useRef<-1 | 0 | 1>(0); // last frame's ceremonyFrame side, fed back as stickySide so the
   // end-on dead zone can't flip the desired machine position frame-to-frame; 0 = fresh ceremony, no preference.
   useFrame((_, dt) => {
+    // ── Q/E 滚转(hold-to-roll,线性)── 按住即每帧 dt 积分,松开即停,和 WASD 同款。roll 是唯一真值,下面各
+    // 渲染分支(自由飞 / 环绕 / flyTarget)据它落地姿态。Q/E 已置 ceremonyCam.cancelled,故滚转发生在礼仪块之后。
+    if (keys.current["KeyQ"]) roll.current -= ROLL_RATE * dt; // Q 逆向
+    if (keys.current["KeyE"]) roll.current += ROLL_RATE * dt; // E 正向(初设:星空顺时针;翻号即反向)
+    const rolling = !!(keys.current["KeyQ"] || keys.current["KeyE"]); // 这帧是否正在滚(决定自由飞是否需重提交姿态)
     // ── CEREMONY CAMERA (highest priority) ── fly a hero-frame that plunges WITH the claimer's own streak
     // toward the heart (fixes 根因①: the camera used to lock onto the streak's START and never follow). The
     // geometry (head/start/end) is published every frame by Meteors in WORLD space — RED LINE: use it RAW, do
@@ -463,8 +479,10 @@ export function FlyControls() {
         const k = 1 - Math.pow(0.0025, dt); // gentle glide-in then steady follow (drag/wheel adjust orbit)
         camera.position.lerp(desired, k);
         const m = _mat.lookAt(camera.position, target, tmpUp.current); // _tgt still valid here
-        camera.quaternion.slerp(_quat.setFromRotationMatrix(m), k);
-        euler.current.setFromQuaternion(camera.quaternion); // so free-fly resumes cleanly on release
+        _quat.setFromRotationMatrix(m);
+        if (roll.current) _quat.multiply(_rollQuat.setFromAxisAngle(_zAxis, roll.current)); // Q/E 滚转:绕视线轴后乘偏移
+        camera.quaternion.slerp(_quat, k);
+        euler.current.setFromQuaternion(camera.quaternion); // so free-fly resumes cleanly on release (含 roll)
         return;
       }
     }
@@ -484,9 +502,11 @@ export function FlyControls() {
       const k = 1 - Math.pow(0.0015, dt);
       camera.position.lerp(desired, k);
       const m = _mat.lookAt(camera.position, tv, tmpUp.current); // _tgt still valid here
-      camera.quaternion.slerp(_quat.setFromRotationMatrix(m), k);
+      _quat.setFromRotationMatrix(m);
+      if (roll.current) _quat.multiply(_rollQuat.setFromAxisAngle(_zAxis, roll.current)); // Q/E 滚转:绕视线轴后乘偏移
+      camera.quaternion.slerp(_quat, k);
       if (camera.position.distanceTo(desired) < 24) {
-        euler.current.setFromQuaternion(camera.quaternion);
+        euler.current.setFromQuaternion(camera.quaternion); // 含 roll → 落地后自由飞接得上
         useStore.getState().setFlyTarget(null);
       }
       return;
@@ -517,13 +537,18 @@ export function FlyControls() {
       const k = 1 - Math.pow(0.0025, dt);
       camera.position.lerp(desired, k);
       const m = _mat.lookAt(camera.position, target, tmpUp.current);
-      camera.quaternion.slerp(_quat.setFromRotationMatrix(m), k);
-      euler.current.setFromQuaternion(camera.quaternion); // so free-fly resumes cleanly on toggle/release
+      _quat.setFromRotationMatrix(m);
+      if (roll.current) _quat.multiply(_rollQuat.setFromAxisAngle(_zAxis, roll.current)); // Q/E 滚转:绕视线轴后乘偏移
+      camera.quaternion.slerp(_quat, k);
+      euler.current.setFromQuaternion(camera.quaternion); // so free-fly resumes cleanly on toggle/release (含 roll)
       return;
     }
     // free-fly (freeMove ON, no lock / no fly): invalidate the orbit seed so re-entering a lock reseeds
     // from the CURRENT camera (no snap).
     lock.current.key = "";
+    // Q/E 滚转(自由飞):当前 roll 写进 euler.z(YXZ 序 z = 绕局部前向轴)。放在引力协转之前 —— 引力只 += euler.y
+    // 再 setFromEuler,会读到这里写好的 euler.z → roll 不被吃掉(无需另加偏移)。拖拽(onMove)只改 y/x,z 独立保留。
+    euler.current.z = roll.current;
     // 引力: once inside the galaxy, orbit the camera WITH the spin (same Δ as the galaxy this
     // frame) so the stars hold still on screen — otherwise close-up stars drift tangentially
     // faster than you can click. Outside the sphere you watch it turn from afar.
@@ -540,6 +565,9 @@ export function FlyControls() {
         camera.quaternion.setFromEuler(euler.current);
       }
     }
+    // 滚转帧的姿态落地:引力未生效(关/出球)且未拖拽时,euler.z 的变化要在此显式提交(引力若已 setFromEuler
+    // 则已含 roll,此为等值重复、无害)。仅在按住 Q/E 时提交,静止/纯 WASD 帧不多做一次 setFromEuler。
+    if (rolling) camera.quaternion.setFromEuler(euler.current);
     const k = keys.current;
     const v = _flyV.set(0, 0, 0); // reset the hoisted temp each frame (was a fresh Vector3)
     if (k["KeyW"]) v.z -= 1;
