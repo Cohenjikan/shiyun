@@ -148,10 +148,33 @@ const LINE_CAP = 6; // max poems indexed per identical line (avoid skew on ultra
 let total = 0;
 let poemsWithD = 0; // 携带展示层 d(即正文含 □ 缺字)的诗数 — 构建日志输出
 
+// ── 收录状态标注层 (collection status) bookkeeping ──────────────────────────────────────────────────
+// 把库里各种「不全/特殊」从暗坑变成 poets.index 上的可选标注,前端据类渲染一行灰字 / 存目条目。全部可选、加法式:
+// 不动 p / charset / poemIdx / poetId,poets.index 只新增可选键(collection/quGap/restrictedOnly/lost),
+// poems 分片只新增可选 s/sn。以下四个表在 addPoem + corpus 摄入循环里填充,emission 时织入 index。
+const quGapPoets = new Set();            // poetId:该诗人 ≥1 首散曲(genre=qu)真正入库 → 前端「散曲收录不完整」(~97 位)
+// 散曲起于金元 —— 更早朝代的 genre=qu 全是 corpus deriveGenre 把「宫调前缀的词牌」误判(如贺铸《中吕宫丑奴儿》、
+// 李贺乐府),给宋人唐人挂「散曲不全」会露怯。朝代守卫兜住 14 例误伤;deriveGenre 根修记 DATA_ERRATA 待 corpus 下轮。
+const QU_DYNS = new Set(["jin", "yuan", "ming", "qing", "jinxiandai", "dangdai"]);
+const restrictedCountByPoet = new Map(); // poetId → s==="restricted" 的入库诗数;== p.count 即全库仅存目 → restrictedOnly
+const lostByKey = new Map();             // "name|dyn" → [{t,k}] 零汉字诗(全 □ lacuna / 全外文·数字 nonhan)存目
+const charsetSkipByPoet = new Map();     // poetId → 被字库门禁跳过的诗数(当前预期 0;>0 时构建末尾 console.error 提醒补 UI)
+
 // index every poem: charset freq, poet aggregation, and EVERY line (so any line is searchable —
 // 疑是地上霜 → 静夜思, not just the opening). `dLines`(可选)= 含 □ 的展示原貌句(见上);缺省则不带 d。
-function addPoem(title, author, dyn, dynRaw, lines, dLines) {
-  if (lines.length === 0) return;
+// `opts`(可选)= {s, sn} 收录状态:s 挂到 PoemRecord(disputed|restricted),sn = 展示注文(见下方 rec)。
+function addPoem(title, author, dyn, dynRaw, lines, dLines, opts) {
+  if (lines.length === 0) {
+    // lost(存目):正文经 onlyHan 切分后无任何汉字句 → 这首诗永远进不了 p/编号/星位/搜索(现状不变,不入 poems)。
+    // 但它确实存在于语料,静默消失是暗坑 → 记 per-「name|dyn」列表,emission 挂到诗人行 lost[]。分两式:dLines
+    // (含 □ 原貌)非空且含 □ → 原文已佚(lacuna,如贺铸《江夏八咏 其四》全 □);否则 → 非汉字内容(nonhan,如全外文/数字)。
+    const hasBox = !!(dLines && dLines.length && dLines.some((l) => l.includes(BOX)));
+    const lkey = author + "|" + dyn;
+    let arr = lostByKey.get(lkey);
+    if (!arr) { arr = []; lostByKey.set(lkey, arr); }
+    arr.push({ t: title || "", k: hasBox ? "lacuna" : "nonhan" });
+    return;
+  }
   if (frozenSet) {
     // frozen-charset gate: a poem with ANY out-of-字库 char is skipped whole (dropping single chars
     // would corrupt the poem text; skipping keeps N + every existing 编号 permalink stable).
@@ -159,6 +182,10 @@ function addPoem(title, author, dyn, dynRaw, lines, dLines) {
       for (const ch of l) {
         if (!frozenSet.has(ch)) {
           skippedByCharset.set(currentSource, (skippedByCharset.get(currentSource) || 0) + 1);
+          // 收录状态:门禁按诗人计数(当前预期 0——字库已含全 CJK 基本块)。>0 = 有诗人被字库外字符整首吞掉,
+          // 需在前端补「字库外字符,收录不完整」子句;此处只记账,不落盘、不进 index(见构建末尾 console.error)。
+          const skPid = poetId(author, dyn);
+          charsetSkipByPoet.set(skPid, (charsetSkipByPoet.get(skPid) || 0) + 1);
           return;
         }
       }
@@ -172,6 +199,9 @@ function addPoem(title, author, dyn, dynRaw, lines, dLines) {
   const f = classifyForm(lines);
   const poemIdx = p.poems.length;
   const rec = { t: title || "", f, p: lines };
+  // 收录状态标注(仅 corpus additions 带 collection 的 2 首):s = disputed(真伪存疑)| restricted(版权存目),
+  // sn = 展示注文。惰性:不含 s 的诗记录逐字节不变;s/sn 只影响前端灰注,不进编号/搜索/格律。
+  if (opts && opts.s) { rec.s = opts.s; if (opts.sn) rec.sn = opts.sn; }
   if (dLines) {
     // 硬不变量:d 去 □ 去空句后必须与 p 逐句逐字相等。违反 = 构建失败(绝不让 d 悄悄改动正文/与 p 脱节)。
     const stripped = stripBoxes(dLines);
@@ -226,6 +256,16 @@ const MODERN_JINXIANDAI = new Set([
   "刘大白","王独清","穆木天","殷夫","蒋光慈","田间","袁可嘉","杜运燮","陈梦家","朱湘","邵洵美",
   "鲁迅","周作人","艾青","纪弦","痖弦","郑愁予","周梦蝶","洛夫","余光中","覃子豪","方思",
 ]);
+
+// ── 收录状态·策展表(key = `name|dynasty`,类比 MODERN_JINXIANDAI:表述层,不动 poetId) ─────────────────
+// 少数诗人的「不全」是结构性事实(整部御制诗集只传下三百余首 / 作品仍在版权期),不是 corpus 能自动测出的。
+// 这里按正身诗人挂一行「为什么不全」的灰字文案(前端 collectionStatus.ts 组装)。别名/redirect 行不带(#a=
+// 先重定向到正身再渲染,现有逻辑保证)。k=copyright 的诗人会抑制前端「现当代通用」子句(避免重复)。
+const COLLECTION_NOTES = {
+  "弘历|qing":        [{ k: "partial",   note: "《御制诗集》四万余首,开源语料仅传三百余首" }],
+  "毛泽东|jinxiandai": [{ k: "copyright", note: "部分作品在版权保护期内,2027 年 1 月进入公有领域后补全" }],
+  "叶嘉莹|jinxiandai": [{ k: "copyright", note: "作品版权保护至 2074 年,现仅存目" }],
+};
 // modern-poem dedup across sources (yuxqiu ships first and is PRESERVED verbatim — its poems keep
 // their existing per-poet order/idx; sheepzh then adds only poems whose CONTENT wasn't seen).
 const modernSeen = new Map(); // poetId -> Set<content key>
@@ -384,7 +424,22 @@ if (USE_CORPUS) {
         continue;
       }
       if (o.id) lineOwner.set(o.id, bkey); // canonical line → its bucket (charset-skips don't matter here)
-      addPoem(o.title || "", o.author, dyn, o.dynasty_raw || "", splitLines(o.body), splitDisplayLines(o.body));
+      // 收录状态:corpus 行的 collection.status → PoemRecord.s(index-only→restricted 版权存目 / disputed→disputed 真伪存疑),
+      // sn = collection.note。仅 additions 的 2 首带 collection,其余 undefined → 不带 s/sn。
+      let sOpts;
+      if (o.collection && o.collection.status) {
+        const s = o.collection.status === "index-only" ? "restricted" : o.collection.status === "disputed" ? "disputed" : null;
+        if (s) sOpts = { s, sn: o.collection.note || "" };
+      }
+      const before = total;
+      addPoem(o.title || "", o.author, dyn, o.dynasty_raw || "", splitLines(o.body), splitDisplayLines(o.body), sOpts);
+      if (total > before) {
+        // 真正入库(未被字库门禁 / 空句丢弃)才计:散曲缺口 quGap & 全存目判定 restrictedOnly。canonical:false 行
+        // 已在上面 continue,天然排除。CSV/yuxqiu/sheepzh 路径无 o.genre/collection → 此块在 USE_CORPUS 下才有数据。
+        const inPid = poetId(o.author, dyn);
+        if (o.genre === "qu" && QU_DYNS.has(dyn)) quGapPoets.add(inPid); // 朝代守卫见 QU_DYNS 注释
+        if (sOpts && sOpts.s === "restricted") restrictedCountByPoet.set(inPid, (restrictedCountByPoet.get(inPid) || 0) + 1);
+      }
       cp++;
       if (CORPUS_MAX && cp >= CORPUS_MAX) {
         console.log(`  (CORPUS_MAX=${CORPUS_MAX} smoke cap hit)`);
@@ -430,9 +485,22 @@ if (frozenSet) {
 
 // poets.index.json (sorted by poemCount desc)
 const clusterSize = (n) => Math.min(60, Math.max(2, +(2 + 1.4 * Math.sqrt(n)).toFixed(2)));
+// 收录状态标注:emission 时把四个可选键织入真实诗人行(全部加法式,老消费者零感知)。lost 需按 name|dyn 找到
+// 真实诗人行才能挂;无真实诗行(全库仅零汉字诗,如马拉梅《Soupir》全法文)的 → 下方 console.error + 计数丢弃。
+const consumedLostKeys = new Set();
 const index = [...poets.values()]
   .sort((a, b) => b.count - a.count)
-  .map((p) => ({ id: p.id, name: p.name, dynasty: p.dynasty, poemCount: p.count, clusterSize: clusterSize(p.count) }));
+  .map((p) => {
+    const row = { id: p.id, name: p.name, dynasty: p.dynasty, poemCount: p.count, clusterSize: clusterSize(p.count) };
+    const key = p.name + "|" + p.dynasty;
+    const notes = COLLECTION_NOTES[key];
+    if (notes) row.collection = notes;                          // 策展文案(弘历/毛泽东/叶嘉莹)
+    if (quGapPoets.has(p.id)) row.quGap = 1;                    // ≥1 首散曲入库 → 散曲收录不完整
+    if (p.count > 0 && (restrictedCountByPoet.get(p.id) || 0) === p.count) row.restrictedOnly = 1; // 全库仅存目
+    const lost = lostByKey.get(key);                            // 零汉字诗存目条目
+    if (lost && lost.length) { row.lost = lost; consumedLostKeys.add(key); }
+    return row;
+  });
 
 // canonical 别名诗人行 (G1 merges.jsonl → poets.jsonl mergedInto rows): each is a REDIRECT, not a poet —
 // poemCount:0/clusterSize:0 so it never renders a star (PoetStars/gpuPick gate on aSize<0.001) and never
@@ -504,6 +572,36 @@ if (USE_CORPUS) {
     console.log(`  canonical 别名诗人行 (AUTO 清零桶): +${autoAlias} mergedInto, +${plainZero} plain-zero (无同名有诗桶)`);
   }
 }
+
+// ── 收录状态标注层:构建日志 + 兜底告警 ──────────────────────────────────────────────────────────────
+// lost 无真实诗行的诗人(全库仅零汉字诗)→ 无处可挂,console.error + 计数(预期:马拉梅《Soupir》全法文一位)。
+let lostOrphanPoets = 0, lostOrphanEntries = 0;
+for (const [key, arr] of lostByKey) {
+  if (consumedLostKeys.has(key)) continue;
+  lostOrphanPoets++; lostOrphanEntries += arr.length;
+  console.error(`  ⚠ lost 存目诗人无真实诗行,丢弃 ${arr.length} 条: ${key} — ${arr.map((e) => e.t || "（无题）").join(" / ")}`);
+}
+// COLLECTION_NOTES 键必须都命中真实诗人行(否则文案不渲染、静默失效)——命不中 = corpus 换源/合并动过该诗人,需查。
+const collectionRows = index.filter((r) => r.collection);
+const collectionKeysSeen = new Set(collectionRows.map((r) => r.name + "|" + r.dynasty));
+for (const k of Object.keys(COLLECTION_NOTES)) {
+  if (!collectionKeysSeen.has(k)) console.error(`  ⚠ COLLECTION_NOTES 键无匹配诗人行(该诗人无真实诗?文案不会渲染): ${k}`);
+}
+// 汇总
+const quGapRows = index.filter((r) => r.quGap);
+const restrictedOnlyRows = index.filter((r) => r.restrictedOnly);
+const lostRows = index.filter((r) => r.lost);
+let lostLacuna = 0, lostNonhan = 0, lostTotal = 0;
+for (const arr of lostByKey.values()) for (const e of arr) { lostTotal++; if (e.k === "lacuna") lostLacuna++; else lostNonhan++; }
+const charsetSkipTotal = [...charsetSkipByPoet.values()].reduce((a, b) => a + b, 0);
+console.log(`\n── 收录状态标注层 ──`);
+console.log(`  collection 策展文案诗人: ${collectionRows.length}  [${collectionRows.map((r) => `${r.name}|${r.dynasty}`).join(", ")}]`);
+console.log(`  quGap(散曲收录不完整)诗人: ${quGapRows.length}`);
+console.log(`  restrictedOnly(全库仅存目)诗人: ${restrictedOnlyRows.length}  [${restrictedOnlyRows.map((r) => `${r.name}(${r.id})`).join(", ")}]`);
+console.log(`  lost(零汉字诗存目): 共 ${lostTotal} 条 = ${lostLacuna} lacuna + ${lostNonhan} nonhan;挂真实诗人 ${lostRows.length} 位,无诗人行丢弃 ${lostOrphanPoets} 位/${lostOrphanEntries} 条`);
+if (charsetSkipByPoet.size === 0) console.log(`  charset 门禁 skip: 0(无字库外字符,符合预期)`);
+else console.error(`  ⚠ charset 门禁 skip: ${charsetSkipByPoet.size} 位诗人 / ${charsetSkipTotal} 首被整首吞掉 — 需在前端补「字库外字符,收录不完整」子句(方案 §2b);本轮不落盘不进 index`);
+
 writeFileSync(join(OUT, "poets.index.json"), JSON.stringify(index));
 
 // poems bucketed by id[0:2] (256 buckets) -> {id: [{t,f,p}]}

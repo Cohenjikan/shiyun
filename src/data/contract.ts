@@ -49,6 +49,15 @@ export interface PoetIndexEntry {
   dynastyRaw?: string; // original 朝代 string, for reversibility
   poemCount: number;
   clusterSize: number; // ∝ √poemCount
+  // canonical 别名层 (G2, Wikidata-style redirect): set ONLY on an alias row (poemCount:0/clusterSize:0);
+  // the CANONICAL poet id this name was merged into. Absent on a normal row. (See load.ts PoetRow — the
+  // real consumer; this contract row has no runtime consumer, kept只作文档 authority.)
+  mergedInto?: string;
+  // ── 收录状态标注层 (collection status): 可选、加法式,build-data.mjs 只在正身行写。见 load.ts PoetRow 详注。 ──
+  collection?: { k: "partial" | "copyright"; note: string }[]; // 结构性「不全」的策展文案(弘历/毛泽东/叶嘉莹)
+  quGap?: 1; // ≥1 首散曲入库 → 散曲收录不完整
+  restrictedOnly?: 1; // 全库仅存目(叶嘉莹)→ 头部改「存目 N 条」
+  lost?: { t: string; k: "lacuna" | "nonhan" }[]; // 零汉字诗存目(全 □ / 全外文·数字)
 }
 
 /** Per-poet star metadata shard (lazy, by region). */
@@ -72,6 +81,9 @@ export interface PoemRecord {
   /** 原貌展示句,含 □(U+25A1 古籍缺字符号)。仅当正文含 □ 时 build-data.mjs 才写入,满足「d 去 □ 去空句 === p」。
    *  展示专用(正文渲染 `d ?? p`);所有计算仍只读 p。 */
   d?: string[];
+  /** 收录状态(极少数 corpus additions 诗):disputed=真伪存疑 / restricted=版权存目。展示元数据,不参与任何计算。 */
+  s?: "disputed" | "restricted";
+  sn?: string; // 收录状态注文(与 s 配套的可展示短句)
 }
 export interface PoemShard {
   poets: Record<string, PoemRecord[]>; // poetId -> poems

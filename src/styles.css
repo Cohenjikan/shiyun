@@ -1006,6 +1006,13 @@ canvas {
   margin: -4px 0 10px;
   font-style: italic;
 }
+/* 收录状态诗人级灰字(复用 .poet-alias-note 视觉);当它紧跟别名提示时,去掉负 top margin 避免两行贴太近。 */
+.poet-collection-note {
+  margin-top: 0;
+}
+.poet-alias-note + .poet-collection-note {
+  margin-top: -6px;
+}
 .loading-row {
   color: var(--muted);
   font-size: 13px;
@@ -1143,6 +1150,27 @@ canvas {
   border-radius: 8px;
   padding: 8px 10px;
   margin: -2px 0 4px;
+}
+/* 存目条目(lost):不可展开、无按钮的 muted 行——标题左、存目标签右。复用现有 muted 视觉,不发明新模式。 */
+.poem-item.lost .pi-row {
+  cursor: default;
+}
+.poem-item.lost .lost-title {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  line-height: 1.45;
+  font-size: 14px;
+  color: var(--muted);
+  opacity: 0.7;
+}
+.poem-item.lost .lost-tag {
+  flex: none;
+  white-space: nowrap;
+  align-self: center;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.7;
 }
 .pi-hit {
   /* on its OWN line under the title, so even a 1-char title (e.g. 秋) is never squeezed/truncated by it */
@@ -2412,6 +2440,14 @@ canvas {
   font-size: 13px;
   letter-spacing: 0.12em;
   color: var(--gold);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+}
+/* 收录状态小灰字(署名行下):真伪存疑 / 版权存目——防截图外传时丢掉警示。muted + 阴影保证深底可读。 */
+.cinema-status {
+  margin-top: 3px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
 }
 .cinema-idx {

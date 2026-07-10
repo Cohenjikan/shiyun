@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../state/store";
 import { DYNASTY_BY_KEY } from "../data/dynasties";
+import { collectionNotice } from "../data/collectionStatus";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { anyTextIndex } from "../engine/engineApi";
 import { poemPosition } from "../three/positions";
@@ -113,6 +114,10 @@ export function PoetPanel() {
 
   if (!poet) return null;
   const dyn = DYNASTY_BY_KEY[poet.dynasty];
+  // 收录状态:诗人级一行灰字(按类拼装,零人名硬编码);头部计数在「全库仅存目」诗人(叶嘉莹)上改说「存目 N 条」。
+  const notice = collectionNotice(poet);
+  const countLabel = poet.restrictedOnly ? `存目 ${poet.poemCount} 条` : `${poet.poemCount} 首`; // peek 用
+  const fullCountLabel = poet.restrictedOnly ? `存目 ${poet.poemCount} 条` : `${poet.poemCount} 首真实作品`; // 头部用
 
   // mobile: clicking a star stashes the poet as a bottom peek bar (name + 朝代 + 首数), not a full sheet
   // over the galaxy; tap it to open the poem drawer. Re-collapses when a different poet is selected.
@@ -120,7 +125,7 @@ export function PoetPanel() {
     return (
       <div className="sheet-peek" onClick={sheet.expand}>
         <span className="peek-label" style={{ color: dyn?.color }}>{poet.name}</span>
-        <span className="peek-sub">{dyn?.label ?? poet.dynasty} · {poet.poemCount} 首</span>
+        <span className="peek-sub">{dyn?.label ?? poet.dynasty} · {countLabel}</span>
         <span className="peek-cue">▲ 展开</span>
         <button className="peek-x" onClick={(e) => { e.stopPropagation(); close(); }} aria-label="关闭">×</button>
       </div>
@@ -161,13 +166,14 @@ export function PoetPanel() {
       <div className="poet-head">
         <span className="poet-name" style={{ color: dyn?.color }}>{poet.name}</span>
         <span className="poet-sub">
-          {dyn?.label ?? poet.dynasty} · {poet.poemCount} 首真实作品 <ShareButton />
+          {dyn?.label ?? poet.dynasty} · {fullCountLabel} <ShareButton />
           <button className="cinema-btn" onClick={openCinema} title="留影当前搜中的那首（时间暂停）;目录里每一行也有单独的「留影」按钮">
             留影
           </button>
         </span>
       </div>
       {aliasNote && <div className="poet-alias-note">{aliasNote}</div>}
+      {notice && <div className="poet-alias-note poet-collection-note">{notice}</div>}
       {poems === null && poemsError === poet.id ? (
         <div className="loading-row error">
           作品载入失败,可能是网络波动。
@@ -215,6 +221,9 @@ export function PoetPanel() {
                       ))}
                     </div>
                     {pm.d && <div className="pi-idx dim">□ 为原文缺字</div>}
+                    {/* 收录状态灰注(同 □ 槽位):正文/编号/定位/留影按钮一律保留(owner 已拍板),仅加一行说明 */}
+                    {pm.s === "disputed" && <div className="pi-idx dim">真伪存疑 · {pm.sn}</div>}
+                    {pm.s === "restricted" && <div className="pi-idx dim">版权存目 · {pm.sn}</div>}
                     {(() => {
                       const r = indexFor(i);
                       if (!r) return <div className="pi-idx dim">含字库外字符 · 无固定编号</div>;
@@ -236,6 +245,16 @@ export function PoetPanel() {
               显示更多（剩 {order.length - shown} 首）
             </button>
           )}
+          {/* 存目条目(lost):零汉字诗(全 □ / 全外文·数字)进不了 p/编号,列在最末、显示更多之后(打开即见,不随分页)。
+              muted、无箭头无按钮不可展开——它没有可编号的正文,只是「存在过」的存目。 */}
+          {poet.lost?.map((lo, k) => (
+            <div className="poem-item lost" key={`lost-${k}`}>
+              <div className="pi-row">
+                <span className="pi-title lost-title">{lo.t || "（无题）"}</span>
+                <span className="lost-tag">{lo.k === "lacuna" ? "原文已佚 · 存目" : "非汉字内容 · 存目"}</span>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

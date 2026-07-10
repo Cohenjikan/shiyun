@@ -41,6 +41,19 @@ export interface PoetRow {
    *  that resolve a poet by id (permalink #a=, search) should redirect through this to the canonical row;
    *  renderers (PoetStars/gpuPick) must treat poemCount:0 rows as invisible/unpickable regardless. */
   mergedInto?: string;
+  // ── 收录状态标注层 (collection status): 把库里各种「不全/特殊」从暗坑变成界面明说。全部 build-data.mjs 只在
+  //    正身诗人行上写的 **可选加法式** 键(别名/redirect 行不带)——loader 不校验、store 不裁剪,老数据缺这些键零感知。
+  //    渲染逻辑集中在 collectionStatus.ts(灰字)+ PoetPanel(存目条目/头部计数)。这些键 **不参与** 编号/星位/搜索。
+  /** 结构性「不全」的策展文案(corpus 无法自动测出的:整部御制诗集只传三百余首 / 作品仍在版权期)。k=copyright
+   *  会抑制前端「现当代通用」子句。仅弘历/毛泽东/叶嘉莹等极少数正身行带。 */
+  collection?: { k: "partial" | "copyright"; note: string }[];
+  /** 该诗人 ≥1 首散曲(genre=qu)入库 → 前端提示「散曲存世文献电子化极少,收录不完整」(元散曲十不存一,~118 位)。 */
+  quGap?: 1;
+  /** 该诗人全部入库诗的 s 都是 "restricted"(全库仅存目,现仅叶嘉莹)→ 头部把「N 首真实作品」改「存目 N 条」。 */
+  restrictedOnly?: 1;
+  /** 零汉字诗存目:正文经 onlyHan 切分后无汉字句(全 □ 缺字 lacuna / 全外文·数字 nonhan)的诗进不了 p/编号/搜索,
+   *  这里保留题目 + 类别,PoetPanel 作品列表末尾渲染为不可展开的「存目」条目,避免静默消失。 */
+  lost?: { t: string; k: "lacuna" | "nonhan" }[];
 }
 export interface PoemRecord {
   t: string;
@@ -49,6 +62,11 @@ export interface PoemRecord {
   /** 原貌展示句,含 □(U+25A1,古籍缺字符号)。仅当正文含 □ 时由 build-data.mjs 写入(否则缺省),且满足
    *  「d 逐句去 □ 去空句 === p」。**仅供人眼展示**(正文渲染用 `d ?? p`);一切计算严格用 `p`,绝不用 d。 */
   d?: string[];
+  /** 收录状态(仅 corpus additions 带 collection 的极少数诗带):disputed = 真伪存疑 / restricted = 版权存目。
+   *  PoetPanel + 留影卡据此加一行灰注(防存疑诗被截图外传时丢掉警示)。**不参与** 编号/搜索/格律,纯展示元数据。 */
+  s?: "disputed" | "restricted";
+  /** 收录状态注文(与 s 配套,直接可展示的短句,如「轶闻类记载,未见《张太岳集》,真伪存疑」)。 */
+  sn?: string;
 }
 export interface DataManifest {
   n: number;

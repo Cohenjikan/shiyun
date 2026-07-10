@@ -16,6 +16,10 @@ export interface ResolvedCinemaPoem {
   index: string | null;
   digits: number;
   attribution: string;
+  // 收录状态(仅诗人诗路径带):disputed=真伪存疑 / restricted=版权存目。留影卡署名行下加小灰字,防存疑诗被
+  // 截图外传时丢掉警示(虚空捞诗无此字段)。s/sn 直接透传自 PoemRecord。
+  s?: "disputed" | "restricted";
+  sn?: string;
 }
 
 export interface AnyIndexLike {
@@ -26,9 +30,9 @@ export interface AnyIndexLike {
 export interface CinemaResolveArgs {
   // void pull
   selected: { lines: string[]; babelIndex: string; babelDigits: number } | null;
-  // selected poet + its loaded poems (null while loading). `d` = 含 □ 原貌展示句(见 PoemRecord)。
+  // selected poet + its loaded poems (null while loading). `d` = 含 □ 原貌展示句;`s`/`sn` = 收录状态(见 PoemRecord)。
   poet: { name: string } | null;
-  poems: { t: string; p: string[]; d?: string[] }[] | null;
+  poems: { t: string; p: string[]; d?: string[]; s?: "disputed" | "restricted"; sn?: string }[] | null;
   // 搜的这首 focus (search hit)
   focus: { poemIdx: number } | null;
   // explicit per-poem 留影 target (PoetPanel row button)
@@ -39,7 +43,7 @@ export interface CinemaResolveArgs {
 
 function fromPoetPoem(
   poet: { name: string },
-  pm: { t: string; p: string[]; d?: string[] },
+  pm: { t: string; p: string[]; d?: string[]; s?: "disputed" | "restricted"; sn?: string },
   indexer: CinemaResolveArgs["indexer"],
 ): ResolvedCinemaPoem {
   const a = indexer(pm.p); // 编号永远算自 p(真值),d 只影响展示
@@ -48,6 +52,8 @@ function fromPoetPoem(
     index: a?.index ?? null,
     digits: a?.digits ?? 0,
     attribution: `${poet.name}《${pm.t || "无题"}》`,
+    s: pm.s, // 收录状态透传(存疑/存目),Cinema 卡署名行下渲染小灰字
+    sn: pm.sn,
   };
 }
 

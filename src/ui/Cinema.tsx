@@ -66,6 +66,8 @@ export function Cinema() {
   const index = resolved?.index ?? null;
   const digits = resolved?.digits ?? 0;
   const attribution = resolved?.attribution ?? "";
+  // 收录状态小灰字:防存疑/存目诗被截图外传时丢掉警示(disputed=真伪存疑 / restricted=版权存目)。
+  const statusText = resolved?.s === "disputed" ? "真伪存疑" : resolved?.s === "restricted" ? "版权存目" : null;
   // 认领分享卡: the card becomes a sharable claim certificate when THIS poem is claimed on this device.
   const claim = index ? myClaims.find((c) => c.index === index && c.no != null) : undefined;
 
@@ -226,6 +228,7 @@ export function Cinema() {
             )}
           </div>
           <div className="cinema-attr">{attribution}</div>
+          {statusText && <div className="cinema-status">{statusText}</div>}
           {index && (
             <div className="cinema-idx">
               <div className="cinema-idx-k">全集编号 · {digits} 位 · 它在诗云里的唯一住址</div>
