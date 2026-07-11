@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   addLocalClaim,
   setLocalClaimNo,
+  setLocalClaimResult,
+  isPrizeKey,
   listClaims,
   getClaim,
   dayBucket,
@@ -108,6 +110,83 @@ describe("claims — local store", () => {
     expect(listClaims(null)).toEqual([]);
     expect(addLocalClaim({ index: "1" }, null)).toEqual([]);
     expect(setLocalClaimNo("1", 1, null)).toEqual([]);
+    expect(setLocalClaimResult("1", 1, "SY1-QKC9T-E9BP3-7TCDP-7KNYC", null)).toEqual([]);
+  });
+});
+
+describe("claims — 里程碑中奖密钥 (prize key)", () => {
+  let s: ReturnType<typeof memStore>;
+  const KEY = "SY1-QKC9T-E9BP3-7TCDP-7KNYC"; // a real-shaped key (server format, Crockford-ish)
+  beforeEach(() => {
+    s = memStore();
+  });
+
+  it("isPrizeKey accepts the server format and rejects everything else", () => {
+    expect(isPrizeKey(KEY)).toBe(true);
+    expect(isPrizeKey("SY100-ABCDE-FGHJK-MNPQR-STUVW")).toBe(true); // multi-digit no
+    expect(isPrizeKey("SY1-QKC9T-E9BP3-7TCDP")).toBe(false); // only 3 groups
+    expect(isPrizeKey("SY1-QKC9T-E9BP3-7TCDP-7KNYC-EXTRA")).toBe(false); // 5 groups
+    expect(isPrizeKey("XY1-QKC9T-E9BP3-7TCDP-7KNYC")).toBe(false); // wrong prefix
+    expect(isPrizeKey("SY-QKC9T-E9BP3-7TCDP-7KNYC")).toBe(false); // no number
+    expect(isPrizeKey("SY1-qkc9t-e9bp3-7tcdp-7knyc")).toBe(false); // lowercase
+    expect(isPrizeKey("SY1-QKC9-E9BP3-7TCDP-7KNYC")).toBe(false); // 4-char group
+    expect(isPrizeKey(12345)).toBe(false);
+    expect(isPrizeKey(null)).toBe(false);
+    expect(isPrizeKey(undefined)).toBe(false);
+  });
+
+  it("setLocalClaimResult patches 编号 + a valid prize key onto a pending claim", () => {
+    addLocalClaim({ index: "10", ts: 100 }, s);
+    setLocalClaimResult("10", 1, KEY, s);
+    expect(getClaim("10", s)).toEqual({ index: "10", no: 1, ts: 100, prizeKey: KEY });
+  });
+
+  it("setLocalClaimResult patches 编号 alone when there is no prize key (non-milestone)", () => {
+    addLocalClaim({ index: "20", ts: 200 }, s);
+    setLocalClaimResult("20", 7, undefined, s);
+    const c = getClaim("20", s);
+    expect(c).toEqual({ index: "20", no: 7, ts: 200 }); // no prizeKey property at all
+    expect("prizeKey" in c!).toBe(false);
+  });
+
+  it("setLocalClaimResult drops a malformed key but still lands the 编号 (guard)", () => {
+    addLocalClaim({ index: "30", ts: 300 }, s);
+    setLocalClaimResult("30", 3, "not-a-key", s);
+    expect(getClaim("30", s)).toEqual({ index: "30", no: 3, ts: 300 }); // number kept, junk key rejected
+  });
+
+  it("the prize key persists across reload (survives listClaims round-trip)", () => {
+    addLocalClaim({ index: "40", ts: 400 }, s);
+    setLocalClaimResult("40", 100, KEY, s);
+    // simulate a fresh page load: a brand-new store view over the SAME backing map
+    const reread: MyClaim[] = listClaims(s);
+    expect(reread.find((c) => c.index === "40")?.prizeKey).toBe(KEY);
+  });
+
+  it("a claim with a non-string prizeKey in storage is rejected by the guard", () => {
+    s.setItem(
+      "shiyun_claims_v1",
+      JSON.stringify([
+        { index: "1", no: 1, ts: 10, prizeKey: KEY }, // good
+        { index: "2", no: 2, ts: 20, prizeKey: 123 }, // bad prizeKey type → dropped
+      ]),
+    );
+    expect(listClaims(s).map((c) => c.index)).toEqual(["1"]);
+  });
+
+  it("setLocalClaimNo (back-compat) never writes a prize key", () => {
+    addLocalClaim({ index: "50", ts: 500 }, s);
+    setLocalClaimNo("50", 5, s);
+    const c = getClaim("50", s);
+    expect(c).toEqual({ index: "50", no: 5, ts: 500 });
+    expect("prizeKey" in c!).toBe(false);
+  });
+
+  it("a re-claim keeps the ORIGINAL prize key (dedupe by index, no second key)", () => {
+    addLocalClaim({ index: "60", ts: 600 }, s);
+    setLocalClaimResult("60", 1, KEY, s);
+    addLocalClaim({ index: "60", ts: 999, prizeKey: "SY9-AAAAA-BBBBB-CCCCC-DDDDD" }, s); // re-claim
+    expect(getClaim("60", s)).toEqual({ index: "60", no: 1, ts: 600, prizeKey: KEY }); // unchanged
   });
 });
 

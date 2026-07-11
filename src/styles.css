@@ -462,6 +462,73 @@ canvas {
   color: var(--muted);
 }
 
+/* 🎉 里程碑中奖块 (PoemPanel, shown only when the server returned a 中奖密钥) — gold accent as the one
+   点睛, muted explanatory copy; no popup, in-line with the claimed state. */
+.claim-prize {
+  margin-top: 10px;
+  padding: 11px 12px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 210, 122, 0.5);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 214, 130, 0.14), rgba(255, 196, 92, 0.05));
+}
+.claim-prize-title {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  font-weight: 600;
+  text-align: center;
+}
+.claim-prize-keyrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.claim-prize-key {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: #ffe6b8;
+  word-break: break-all;
+}
+.claim-prize-note {
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* 我的认领 里程碑中奖行 — long-term recoverable key + copy (below the restore button). */
+.myclaim-prize {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 210, 122, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 210, 122, 0.07);
+}
+.myclaim-prize-tag {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  flex: none;
+}
+.myclaim-prize-key {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #ffe6b8;
+  word-break: break-all;
+  flex: 1 1 auto;
+}
+
 /* 里程碑 / 早期印记 徽记 (PoemPanel claimed state + 我的认领 rows) */
 .claim-badge {
   display: inline-block;

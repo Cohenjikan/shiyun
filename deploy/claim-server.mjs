@@ -4,19 +4,32 @@
 // ONE thing the static client cannot do: hand out a GLOBALLY monotonic 认领编号 (claim number) that
 // counts up from 1 across ALL users.
 //
-// ⚖️ HARD CONSTRAINT — STORE ONLY THREE NUMBERS, NEVER ANY TEXT/IDENTITY. Each claim appends EXACTLY:
+// ⚖️ HARD CONSTRAINT — STORE ONLY THREE NUMBERS (+ on a prize row, ONE server-random key), NEVER ANY
+//   TEXT/IDENTITY. Each claim appends EXACTLY:
 //      no    — the 认领编号 (global, from 1, consecutive)
 //      index — the poem's 全集编号 (a long decimal; 诗云's 编号↔诗 is a reversible bijection)
 //      ts    — the claim timestamp
+//      key   — ONLY on a 里程碑 prize row (no ∈ PRIZE_NOS): a server-random 中奖密钥 (see below). Nothing
+//              else — still zero identity, zero 文字, zero IP. The key is co-located with `ts` on the same
+//              line so the owner verifies both together (a key is bound to the moment it was minted).
 //   NEVER stored: the poem TEXT or any文字内容, user identity, IP, or User-Agent. The poem is recomputed
 //   client-side from `index` (pulledFromIndex) and never touches the server. Rationale: persisting poem
 //   text would make this a user-generated-content service (论坛性质) → ICP 备案 / 内容审核 obligations in
-//   中国. Storing only numbers = a set of mathematical coordinates, NOT a content service → lowest risk.
+//   中国. Storing only numbers (+ a random prize token) = mathematical coordinates, NOT a content service.
 //   (UA is used ONLY for the in-memory rate limiter and is never written to disk.)
 //
+//   🎁 里程碑中奖 (milestone prize): when a newly-allocated `no` is a milestone (PRIZE_NOS, default
+//   1,100,500,1000,5000,10000), the server mints a random, time-bound 中奖密钥 (impossible to guess or
+//   pre-compute). The POST reply carries it back as `prizeKey`; the client shows 「你中奖了」 and the
+//   claimer DMs the author on any platform to redeem 刘慈欣《诗云》原著. The owner verifies by grepping
+//   claims.jsonl for the {no,ts,key} the claimer quotes. RED LINE: the key lives ONLY in the JSONL and the
+//   ONE POST reply — the PUBLIC feed and the boot-recovered in-memory window NEVER carry it.
+//
 //   POST /api/claim        body: {"index":"<decimal 全集编号>","ts?":169…}  (any other field is IGNORED)
-//                          → atomically allocates the next 认领编号, appends one JSON line {no,index,ts},
-//                            replies {"ok":true,"no":<claim#>,"index":"…","ts":…}. The number is THE backend value.
+//                          → atomically allocates the next 认领编号, appends one JSON line {no,index,ts}
+//                            (+ "key" on a prize row), replies {"ok":true,"no":<claim#>,"index":"…","ts":…}.
+//                            On a 里程碑 prize row the reply ALSO carries "prizeKey":"SY<no>-…" (this reply
+//                            ONLY). The number is THE backend value.
 //   GET  /api/claim/feed   ?since=<ts>&limit=<n>   (PUBLIC — every visitor reads it to draw meteors)
 //                          → {"total":<all-time count>,"serverNow":<ms>,"claims":[{"no","index","ts"},…]}
 //                            newest-first, capped at `limit` (default 500, max 2000). No token: it only
@@ -31,12 +44,19 @@
 // Run (dev):        node deploy/claim-server.mjs
 // Configure (env):  PORT=8788  HOST=127.0.0.1  CLAIM_FILE=/var/lib/shiyun/claims.jsonl
 //                   FEED_MAX=2000   (hard cap on the public feed window)
+//                   PRIZE_NOS="1,100,500,1000,5000,10000"   (认领编号 that mint a 中奖密钥; comma-separated)
+//
+// Owner verify (a claimer DMs you a 中奖密钥): ssh in, then
+//     grep '"key":"SY<no>-' /var/lib/shiyun/claims.jsonl   →  confirm the {no, ts, key} matches what they sent
+// (the key is bound to that no+ts on one line; it appears NOWHERE else — not in the feed, not in any reply
+// but the original one). No key on file ⇒ not a genuine winner.
 //
 // Deploy: bind to 127.0.0.1 and put nginx in front (same-origin /api/claim → no CORS); see
 // docs/DEPLOY.md §7 for the nginx location + systemd unit. Keep it SEPARATE from the feedback collector
 // (different failure domain; the feed is public while the feedback inbox is token-gated).
 import { createServer } from "node:http";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { dirname } from "node:path";
 
 const PORT = Number(process.env.PORT || 8788);
@@ -45,6 +65,44 @@ const FILE = process.env.CLAIM_FILE || "./claims.jsonl";
 const FEED_MAX = Math.max(1, Number(process.env.FEED_MAX || 2000)); // hard cap on the public window
 const MAX_BODY = 4 * 1024; // a claim is a tiny JSON — 4 KB is generous
 const MAX_INDEX = 4096; // a 全集编号 is a long decimal but bounded; reject absurd input
+
+// 里程碑中奖号 (认领编号 that mint a 中奖密钥). A Set of positive ints from PRIZE_NOS (comma-separated),
+// default the 1st / 100th / 500th / 1000th / 5000th / 10000th claim. Malformed entries are dropped.
+const PRIZE_NOS = new Set(
+  String(process.env.PRIZE_NOS ?? "1,100,500,1000,5000,10000")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0),
+);
+console.log(`prize 认领编号: ${[...PRIZE_NOS].sort((a, b) => a - b).join(", ") || "(none)"}`);
+
+// 中奖密钥 alphabet — Crockford-ish 31 chars, NO 0/O/1/I/L (hand-copy-proof). Key format is
+// `SY<no>-XXXXX-XXXXX-XXXXX-XXXXX`: 4 groups × 5 chars = 20 symbols → 31^20 ≈ 99 bits of entropy, so it
+// cannot be guessed or pre-computed. `<no>` prefixes it purely so a human eyeballs which milestone it is.
+const KEY_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // length 31
+
+// Draw `n` uniform symbols with REJECTION SAMPLING (no modulo bias): 256 % 31 = 8, so bytes ≥ 248 are
+// discarded and the remaining 0..247 map evenly across the 31 symbols. randomBytes is a CSPRNG.
+function randomSymbols(n) {
+  const m = KEY_ALPHABET.length; // 31
+  const limit = 256 - (256 % m); // 248
+  const out = [];
+  while (out.length < n) {
+    for (const b of randomBytes(Math.max(16, (n - out.length) * 2))) {
+      if (b >= limit) continue; // reject the biased tail
+      out.push(KEY_ALPHABET[b % m]);
+      if (out.length === n) break;
+    }
+  }
+  return out;
+}
+
+// Mint a 中奖密钥 for a prize 认领编号: `SY<no>-XXXXX-XXXXX-XXXXX-XXXXX`.
+function makePrizeKey(no) {
+  const s = randomSymbols(20);
+  const g = (i) => s.slice(i, i + 5).join("");
+  return `SY${no}-${g(0)}-${g(5)}-${g(10)}-${g(15)}`;
+}
 
 // tiny in-memory rate limit: per-process, 60 claims / 10 min / UA-bucket. Coarse on purpose — it only
 // needs to stop a runaway loop, not a determined attacker (nginx limit_req does the real throttling).
@@ -96,6 +154,8 @@ async function boot() {
     if (!Number.isFinite(no) || no <= 0 || !index) continue;
     total++;
     if (no > counter) counter = no;
+    // RED LINE (same as allocate): recover ONLY the three numbers into the feed window — never row.key.
+    // A prize row on disk has a `key`, but it must NEVER re-enter the public feed after a restart.
     recent.push({ no, index, ts: Number(row?.ts) || 0 });
   }
   // keep memory bounded — only the newest FEED_MAX matter for the feed
@@ -111,13 +171,19 @@ let chain = Promise.resolve();
 function allocate(index, ts) {
   const run = async () => {
     const no = counter + 1;
-    const entry = { no, index, ts }; // EXACTLY three numbers — no form, no receivedAt, no UA/IP (compliance)
-    await appendFile(FILE, JSON.stringify(entry) + "\n", "utf8"); // throws → number NOT committed
+    // Three numbers always; a 里程碑 prize row ALSO carries one server-random 中奖密钥 (nothing else — still
+    // zero identity / zero 文字 / zero IP). The key is minted INSIDE the critical section and lands on the
+    // same line as {no, index, ts} so it is bound to that exact moment (owner verifies key + ts together).
+    const key = PRIZE_NOS.has(no) ? makePrizeKey(no) : null;
+    const entry = key ? { no, index, ts, key } : { no, index, ts };
+    await appendFile(FILE, JSON.stringify(entry) + "\n", "utf8"); // throws → NEITHER number NOR key committed
     counter = no;
     total++;
+    // RED LINE: the in-memory feed window is the PUBLIC interface — it NEVER holds the key. Push only the
+    // three numbers here (and boot() does the same when recovering from disk).
     recent.push({ no, index, ts });
     if (recent.length > FEED_MAX) recent.shift();
-    return no;
+    return { no, key }; // key is non-null only on a prize row → echoed to the POST reply as prizeKey
   };
   const next = chain.then(run, run); // run regardless of a prior rejection (each claim is independent)
   chain = next.catch(() => {}); // keep the chain alive even if this one rejected
@@ -186,8 +252,12 @@ createServer(async (req, res) => {
         // {no, index, ts} are stored (compliance: no text content ever lands on disk).
         const ts = Number(body?.ts) || Date.now();
         try {
-          const no = await allocate(index, ts);
-          return json(res, 200, { ok: true, no, index, ts });
+          const { no, key } = await allocate(index, ts);
+          // Prize rows echo the 中奖密钥 back ONCE (this reply only) so the client can persist + show it.
+          // Non-prize claims reply exactly as before {ok,no,index,ts}. The key is NEVER in the feed.
+          const reply = { ok: true, no, index, ts };
+          if (key) reply.prizeKey = key;
+          return json(res, 200, reply);
         } catch (e) {
           console.error("claim append failed:", e?.message || e);
           return json(res, 500, { error: "storage" });

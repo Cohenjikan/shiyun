@@ -1,6 +1,7 @@
 import { useStore } from "../state/store";
 import { pulledFromIndex } from "../engine/engineApi";
 import { claimBadge } from "../state/claims";
+import { CopyButton } from "./CopyButton";
 
 // 我的认领 — this device's claimed poems, a LOCAL keepsake (mirrors 拾遗/ShiyiViewer). Each row re-surfaces
 // the poem from its universal 全集编号 (pulledFromIndex — a bijection, same number → same poem), shows its
@@ -63,6 +64,15 @@ export function ClaimsViewer() {
                         {badge && <span className={`claim-badge ${badge.tier} mini`}>✦ {badge.label}</span>}
                       </span>
                     </button>
+                    {/* 中奖密钥: shown OUTSIDE the restore <button> (a button can't nest a copy button) so a
+                        winner can always re-find + copy it here — 「显示一次就丢」的反面。 */}
+                    {c.prizeKey && (
+                      <div className="myclaim-prize">
+                        <span className="myclaim-prize-tag">🎉 中奖密钥</span>
+                        <code className="pi-idx myclaim-prize-key">{c.prizeKey}</code>
+                        <CopyButton text={c.prizeKey} label="复制" />
+                      </div>
+                    )}
                   </div>
                 );
               })}

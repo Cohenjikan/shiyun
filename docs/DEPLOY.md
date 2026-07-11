@@ -365,18 +365,22 @@ to draw meteors) whereas the feedback inbox is token-gated. The global counter i
 promise-chain mutex (atomic under concurrent POSTs) and recovered from the JSONL at boot (a restart never
 reuses or skips a number).
 
-> ⚖️ **COMPLIANCE — store only numbers, never text/identity.** Each claim appends **EXACTLY three numbers:
-> `{no, index, ts}`** (claim number · poem's 全集编号 · timestamp). It **NEVER stores the poem text or any
-> 文字内容, user identity, IP, or User-Agent** — the poem is recomputed client-side from `index`
-> (`pulledFromIndex`) and never touches the server; the client sends only `{index, ts}` and the server
+> ⚖️ **COMPLIANCE — store only numbers (+ a server-random prize key on milestone rows), never text/identity.**
+> Each claim appends **`{no, index, ts}`** (claim number · poem's 全集编号 · timestamp). A **里程碑 prize row**
+> (see §7d) ALSO carries one field, **`key`** — a server-random 中奖密钥, nothing else. It **NEVER stores the
+> poem text or any 文字内容, user identity, IP, or User-Agent** — the poem is recomputed client-side from
+> `index` (`pulledFromIndex`) and never touches the server; the client sends only `{index, ts}` and the server
 > ignores any other field. Rationale: persisting poem text would make this user-generated content (论坛性质)
-> → ICP 备案 / 内容审核 obligations in 中国; storing only numbers is a set of mathematical coordinates, not a
-> content service. Back up `claims.jsonl`, but know it contains no text. (UA is used only for the in-memory
-> rate limiter, never written to disk.)
+> → ICP 备案 / 内容审核 obligations in 中国; storing only numbers (+ a random token) is a set of mathematical
+> coordinates, not a content service. Back up `claims.jsonl` — it contains no text, **but a prize row's `key`
+> is the ONLY copy the owner has for verifying a winner, so the backup is now load-bearing for redemption.**
+> (UA is used only for the in-memory rate limiter, never written to disk.)
 
 ```
-POST /api/claim        {index:"<全集编号>", ts?}  (any other field is ignored) → {ok, no, index, ts}
-GET  /api/claim/feed   ?limit=<n>   (PUBLIC) → {total, serverNow, claims:[{no,index,ts}…]}  (newest-first)
+POST /api/claim        {index:"<全集编号>", ts?}  (any other field is ignored)
+                       → {ok, no, index, ts}   (+ "prizeKey":"SY<no>-…" on a 里程碑 row ONLY — see §7d)
+GET  /api/claim/feed   ?limit=<n>   (PUBLIC) → {total, serverNow, claims:[{no,index,ts}…]}  (newest-first,
+                       NEVER carries a prize key)
 GET  /api/claim/health → {ok:true}
 ```
 
@@ -398,6 +402,9 @@ ExecStart=/usr/bin/node /opt/shiyun/claim-server.mjs
 Environment=PORT=8788
 Environment=HOST=127.0.0.1
 Environment=CLAIM_FILE=/var/lib/shiyun/claims.jsonl
+# 里程碑中奖号 (认领编号 that mint a 中奖密钥). Default is the 1/100/500/1000/5000/10000th claim; override to
+# retune. Removing a number that has ALREADY been allocated does nothing retroactively (the key is on disk).
+Environment=PRIZE_NOS=1,100,500,1000,5000,10000
 Restart=on-failure
 DynamicUser=yes
 StateDirectory=shiyun
@@ -448,3 +455,26 @@ curl -s "https://你的域名/api/claim/feed?limit=5"
 In the live app: open a void poem → **认领这首诗** → the panel shows **认领编号 #N** and the poem streaks off
 as a meteor. Today's claims render as bright, clickable meteors; older ones as faint glints. 更多 → 流星
 toggles the whole layer off.
+
+### 7d. 里程碑中奖密钥 (milestone prize keys) + owner verification
+
+When an allocated `no` is a milestone (`PRIZE_NOS`, default the 1st / 100th / 500th / 1000th / 5000th /
+10000th claim), the server mints a **random, time-bound 中奖密钥** — impossible to guess or pre-compute
+(31-symbol Crockford alphabet, `SY<no>-XXXXX-XXXXX-XXXXX-XXXXX`, ≈99 bits). The winning claimer sees a
+**「🎉 你中奖了」** block with the key + a copy button, and is told to **DM the author on 抖音 / 小红书 / B站** to
+redeem 刘慈欣《诗云》原著. The key is also saved into the visitor's **我的认领** so it survives a page reload.
+
+- **Where the key lives:** ONLY in `claims.jsonl` (on the winning row) **and** the single POST reply that
+  minted it. It is **NEVER** in the public `/feed`, never in the boot-recovered in-memory window, never in
+  any later reply. So the public interface stays a set of numbers; only the owner's disk holds the secret.
+- **Owner verification (a claimer DMs you a key):** SSH to the box and grep the ledger —
+  ```bash
+  grep '"key":"SY42-' /var/lib/shiyun/claims.jsonl    # or grep the exact 认领编号 they claim
+  #  → {"no":42,"index":"…","ts":1781…,"key":"SY42-…"}   verify BOTH the key string AND the ts match
+  ```
+  A genuine winner's key is on exactly one line, bound to that `no` + `ts`. No matching line ⇒ not a real
+  winner (fabricated or mistyped key).
+- **Backups are now load-bearing for redemption.** `claims.jsonl` was always the global counter; it is now
+  also the sole record of prize keys. Back it up like `feedback.jsonl` (it still contains **no** text/identity).
+- **Retuning:** change `PRIZE_NOS` and restart. It only affects **future** allocations — a key already
+  written to disk is permanent regardless of the current `PRIZE_NOS`.

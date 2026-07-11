@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useStore } from "../state/store";
 import { CopyButton, ShareButton } from "./CopyButton";
 import { useSheet } from "./useSheet";
-import { addLocalClaim, setLocalClaimNo, listClaims, postClaim, hasClaimServer, claimBadge } from "../state/claims";
+import { addLocalClaim, setLocalClaimResult, listClaims, postClaim, hasClaimServer, claimBadge } from "../state/claims";
 
 const FORM_LABEL: Record<string, string> = {
   wujue: "五言绝句",
@@ -58,9 +58,9 @@ export function PoemPanel() {
     setFlyTarget(pos); // 在虚空中定位
     launchClaimCeremony({ index, pos, ts }); // …然后化作流星没入银河
     try {
-      const { no } = await postClaim(index, ts);
+      const { no, prizeKey } = await postClaim(index, ts);
       if (no != null) {
-        setLocalClaimNo(index, no);
+        setLocalClaimResult(index, no, prizeKey ?? undefined); // patch 编号 (+ 中奖密钥 on a 里程碑)
         setMyClaims(listClaims());
       }
     } finally {
@@ -141,6 +141,18 @@ export function PoemPanel() {
             )}
             {badge && <span className={`claim-badge ${badge.tier}`}>✦ {badge.label}</span>}
             <span className="claim-sub">你从虚空里认下了它 —— 此刻它在此定位，化作流星，没入银河。</span>
+            {myClaim.prizeKey && myClaim.no != null && (
+              <div className="claim-prize">
+                <span className="claim-prize-title">🎉 你中奖了 · 第 {myClaim.no.toLocaleString()} 位认领者</span>
+                <div className="claim-prize-keyrow">
+                  <code className="pi-idx claim-prize-key">{myClaim.prizeKey}</code>
+                  <CopyButton text={myClaim.prizeKey} label="复制密钥" />
+                </div>
+                <span className="claim-prize-note">
+                  凭此密钥在抖音 / 小红书 / B站 任一平台私信作者，可领取刘慈欣原著《诗云》一本。密钥仅生成一次，请妥善保存 —— 它已同时存入本机「我的认领」。
+                </span>
+              </div>
+            )}
           </div>
         ) : (
           <>

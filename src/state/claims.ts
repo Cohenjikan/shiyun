@@ -23,6 +23,17 @@ export interface MyClaim {
   no: number | null; // 认领编号 from the backend; null = recorded locally, awaiting a server number
   ts: number; // epoch ms when claimed
   preview?: string; // first line, stored LOCALLY ONLY (never sent to the server) for the 我的认领 gallery
+  prizeKey?: string; // 里程碑中奖密钥 (only on a milestone claim; server-minted, echoed once — kept LOCAL so
+  // the winner can always re-find it in 我的认领). Format: SY<no>-XXXXX-XXXXX-XXXXX-XXXXX.
+}
+
+// A well-formed 中奖密钥 as minted by deploy/claim-server.mjs: SY<no>-XXXXX-XXXXX-XXXXX-XXXXX (4×5 groups,
+// Crockford-ish uppercase). A defensive guard so a malformed / hostile server reply can never inject junk
+// (or something that looks like a fake prize) into the local store or the UI. The client NEVER decides who
+// wins — it only trusts a server reply that carries a syntactically valid key.
+const PRIZE_KEY_RE = /^SY\d+-[2-9A-Z]{5}(-[2-9A-Z]{5}){3}$/;
+export function isPrizeKey(v: unknown): v is string {
+  return typeof v === "string" && PRIZE_KEY_RE.test(v);
 }
 
 /** A claim as published by the public feed (deploy/claim-server.mjs GET /api/claim/feed). */
@@ -65,8 +76,9 @@ function isMyClaim(v: unknown): v is MyClaim {
   if (!v || typeof v !== "object") return false;
   const e = v as Record<string, unknown>;
   const noOk = e.no === null || (typeof e.no === "number" && Number.isFinite(e.no) && e.no > 0);
+  const keyOk = e.prizeKey === undefined || typeof e.prizeKey === "string"; // optional; validated on write
   return typeof e.index === "string" && e.index.length > 0 && noOk
-    && typeof e.ts === "number" && Number.isFinite(e.ts);
+    && typeof e.ts === "number" && Number.isFinite(e.ts) && keyOk;
 }
 
 /** This device's claims, NEWEST FIRST. Tolerates missing/corrupt storage (→ []); never throws. */
@@ -103,7 +115,7 @@ function write(list: MyClaim[], store: Storageish | null): void {
  * never spend two 认领编号 on the same poem). Newest-first; caps at CAP (drops OLDEST). Returns the list.
  */
 export function addLocalClaim(
-  entry: { index: string; no?: number | null; ts?: number; preview?: string },
+  entry: { index: string; no?: number | null; ts?: number; preview?: string; prizeKey?: string },
   store: Storageish | null = defaultStore(),
 ): MyClaim[] {
   if (!store) return [];
@@ -114,32 +126,50 @@ export function addLocalClaim(
   const rec: MyClaim = { index, no: entry.no ?? null, ts: entry.ts ?? Date.now() };
   const pv = (entry.preview ?? "").trim(); // LOCAL keepsake preview (first line) — never leaves the device
   if (pv) rec.preview = pv.length > 16 ? pv.slice(0, 16) : pv;
+  if (isPrizeKey(entry.prizeKey)) rec.prizeKey = entry.prizeKey; // usually patched in later via the server reply
   const next = [rec, ...existing].slice(0, CAP);
   write(next, store);
   return next;
 }
 
 /**
- * Patch the 认领编号 onto an existing local claim once the server replies. No-op if the claim isn't
- * present or already has a number. Returns the (possibly unchanged) list.
+ * Patch the server reply (认领编号 + an optional 里程碑中奖密钥) onto an existing local claim once the server
+ * responds. No-op if the claim isn't present or already has a number. A `prizeKey` is only written when it
+ * passes the format guard (isPrizeKey) — a bad key is silently dropped while the `no` still lands. Returns
+ * the (possibly unchanged) list.
+ */
+export function setLocalClaimResult(
+  index: string,
+  no: number,
+  prizeKey?: string,
+  store: Storageish | null = defaultStore(),
+): MyClaim[] {
+  if (!store || !index || !Number.isFinite(no) || no <= 0) return listClaims(store);
+  const key = isPrizeKey(prizeKey) ? prizeKey : undefined;
+  const list = listClaims(store);
+  let changed = false;
+  const next = list.map((c) => {
+    if (c.index === index && c.no == null) {
+      changed = true;
+      const rec: MyClaim = { ...c, no };
+      if (key) rec.prizeKey = key;
+      return rec;
+    }
+    return c;
+  });
+  if (changed) write(next, store);
+  return changed ? next : list;
+}
+
+/**
+ * Back-compat shim: patch just the 认领编号 (no prize key). Equivalent to setLocalClaimResult(index, no).
  */
 export function setLocalClaimNo(
   index: string,
   no: number,
   store: Storageish | null = defaultStore(),
 ): MyClaim[] {
-  if (!store || !index || !Number.isFinite(no) || no <= 0) return listClaims(store);
-  const list = listClaims(store);
-  let changed = false;
-  const next = list.map((c) => {
-    if (c.index === index && c.no == null) {
-      changed = true;
-      return { ...c, no };
-    }
-    return c;
-  });
-  if (changed) write(next, store);
-  return changed ? next : list;
+  return setLocalClaimResult(index, no, undefined, store);
 }
 
 // ── day bucket (今日 / 往日) ──────────────────────────────────────────────────────────────────────────
@@ -211,11 +241,15 @@ export const hasClaimServer = ENDPOINT !== "";
  * of truth for "this poem is claimed"; only the NUMBER needs the server.
  *
  * We send ONLY {index, ts} — two numbers. The poem text is NEVER transmitted (the server stores only
- * {no, index, ts}; the poem is recomputed client-side from index). See deploy/claim-server.mjs's
- * compliance note.
+ * {no, index, ts} — plus a server-random key on a milestone row; the poem is recomputed client-side from
+ * index). See deploy/claim-server.mjs's compliance note.
+ *
+ * Resolves with the authoritative 认领编号 and — ONLY on a 里程碑中奖 — a `prizeKey`. The key is never
+ * client-decided: it is returned only when the server sends a syntactically valid one (isPrizeKey), else
+ * null. No endpoint / unreachable / error → {no:null, prizeKey:null}. Never throws.
  */
-export async function postClaim(index: string, ts: number): Promise<{ no: number | null }> {
-  if (!ENDPOINT) return { no: null };
+export async function postClaim(index: string, ts: number): Promise<{ no: number | null; prizeKey: string | null }> {
+  if (!ENDPOINT) return { no: null, prizeKey: null };
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
@@ -223,11 +257,14 @@ export async function postClaim(index: string, ts: number): Promise<{ no: number
       keepalive: true, // survive a tab-close right after claiming
       body: JSON.stringify({ index, ts }),
     });
-    if (!res.ok) return { no: null };
-    const j = (await res.json()) as { no?: unknown };
-    return { no: typeof j?.no === "number" && j.no > 0 ? j.no : null };
+    if (!res.ok) return { no: null, prizeKey: null };
+    const j = (await res.json()) as { no?: unknown; prizeKey?: unknown };
+    const no = typeof j?.no === "number" && j.no > 0 ? j.no : null;
+    // Only surface a prize key that is (a) syntactically valid AND (b) accompanied by a real 认领编号.
+    const prizeKey = no != null && isPrizeKey(j?.prizeKey) ? j.prizeKey : null;
+    return { no, prizeKey };
   } catch {
-    return { no: null }; // offline / CORS / server down — the local copy already holds the claim
+    return { no: null, prizeKey: null }; // offline / CORS / server down — the local copy already holds the claim
   }
 }
 
