@@ -208,7 +208,7 @@ export function PoemPanel() {
                   <CopyButton text={myClaim.prizeKey} label="复制密钥" />
                 </div>
                 <span className="claim-prize-note">
-                  凭此密钥在抖音 / 小红书 / B站 任一平台私信作者，可领取刘慈欣原著《诗云》实体书一本。密钥仅生成一次，请妥善保存 —— 它已同时存入本机「我的认领」。
+                  凭此密钥在抖音 / 小红书 / B站 任一平台私信作者「世界第一裹凉皮」，可领取刘慈欣原著《诗云》实体书一本。密钥仅生成一次，请妥善保存 —— 它已同时存入本机「我的认领」。
                 </span>
               </div>
             )}
