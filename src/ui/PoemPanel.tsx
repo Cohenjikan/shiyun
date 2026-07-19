@@ -1,8 +1,22 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../state/store";
 import { CopyButton, ShareButton } from "./CopyButton";
 import { useSheet } from "./useSheet";
 import { addLocalClaim, setLocalClaimResult, listClaims, postClaim, hasClaimServer, claimBadge } from "../state/claims";
+
+// 首次揭示: the first 3 void poems carry a plain-words banner explaining the poem was generated on
+// the spot (实测: many visitors assumed pulls came from a database). Counter in localStorage; after
+// 3 poems the banner retires for good — the poem-foot line keeps the idea alive. The banner also
+// offers 关闭随机出诗 directly (same toggle as 更多 → 生成随机诗), so the escape is taught in context.
+const REVEAL_KEY = "shiyun_voidreveal_n";
+const REVEAL_MAX = 3;
+function revealCount(): number {
+  try {
+    return Number(localStorage.getItem(REVEAL_KEY)) || 0;
+  } catch {
+    return REVEAL_MAX; // blocked storage → don't nag on every open
+  }
+}
 
 const FORM_LABEL: Record<string, string> = {
   wujue: "五言绝句",
@@ -30,6 +44,26 @@ export function PoemPanel() {
   const launchClaimCeremony = useStore((s) => s.launchClaimCeremony);
   const [claimingIdx, setClaimingIdx] = useState<string | null>(null);
   const sheet = useSheet(selected?.babelIndex ?? null);
+  // 首次揭示条 (see REVEAL_KEY above). Counted once per poem shown; revealOff acknowledges the
+  // in-banner 关闭随机出诗 click.
+  const allowRandomPoem = useStore((s) => s.allowRandomPoem);
+  const toggleRandomPoem = useStore((s) => s.toggleRandomPoem);
+  const [reveal, setReveal] = useState(false);
+  const [revealOff, setRevealOff] = useState(false);
+  useEffect(() => {
+    if (!selected) return;
+    const n = revealCount();
+    setReveal(n < REVEAL_MAX);
+    setRevealOff(false);
+    if (n < REVEAL_MAX) {
+      try {
+        localStorage.setItem(REVEAL_KEY, String(n + 1));
+      } catch {
+        /* ignore */
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.babelIndex]);
   if (!selected) return null;
   const isFree = selected.form === "ziyou";
   const toggleKeep = () =>
@@ -86,6 +120,31 @@ export function PoemPanel() {
       <button className="panel-close" onClick={close} aria-label="关闭">
         ×
       </button>
+      {reveal && (
+        <div className="void-reveal">
+          <strong>这首诗此前并不存在</strong> —— 它是你点下的那一刻，从那个坐标当场算出来的。同一个点，永远捞出同一首。
+          {(revealOff || allowRandomPoem) && (
+            <div className="void-reveal-row">
+              {revealOff ? (
+                <span>已关闭 · 在「更多」里可随时再打开</span>
+              ) : (
+                <>
+                  <span>不想点虚空就蹦诗？</span>
+                  <button
+                    className="void-reveal-off"
+                    onClick={() => {
+                      toggleRandomPoem();
+                      setRevealOff(true);
+                    }}
+                  >
+                    关闭随机出诗
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <div className="poem-body" lang="zh">
         {selected.lines.map((line, i) => (
           <div className={isFree ? "poem-line wrap" : "poem-line"} key={i}>

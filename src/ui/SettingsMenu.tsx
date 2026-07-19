@@ -4,6 +4,7 @@ import { useStore } from "../state/store";
 import { COARSE, WEAK } from "../three/detectQuality";
 import { hasCloudInbox, submitFeedback } from "../state/feedback";
 import { ShiyiViewer } from "./ShiyiViewer";
+import { replayOnboarding } from "./Onboarding";
 
 // in-page feedback box (collapsed → a single button; expanded → a textarea). Stored locally + (if
 // VITE_FEEDBACK_ENDPOINT is set) POSTed to the server inbox, which the owner reads via the token GET.
@@ -356,6 +357,9 @@ export function SettingsMenu() {
           <input type="checkbox" checked={allowRandomPoem} onChange={toggleRandomPoem} />
           生成随机诗 · 点虚空拉一首随机诗（关闭后点虚空不再生成,只看现存的诗）
         </label>
+        <button className="set-feedback-open" onClick={() => { toggleSettings(); replayOnboarding(); }}>
+          重看新手引导
+        </button>
       </div>
 
       <button className="set-reset wide" onClick={resetAll} disabled={allDefault}>全部恢复默认</button>

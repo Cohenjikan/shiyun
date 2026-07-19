@@ -1585,6 +1585,106 @@ canvas {
 .onb-next:hover {
   filter: brightness(1.08);
 }
+/* v3 gate step — the guide ends with an action, not a button (desktop: press W / touch: drag).
+   On touch the overlay is pointer-transparent so the drag really turns the sky behind the card. */
+.onb-overlay.gate {
+  pointer-events: none;
+}
+.onb-overlay.gate .onb-card {
+  pointer-events: auto;
+}
+.onb-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 2px;
+}
+.onb-key {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--gold);
+  background: linear-gradient(180deg, rgba(30, 33, 48, 0.95), rgba(14, 16, 26, 0.95));
+  border: 1px solid rgba(255, 210, 122, 0.45);
+  border-bottom-width: 3px;
+  border-radius: 12px;
+  animation: onbPress 1.6s ease-in-out infinite;
+}
+@keyframes onbPress {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    transform: translateY(3px);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.5);
+  }
+}
+.onb-gesture {
+  font-size: 34px;
+  animation: onbDrag 1.8s ease-in-out infinite;
+}
+@keyframes onbDrag {
+  0%,
+  100% {
+    transform: translateX(-14px);
+  }
+  50% {
+    transform: translateX(14px);
+  }
+}
+.onb-gate-line {
+  font-size: 16px;
+  color: var(--fg);
+}
+.onb-gate-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 虚空诗「首次揭示」条 — first 3 pulls explain, in plain words, that the poem was generated on the
+   spot; includes a direct 关闭随机出诗 shortcut (mirrors 更多 → 生成随机诗). */
+.void-reveal {
+  margin: 6px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 210, 122, 0.35);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255, 210, 122, 0.1), rgba(255, 210, 122, 0.03));
+  font-size: 12.5px;
+  line-height: 1.75;
+}
+.void-reveal strong {
+  color: var(--gold);
+  font-weight: 600;
+}
+.void-reveal-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.void-reveal-off {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--muted);
+  padding: 2px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.void-reveal-off:hover {
+  color: var(--fg);
+  border-color: rgba(255, 255, 255, 0.35);
+}
 
 /* loading screen */
 .loading-screen {

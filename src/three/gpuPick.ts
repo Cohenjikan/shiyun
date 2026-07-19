@@ -35,8 +35,11 @@ export function encodePoemPickColor(localId: number): [number, number, number] {
 // The poem pick disc was rendered at the UN-flared apparent size while the VISIBLE planet is drawn with
 // a flare (PoemOrbits HOLD flareSize ≈ 1 + 0.6*1.8 = 2.08) → the clickable area was only ~¼ of the glow
 // the user sees ("选中后诗的选中面积依然很小"). Boost the pick disc by ≈ that flare so 可点盘 = 可见光点
-// (所见即所点): linear ×2.1 → area ×≈4.4 (≥2×). Keep ≈ PoemOrbits' HOLD_FLARE-derived flareSize.
-export const POEM_CLICK_BOOST = 2.1;
+// (所见即所点). Round 2 (2026-07, owner: "还是有点难点"): 2.1 → 2.8 — the disc now overshoots the visible
+// glow a little (可点 > 可见), area ×1.78 over round 1. Test-capped at 3 to keep neighbouring planets in a
+// ring from swallowing each other AND to keep the void between rings pull-able; nearest-to-cursor still
+// resolves overlaps to the planet the user aimed at.
+export const POEM_CLICK_BOOST = 2.8;
 
 // Mirror of the poem pick vertex shader's gl_PointSize (keep the two in sync). apparentPx = uScale/-mv.z;
 // returns the boosted clickable-disc diameter in drawing-buffer px.
@@ -46,9 +49,11 @@ export function poemPickDiscPx(apparentPx: number, maxPx: number, gatePx = 0, bo
 }
 
 // Pick window radius (drawing-buffer px). Coarse (touch) pointers get a wider tolerance so a fat-finger
-// tap NEAR a planet still lands; a mouse keeps the tighter ~6 CSS-px. pr = renderer pixel ratio.
+// tap NEAR a planet still lands; a mouse keeps a tighter radius. pr = renderer pixel ratio.
+// Round 2 (2026-07): 6/11 → 8/14 CSS-px — a miss within ~2 more px of the disc still snaps to the nearest
+// planet/star. Cost: readback window grows a few KB; void clicks need to land slightly farther from a star.
 export function pickRadiusPx(pr: number, coarse: boolean): number {
-  return Math.max(2, Math.round((coarse ? 11 : 6) * pr));
+  return Math.max(2, Math.round((coarse ? 14 : 8) * pr));
 }
 
 // Like nearestPoetIndex but returns the RAW decoded id (0 = miss) so the caller can split poet vs poem.
@@ -201,7 +206,7 @@ export function createGpuPicker(
     const fullW = sizeV.x, fullH = sizeV.y;
     if (fullW < 1 || fullH < 1) return null;
     const gate = 4.4 * pr; // == old apparent>=2.2 CSS-px gate (diameter), in drawing-buffer px
-    const radius = pickRadiusPx(pr, COARSE); // ~6 CSS-px (mouse) / ~11 (touch) click tolerance, drawing-buffer px
+    const radius = pickRadiusPx(pr, COARSE); // ~8 CSS-px (mouse) / ~14 (touch) click tolerance, drawing-buffer px
     const n = radius * 2 + 1;
     if (rt.width !== n) {
       rt.setSize(n, n);
