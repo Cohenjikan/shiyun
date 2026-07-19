@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useStore } from "../state/store";
 import { COARSE, WEAK } from "../three/detectQuality";
-import { submitFeedback } from "../state/feedback";
+import { hasCloudInbox, submitFeedback } from "../state/feedback";
 import { ShiyiViewer } from "./ShiyiViewer";
 
 // in-page feedback box (collapsed → a single button; expanded → a textarea). Stored locally + (if
@@ -27,6 +28,11 @@ function FeedbackBox() {
         maxLength={2000}
         spellCheck={false}
       />
+      <div className="set-feedback-privacy">
+        {hasCloudInbox
+          ? "反馈正文会发送到诗云自有服务器，仅保存正文与接收时间；请勿填写手机号、证件、住址等个人信息。"
+          : "当前反馈仅保存在此浏览器；请勿填写手机号、证件、住址等个人信息。"}
+      </div>
       <div className="set-feedback-act">
         <button className="set-feedback-cancel" onClick={() => { setOpen(false); setText(""); setSent(false); }}>收起</button>
         <button
@@ -88,7 +94,7 @@ function Credits() {
   return (
     <>
       <button className="set-link" onClick={() => setOpen(true)}>开源致谢</button>
-      {open && (
+      {open && createPortal((
         <div className="credits-overlay" onClick={() => setOpen(false)}>
           <div className="credits-card" onClick={(e) => e.stopPropagation()}>
             <div className="credits-head">
@@ -113,9 +119,43 @@ function Credits() {
             <p className="credits-foot">
               * 现当代诗歌文本著作权归原作者所有,本站为非商业使用 · 灵感 · 刘慈欣《诗云》 · 博尔赫斯《巴别图书馆》
             </p>
+            <section className="credits-legal" aria-label="用户协议、隐私与免责声明">
+              <div className="credits-legal-title">宇宙最强免责协议书</div>
+              <div className="credits-legal-sub">用户协议 · 隐私说明 · 版权与下架规则 · 2026-07-13 生效</div>
+
+              <details open>
+                <summary>一、认领与本地诗歌</summary>
+                <p>认领是诗云中的浪漫化纪念，不是著作权登记、财产权凭证或排他性占有。同一文本可能被多人遇见或认领。诗文、预览与可逆全集编号只保存在你的浏览器；认领请求不携带请求正文，服务器只生成并保存全站认领编号与服务器时间，不保存第三个业务字段。发号默认且最高为 1,000,000 次，运营者可下调；达到上限后仍可留下本地纪念，但不再取得云端编号。公共流星只含认领编号与时间，不能点击、不能反查他人的诗。诗歌永久链接只使用不会随 HTTP 请求发送的 # 片段；只有你主动复制编号或分享链接时，接收方才会得到可逆地址。</p>
+              </details>
+
+              <details>
+                <summary>二、隐私说明</summary>
+                <p>个人信息处理者为诗云维护者 Cohenjikan，联系方式见本协议末尾。本站不设置广告追踪，不出售个人信息。拾遗、我的认领及其中的诗文地址使用浏览器 localStorage 保存，可通过清除本站数据删除。你主动提交反馈时，联网版本为接收、处理及回复反馈之目的，仅保存反馈正文与服务器接收时间；点击提交即表示你同意按上述方式处理该内容。请勿填写身份证号、手机号、住址、账户口令等非必要个人信息。</p>
+                <p>反馈保存期限按“仍有处理该条反馈的必要”确定：处理完成、确认不再必要或收到有效删除请求后清理。网络主机/CDN 为完成传输、安全防护及履行法定义务，可能在必要期限内处理 IP、User-Agent 与访问日志，但它们不会写入诗云的认领或反馈业务账本。需要查询、更正、删除反馈或兑奖联系信息，可通过作者个人主页或项目 GitHub 联系。</p>
+                <p>本站不以处理未满十四周岁未成年人的个人信息为目的。未满十四周岁的使用者请勿自行提交个人信息；确需反馈时应由监护人代为联系。如发现误收，将停止处理并删除。</p>
+              </details>
+
+              <details>
+                <summary>三、版权、语料与下架</summary>
+                <p>古典作品多数已进入公有领域；现当代作品、译文、整理成果及数据库中的具体文本仍可能受著作权保护。上游仓库的开源许可只在其有权许可的范围内有效，不当然替代原作者授权。本站以非商业文化展示、检索与技术研究为目的，不主张取得原作品权利，也不允许使用者借“认领”冒充作者或扩大传播受保护内容。</p>
+                <p>权利人认为内容存在权属、署名或收录问题，可经作者主页或 GitHub 提交作品信息、权属说明与处理请求；核实后将及时更正、限制展示或移除相关正文及派生索引。</p>
+              </details>
+
+              <details>
+                <summary>四、使用边界与法定责任</summary>
+                <p>不得利用编号、反馈、认领或分享功能制作、编码、传播违法有害内容，不得刷号、攻击服务、冒用他人身份或侵害他人名誉、隐私、知识产权。服务按现状提供，星图坐标、语料完整性、持续可用性及永久链接不作绝对保证；因浏览器清理、设备更换、网络中断或必要的合规下架导致的本地记录或展示变化，请自行留存。</p>
+                <p>这份“宇宙最强”协议不和法律硬刚：任何依法不得排除或限制的责任仍然承担，任何免责声明都不削减使用者、作者和权利人的法定权利。</p>
+              </details>
+
+              <div className="credits-legal-contact">
+                联系与权利请求：<a href="https://cohenjikan.com" target="_blank" rel="noopener noreferrer">作者主页</a>
+                <span> · </span>
+                <a href="https://github.com/Cohenjikan/shiyun/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>
+              </div>
+            </section>
           </div>
         </div>
-      )}
+      ), document.body)}
     </>
   );
 }
@@ -302,7 +342,7 @@ export function SettingsMenu() {
         </label>
         <label className="set-toggle">
           <input type="checkbox" checked={meteorsOn} onChange={toggleMeteors} />
-          流星 · 认领的诗化作流星划过银河（今日认领更耀眼,可点开看诗）
+          流星 · 认领化作流星划过银河（今日认领更耀眼,仅作纪念、不可反查）
         </label>
       </div>
 

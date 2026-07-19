@@ -5,7 +5,6 @@ import { useStore } from "../state/store";
 import { spinXZ } from "./galaxyParams";
 import { mergeClaims, isSameDay, type MeteorClaim } from "../state/claims";
 import { ambientPath, ceremonyPath, ceremonyRemap, hashU32, type V3 } from "./meteorPath";
-import { meteorPick } from "./meteorPick";
 import { ceremonyCam } from "./ceremonyCam";
 
 // 认领的诗 → 流星. The look must belong to 诗云's painterly sky (soft glowing colored particles + bloom),
@@ -46,7 +45,7 @@ const PROF = {
 };
 
 interface Meteor {
-  index: string;
+  key: string; // drawing/path seed only; ambient keys cannot address a poem
   start: V3; // LOCAL
   end: V3; // LOCAL
   birth: number; // clock seconds (ceremony adds CEREMONY_DELAY)
@@ -67,13 +66,13 @@ const toWorld = (p: V3): V3 => {
   const [wx, wz] = spinXZ(p[0], p[2]);
   return [wx, p[1], wz];
 };
-const seedOf = (index: string) => (hashU32(index + "~tw") & 0xffff) / 0x10000;
+const seedOf = (key: string) => (hashU32(key + "~tw") & 0xffff) / 0x10000;
 
 function pickNext(pool: MeteorClaim[], spawned: Set<string>, now: number, tz: number): MeteorClaim | null {
   const todays: MeteorClaim[] = [];
   const pasts: MeteorClaim[] = [];
   for (const c of pool) {
-    if (spawned.has(c.index)) continue;
+    if (spawned.has(c.key)) continue;
     (isSameDay(c.ts, now, tz) ? todays : pasts).push(c);
   }
   const useToday = todays.length > 0 && (pasts.length === 0 || Math.random() < 0.7);
@@ -105,10 +104,6 @@ export function Meteors() {
   useMemo(() => {
     tz.current = new Date().getTimezoneOffset();
   }, []);
-
-  useEffect(() => {
-    if (!meteorsOn) meteorPick.alive = [];
-  }, [meteorsOn]);
 
   // release the camera hand-off if this layer unmounts mid-ceremony (otherwise FlyControls would keep
   // chasing a stale head forever — the render loop that clears `active` would no longer run).
@@ -227,9 +222,8 @@ export function Meteors() {
   }, []);
 
   useFrame((_, dt) => {
-    if (useStore.getState().cinema) return; // 留影冻结:不改 ceremonyCam.active(与 meteorPick 同样的冻结自洽)
+    if (useStore.getState().cinema) return; // 留影冻结：保持当前 ceremonyCam 状态，退出后继续自洽
     if (!meteorsOn) {
-      if (meteorPick.alive.length) meteorPick.alive = [];
       if (ceremonyCam.active) ceremonyCam.active = false; // 流星关 → 交还相机
       if (meteors.current.length) {
         meteors.current = [];
@@ -249,25 +243,26 @@ export function Meteors() {
     const cer = st.claimCeremony;
     if (cer && !seenCeremony.current.has(cer.id) && meteors.current.length < MAX_ALIVE) {
       seenCeremony.current.add(cer.id);
-      spawned.current.add(cer.index);
+      const key = `local:${cer.index}`;
+      spawned.current.add(key);
       const { start, end } = ceremonyPath(cer.pos, cer.index);
-      meteors.current.push({ index: cer.index, start, end, birth: t + CEREMONY_DELAY, dur: DUR.ceremony, bright: true, ceremony: true, cerId: cer.id, seed: seedOf(cer.index) });
+      meteors.current.push({ key, start, end, birth: t + CEREMONY_DELAY, dur: DUR.ceremony, bright: true, ceremony: true, cerId: cer.id, seed: seedOf(key) });
     }
 
     // ── dev tool: spawn ONE meteor of a chosen kind RIGHT NOW (bypasses the cap/throttle; synthetic index) ──
     const req = st.meteorSpawnReq;
     if (req && req.id !== seenReq.current && meteors.current.length < MAX_ALIVE) {
       seenReq.current = req.id;
-      const index = String(100000003 + Math.floor(Math.random() * 999999937));
+      const key = `dev:${100000003 + Math.floor(Math.random() * 999999937)}`;
       if (req.kind === "ceremony") {
         const a = Math.random() * Math.PI * 2, r = 900 + Math.random() * 1600;
         const from: V3 = [Math.cos(a) * r, (Math.random() - 0.5) * 280, Math.sin(a) * r];
-        const { start, end } = ceremonyPath(from, index);
-        meteors.current.push({ index, start, end, birth: t, dur: DUR.ceremony, bright: true, ceremony: true, cerId: devCerId.current++, seed: seedOf(index) });
+        const { start, end } = ceremonyPath(from, key);
+        meteors.current.push({ key, start, end, birth: t, dur: DUR.ceremony, bright: true, ceremony: true, cerId: devCerId.current++, seed: seedOf(key) });
       } else {
         const bright = req.kind === "today";
-        const { start, end } = ambientPath(index);
-        meteors.current.push({ index, start, end, birth: t, dur: bright ? DUR.today : DUR.past, bright, ceremony: false, cerId: -1, seed: seedOf(index) });
+        const { start, end } = ambientPath(key);
+        meteors.current.push({ key, start, end, birth: t, dur: bright ? DUR.today : DUR.past, bright, ceremony: false, cerId: -1, seed: seedOf(key) });
       }
     }
 
@@ -287,11 +282,11 @@ export function Meteors() {
           if (appearances.current >= total || meteors.current.length >= MAX_ALIVE) break;
           const cand = pickNext(pool, spawned.current, now, tz.current);
           if (!cand) break;
-          spawned.current.add(cand.index);
+          spawned.current.add(cand.key);
           appearances.current++;
           const bright = isSameDay(cand.ts, now, tz.current);
-          const { start, end } = ambientPath(cand.index);
-          meteors.current.push({ index: cand.index, start, end, birth: t, dur: bright ? DUR.today : DUR.past, bright, ceremony: false, cerId: -1, seed: seedOf(cand.index) });
+          const { start, end } = ambientPath(cand.key);
+          meteors.current.push({ key: cand.key, start, end, birth: t, dur: bright ? DUR.today : DUR.past, bright, ceremony: false, cerId: -1, seed: seedOf(cand.key) });
         }
       }
     }
@@ -323,7 +318,6 @@ export function Meteors() {
     const look = st.meteorLook;
     const tailSpan = TAIL_SPAN * look.len;
     let n = 0;
-    const alive: typeof meteorPick.alive = [];
     for (const m of meteors.current) {
       const u = (t - m.birth) / m.dur;
       if (u < 0) continue; // ceremony pre-delay — located, not yet streaking
@@ -358,7 +352,6 @@ export function Meteors() {
         obj.tColT[v] = tr; obj.tColT[v + 1] = tg2; obj.tColT[v + 2] = tb;
         obj.aWidth[n * 4 + k] = width;
       }
-      if (m.bright) alive.push({ x: hx, y: hy, z: hz, index: m.index });
       n++;
     }
     obj.hg.setDrawRange(0, n);
@@ -373,7 +366,6 @@ export function Meteors() {
     obj.tg.attributes.aColor.needsUpdate = true;
     obj.tg.attributes.aColorTail.needsUpdate = true;
     (obj.tg.attributes.aWidth as THREE.BufferAttribute).needsUpdate = true;
-    meteorPick.alive = alive;
   });
 
   if (!meteorsOn) return null;

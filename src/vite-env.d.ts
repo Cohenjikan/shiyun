@@ -2,12 +2,12 @@
 
 interface ImportMetaEnv {
   /**
-   * Optional feedback-collection endpoint. When set at BUILD time, in-page feedback is also POSTed here
-   * (fire-and-forget JSON) on top of the always-on localStorage save — the single place 诗云 talks to a
-   * server. Leave unset to stay 100% static. See state/feedback.ts + docs/DEPLOY.md.
-   * e.g. VITE_FEEDBACK_ENDPOINT="https://shiyun-feedback.<you>.workers.dev"
+   * Optional feedback endpoint. When set, the client POSTs only {message}; the self-hosted collector adds
+   * receivedAt and persists no IP/UA/client timestamp. Leave unset for localStorage-only feedback.
    */
   readonly VITE_FEEDBACK_ENDPOINT?: string;
+  /** Optional bodyless global claim-number endpoint. It must never receive poem text or a reversible index. */
+  readonly VITE_CLAIM_ENDPOINT?: string;
   /**
    * Optional base URL/path for the heavy data shards (poems/lines/search/manifest/…). When set at BUILD
    * time, all six fetch helpers in src/data/load.ts default to it instead of same-origin "/data".

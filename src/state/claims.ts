@@ -5,10 +5,14 @@
 // — the ONE thing a static client can't produce, so it comes from deploy/claim-server.mjs. The poem then
 // "locates in the void" and streaks off as a meteor into the galaxy (three/Meteors.tsx).
 //
+// PRIVACY RED LINE: the poem AND its reversible 全集编号 are LOCAL-ONLY. The POST has NO body; the server
+// creates only {no, ts}, and the public feed returns only {no, ts}. Other people's meteors are visual traces
+// seeded by the opaque claim number — they are deliberately not clickable and cannot reconstruct a poem.
+//
 // STATIC-FIRST, like state/feedback.ts: a claim is ALWAYS recorded in localStorage so the app works as a
 // 100% static build and the visitor always sees their OWN meteor. When VITE_CLAIM_ENDPOINT is set, the
 // claim is ALSO POSTed; the server's reply carries the authoritative 认领编号, which we patch back onto
-// the local record. Offline / no endpoint → the claim stands locally with no=null ("待联网确认").
+// the local record. Offline / no endpoint → the claim stands locally with no=null (this attempt got no number).
 //
 // This module is PURE where it counts: the local store, the day-bucket classification (今日/往日), and the
 // feed↔local pool merge all take their inputs explicitly (storage backend, now-ms, tz offset) so they are
@@ -23,23 +27,20 @@ export interface MyClaim {
   no: number | null; // 认领编号 from the backend; null = recorded locally, awaiting a server number
   ts: number; // epoch ms when claimed
   preview?: string; // first line, stored LOCALLY ONLY (never sent to the server) for the 我的认领 gallery
-  prizeKey?: string; // 里程碑中奖密钥 (only on a milestone claim; server-minted, echoed once — kept LOCAL so
-  // the winner can always re-find it in 我的认领). Format: SY<no>-XXXXX-XXXXX-XXXXX-XXXXX.
+  prizeKey?: string; // 里程碑中奖密钥 — minted server-side on a milestone 认领编号, returned ONCE in the POST
+                     // reply and persisted here so it survives a reload (the server keeps no per-user copy).
 }
 
-// A well-formed 中奖密钥 as minted by deploy/claim-server.mjs: SY<no>-XXXXX-XXXXX-XXXXX-XXXXX (4×5 groups,
-// Crockford-ish uppercase). A defensive guard so a malformed / hostile server reply can never inject junk
-// (or something that looks like a fake prize) into the local store or the UI. The client NEVER decides who
-// wins — it only trusts a server reply that carries a syntactically valid key.
+// 里程碑中奖密钥 shape (`SY<no>-XXXXX-XXXXX-XXXXX-XXXXX`, Crockford-ish alphabet). Guards what the POST reply
+// hands back before it is persisted, and validates hand-edited / legacy local records on read.
 const PRIZE_KEY_RE = /^SY\d+-[2-9A-Z]{5}(-[2-9A-Z]{5}){3}$/;
 export function isPrizeKey(v: unknown): v is string {
   return typeof v === "string" && PRIZE_KEY_RE.test(v);
 }
 
-/** A claim as published by the public feed (deploy/claim-server.mjs GET /api/claim/feed). */
+/** A claim as published by the public feed. No poem/index — only an opaque event number + server time. */
 export interface FeedClaim {
   no: number;
-  index: string;
   ts: number;
 }
 export interface ClaimFeed {
@@ -48,9 +49,9 @@ export interface ClaimFeed {
   claims: FeedClaim[]; // newest-first window
 }
 
-/** A claim ready to become a meteor (feed ∪ local, deduped). */
+/** A claim ready to become a NON-INTERACTIVE meteor. `key` is a drawing seed, never a poem address. */
 export interface MeteorClaim {
-  index: string;
+  key: string;
   no: number | null;
   ts: number;
 }
@@ -126,17 +127,15 @@ export function addLocalClaim(
   const rec: MyClaim = { index, no: entry.no ?? null, ts: entry.ts ?? Date.now() };
   const pv = (entry.preview ?? "").trim(); // LOCAL keepsake preview (first line) — never leaves the device
   if (pv) rec.preview = pv.length > 16 ? pv.slice(0, 16) : pv;
-  if (isPrizeKey(entry.prizeKey)) rec.prizeKey = entry.prizeKey; // usually patched in later via the server reply
+  if (isPrizeKey(entry.prizeKey)) rec.prizeKey = entry.prizeKey; // local legacy import only
   const next = [rec, ...existing].slice(0, CAP);
   write(next, store);
   return next;
 }
 
 /**
- * Patch the server reply (认领编号 + an optional 里程碑中奖密钥) onto an existing local claim once the server
- * responds. No-op if the claim isn't present or already has a number. A `prizeKey` is only written when it
- * passes the format guard (isPrizeKey) — a bad key is silently dropped while the `no` still lands. Returns
- * the (possibly unchanged) list.
+ * Patch the server claim number (and, on a 里程碑 claim, the 中奖密钥) onto an existing pending local claim.
+ * The prizeKey is validated before it is written; a missing/malformed one just lands the 认领编号 alone.
  */
 export function setLocalClaimResult(
   index: string,
@@ -204,29 +203,35 @@ export function claimBadge(no: number | null | undefined): ClaimBadge | null {
 
 // ── feed ↔ local pool ────────────────────────────────────────────────────────────────────────────────
 /**
- * Merge the public feed with this device's own claims into one meteor pool, DEDUPED by index. A claim
- * the viewer made but the feed hasn't echoed yet (just claimed, or offline) still appears. Prefers a
- * numeric 认领编号 (server-confirmed) over a pending null, and keeps the EARLIEST ts (when it was claimed).
- * Newest-first by ts.
+ * Merge the index-free public feed with this device's own LOCAL claims into one meteor pool. Confirmed
+ * local claims dedupe against the public event by 认领编号; a pending/offline local claim gets a local-only
+ * drawing key. No public FeedClaim can ever carry or recover `MyClaim.index`. Newest-first by ts.
  */
 export function mergeClaims(feed: readonly FeedClaim[], mine: readonly MyClaim[]): MeteorClaim[] {
-  const byIndex = new Map<string, MeteorClaim>();
-  const fold = (c: { index: string; no: number | null; ts: number }) => {
-    if (!c.index) return;
-    const prev = byIndex.get(c.index);
+  const byKey = new Map<string, MeteorClaim>();
+  const fold = (key: string, c: { no: number | null; ts: number }) => {
+    if (!key) return;
+    const prev = byKey.get(key);
     if (!prev) {
-      byIndex.set(c.index, { index: c.index, no: c.no, ts: c.ts });
+      byKey.set(key, { key, no: c.no, ts: c.ts });
       return;
     }
-    byIndex.set(c.index, {
-      index: c.index,
+    byKey.set(key, {
+      key,
       no: prev.no ?? c.no, // keep whichever has a real number
       ts: Math.min(prev.ts, c.ts), // when it was first claimed
     });
   };
-  for (const c of feed) fold({ index: c.index, no: c.no, ts: c.ts });
-  for (const c of mine) fold(c);
-  return [...byIndex.values()].sort((a, b) => b.ts - a.ts);
+  // A local ceremony is inserted into Meteors' spawned-set as `local:<index>`. Keep that identity forever,
+  // even after the server assigns a number; otherwise the same claim is re-keyed to `claim:<no>` and the
+  // ambient scheduler launches the visitor's poem a second time a few seconds later.
+  const localKeyByNo = new Map<number, string>();
+  for (const c of mine) {
+    if (c.no != null && !localKeyByNo.has(c.no)) localKeyByNo.set(c.no, `local:${c.index}`);
+  }
+  for (const c of feed) fold(localKeyByNo.get(c.no) ?? `claim:${c.no}`, c);
+  for (const c of mine) fold(`local:${c.index}`, c);
+  return [...byKey.values()].sort((a, b) => b.ts - a.ts);
 }
 
 // ── network (the only side-effecting part; mirrors feedback.ts's optional-endpoint pattern) ────────────
@@ -236,35 +241,29 @@ const ENDPOINT = (import.meta.env.VITE_CLAIM_ENDPOINT || "").trim().replace(/\/$
 export const hasClaimServer = ENDPOINT !== "";
 
 /**
- * POST a claim to the backend; resolves with the authoritative 认领编号 (or null when there's no endpoint,
- * the server is unreachable, or it replied with an error). Never throws — the local record is the source
- * of truth for "this poem is claimed"; only the NUMBER needs the server.
+ * POST a bodyless claim event to the backend; resolves with the authoritative 认领编号 (or null when there's no endpoint,
+ * the server is unreachable, or it replied with an error) and, on a 里程碑 claim, the 中奖密钥. Never throws —
+ * the local record is the source of truth for "this poem is claimed"; only the NUMBER needs the server.
  *
- * We send ONLY {index, ts} — two numbers. The poem text is NEVER transmitted (the server stores only
- * {no, index, ts} — plus a server-random key on a milestone row; the poem is recomputed client-side from
- * index). See deploy/claim-server.mjs's compliance note.
- *
- * Resolves with the authoritative 认领编号 and — ONLY on a 里程碑中奖 — a `prizeKey`. The key is never
- * client-decided: it is returned only when the server sends a syntactically valid one (isPrizeKey), else
- * null. No endpoint / unreachable / error → {no:null, prizeKey:null}. Never throws.
+ * We send NO body at all. The poem text and reversible index never leave the browser. The server creates
+ * exactly {no, ts} (+ a server-random `key` on a milestone row) and the public feed contains only {no, ts}.
+ * A milestone reply also carries `prizeKey` (validated here) — this is the ONE and only time it is delivered,
+ * so the caller must persist it. No endpoint / unreachable / error resolves to {no:null}. Never throws.
  */
-export async function postClaim(index: string, ts: number): Promise<{ no: number | null; prizeKey: string | null }> {
-  if (!ENDPOINT) return { no: null, prizeKey: null };
+export async function postClaim(): Promise<{ no: number | null; prizeKey?: string }> {
+  if (!ENDPOINT) return { no: null };
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { Accept: "application/json" },
       keepalive: true, // survive a tab-close right after claiming
-      body: JSON.stringify({ index, ts }),
     });
-    if (!res.ok) return { no: null, prizeKey: null };
+    if (!res.ok) return { no: null };
     const j = (await res.json()) as { no?: unknown; prizeKey?: unknown };
     const no = typeof j?.no === "number" && j.no > 0 ? j.no : null;
-    // Only surface a prize key that is (a) syntactically valid AND (b) accompanied by a real 认领编号.
-    const prizeKey = no != null && isPrizeKey(j?.prizeKey) ? j.prizeKey : null;
-    return { no, prizeKey };
+    return no != null && isPrizeKey(j?.prizeKey) ? { no, prizeKey: j.prizeKey } : { no };
   } catch {
-    return { no: null, prizeKey: null }; // offline / CORS / server down — the local copy already holds the claim
+    return { no: null }; // offline / CORS / server down — the local copy already holds the claim
   }
 }
 
@@ -278,8 +277,9 @@ export async function fetchFeed(limit = 500): Promise<ClaimFeed | null> {
     if (!j || !Array.isArray(j.claims)) return null;
     const claims: FeedClaim[] = j.claims
       .filter((c): c is FeedClaim =>
-        !!c && typeof c.index === "string" && typeof c.no === "number" && typeof c.ts === "number")
-      .map((c) => ({ no: c.no, index: c.index, ts: c.ts }));
+        !!c && typeof c.no === "number" && Number.isSafeInteger(c.no) && c.no > 0
+        && typeof c.ts === "number" && Number.isFinite(c.ts))
+      .map((c) => ({ no: c.no, ts: c.ts }));
     return {
       total: typeof j.total === "number" ? j.total : claims.length,
       serverNow: typeof j.serverNow === "number" ? j.serverNow : Date.now(),

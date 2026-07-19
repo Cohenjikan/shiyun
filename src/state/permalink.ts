@@ -2,12 +2,9 @@
 //   a=<poetId>   → a poet (restored: select + fly + load poems)
 //   p=<index>    → a poem, by its UNIVERSAL 全集编号 (anyRank — the number self-describes its 诗体)
 //
-// CANONICAL restore = the hash (`#a=…` / `#p=…`); old pure-hash links keep working bit-for-bit.
-// We ALSO mirror the target into the QUERY string (`/?a=…#a=…`) for ONE reason: crawlers
-// (WeChat/Twitter/Telegram) and the server never see the fragment, so a hash-only link previews the
-// same generic og.jpg for every share. The query mirror lets the server (docs/DEPLOY.md §6) inject a
-// per-target OG card. On boot, `applyHash` falls back to the query when the hash is absent.
-// Panels copy `location.href` (it now carries both).
+// CANONICAL restore = the hash (`#a=…` / `#p=…`). A public poet id is ALSO mirrored into `?a=` so crawlers
+// can render a poet share card. A reversible POEM index is NEVER mirrored into `?p=`: fragments stay inside
+// the browser and are not sent in HTTP requests or access logs. Legacy query-only links still restore.
 import { useStore } from "./store";
 import { pulledFromIndex } from "../engine/engineApi";
 import { getPoet, resolveCanonicalPoet, poetAliasRedirectNote } from "../data/load";
@@ -21,7 +18,8 @@ export type Target = { kind: "a" | "p"; value: string };
 
 /**
  * Build the shareable URL for `target` on top of `base` (a Location-like {pathname,search,hash}).
- *   - target present → query is set to ?a=…/?p=… AND the hash is set to #a=…/#p=… (hash CANONICAL).
+ *   - poet target → public ?a=… mirror + canonical #a=… hash.
+ *   - poem target → canonical #p=… hash ONLY, keeping the reversible coordinate out of HTTP/access logs.
  *   - target null    → strip our own a/p from BOTH query and hash; preserve any UNRELATED query params.
  * Returns a relative URL string (pathname[+search][+hash]) for history.replaceState.
  */
@@ -33,7 +31,7 @@ export function buildShareUrl(
   // our params are mutually exclusive — clear both before (re)setting one
   params.delete("a");
   params.delete("p");
-  if (target) params.set(target.kind, target.value);
+  if (target?.kind === "a") params.set("a", target.value);
   const q = params.toString();
   const hash = target ? `#${target.kind}=${target.value}` : "";
   return base.pathname + (q ? "?" + q : "") + hash;

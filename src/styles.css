@@ -417,6 +417,25 @@ canvas {
   line-height: 1.65;
   color: var(--muted);
 }
+.claim-privacy {
+  margin-top: 10px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border: 1px solid rgba(125, 190, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(90, 150, 230, 0.07);
+  font-size: 10.5px;
+  line-height: 1.65;
+  color: var(--muted);
+  text-align: left;
+}
+.claim-privacy strong {
+  color: #c8dcff;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
 .claim-done {
   display: flex;
   flex-direction: column;
@@ -2701,6 +2720,59 @@ canvas {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   text-align: center;
 }
+.credits-legal {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 210, 122, 0.22);
+}
+.credits-legal-title {
+  color: #ffe6b8;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+.credits-legal-sub {
+  margin: 4px 0 12px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+.credits-legal details {
+  margin-top: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  overflow: hidden;
+}
+.credits-legal summary {
+  padding: 8px 10px;
+  color: var(--gold-soft);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.credits-legal details[open] summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.credits-legal p {
+  margin: 0;
+  padding: 8px 10px 0;
+  color: #aeb8ce;
+  font-size: 11px;
+  line-height: 1.75;
+}
+.credits-legal p:last-child {
+  padding-bottom: 9px;
+}
+.credits-legal-contact {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+.credits-legal-contact a {
+  color: var(--gold-soft);
+}
 .set-feedback-open {
   width: 100%;
   background: rgba(255, 210, 122, 0.1);
@@ -2727,6 +2799,12 @@ canvas {
 }
 .set-feedback-input:focus {
   border-color: rgba(255, 210, 122, 0.5);
+}
+.set-feedback-privacy {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
 }
 .set-feedback-act {
   display: flex;

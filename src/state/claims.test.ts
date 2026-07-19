@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   addLocalClaim,
   setLocalClaimNo,
@@ -17,8 +17,8 @@ import {
 
 // The PURE parts of the 认领 client: the local store (add / dedupe / patch-number / cap / corrupt
 // tolerance), the viewer-local day bucket (今日 vs 往日), and the feed↔local meteor-pool merge. A trivial
-// in-memory stub stands in for localStorage so this runs in node. The fetch/POST helpers are NOT covered
-// here (they're thin network wrappers; the contract they depend on is the server's, tested by hand).
+// in-memory stub stands in for localStorage so this runs in node. The bodyless POST privacy contract is
+// covered below with a fetch stub so adding a request body or Content-Type becomes a gate failure.
 
 function memStore(): Storageish & { _v: Map<string, string> } {
   const _v = new Map<string, string>();
@@ -217,23 +217,69 @@ describe("claims — viewer-local day bucket (今日 / 往日)", () => {
 });
 
 describe("claims — mergeClaims (feed ∪ local pool)", () => {
-  it("dedupes by index, prefers a real 认领编号, keeps the earliest ts, newest-first", () => {
+  it("dedupes confirmed local claims by claim number and never needs a public poem index", () => {
     const feed: FeedClaim[] = [
-      { no: 2, index: "B", ts: 200 },
-      { no: 1, index: "A", ts: 100 },
+      { no: 2, ts: 200 },
+      { no: 1, ts: 100 },
     ];
     const mine: MyClaim[] = [
-      { index: "A", no: null, ts: 90 }, // older ts, pending — should keep no:1 (feed) + ts:90 (earliest)
-      { index: "C", no: null, ts: 300 }, // local-only (feed hasn't echoed it) → still appears
+      { index: "A", no: 1, ts: 90 }, // local poem address joins its own public event only on this device
+      { index: "C", no: null, ts: 300 }, // offline/pending: local-only drawing key
     ];
     const merged = mergeClaims(feed, mine);
-    expect(merged.map((c) => c.index)).toEqual(["C", "B", "A"]); // newest ts first
-    expect(merged.find((c) => c.index === "A")).toEqual({ index: "A", no: 1, ts: 90 });
-    expect(merged.find((c) => c.index === "C")).toEqual({ index: "C", no: null, ts: 300 });
+    expect(merged.map((c) => c.key)).toEqual(["local:C", "claim:2", "local:A"]);
+    expect(merged.find((c) => c.key === "local:A")).toEqual({ key: "local:A", no: 1, ts: 90 });
+    expect(merged.find((c) => c.key === "local:C")).toEqual({ key: "local:C", no: null, ts: 300 });
   });
 
   it("empty inputs → empty pool", () => {
     expect(mergeClaims([], [])).toEqual([]);
+  });
+});
+
+describe("claims — postClaim privacy contract", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it("POSTs without body/Content-Type and parses a valid number + prize key", async () => {
+    vi.stubEnv("VITE_CLAIM_ENDPOINT", "/api/claim");
+    const prizeKey = "SY100-QKC9T-E9BP3-7TCDP-7KNYC";
+    const fetchStub = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, no: 100, prizeKey }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    vi.resetModules();
+    const { postClaim } = await import("./claims");
+
+    await expect(postClaim()).resolves.toEqual({ no: 100, prizeKey });
+    expect(fetchStub).toHaveBeenCalledOnce();
+    const [url, init] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/claim");
+    expect(init.method).toBe("POST");
+    expect(init).not.toHaveProperty("body");
+    expect(new Headers(init.headers).has("Content-Type")).toBe(false);
+  });
+
+  it("never returns a prize key when the response number is invalid", async () => {
+    vi.stubEnv("VITE_CLAIM_ENDPOINT", "/api/claim");
+    const fetchStub = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, no: 0, prizeKey: "SY100-QKC9T-E9BP3-7TCDP-7KNYC" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    vi.resetModules();
+    const { postClaim } = await import("./claims");
+
+    await expect(postClaim()).resolves.toEqual({ no: null });
   });
 });
 

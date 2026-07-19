@@ -1,12 +1,11 @@
-// In-page feedback. ALWAYS saved to localStorage (so the app still works as a 100% static build, offline,
-// and the owner can read it on-device via the hidden 5-taps-on-logo gesture → FeedbackViewer). Local store
-// is capped at 5000 汉字 total (oldest entries drop first).
+// In-page feedback. ALWAYS saved to localStorage (so the app still works as a 100% static build, offline).
+// NOTE: there is no on-device feedback reader anymore — the 5-taps-on-logo gesture now opens the 流星 DevTool,
+// so pure-static feedback stays in localStorage unread unless the §5 server (docs/DEPLOY.md) is run. Local
+// store is capped at 5000 汉字 total (oldest entries drop first).
 //
-// OPTIONAL server collection: if VITE_FEEDBACK_ENDPOINT is set at BUILD time, each message is ALSO POSTed
-// there as fire-and-forget JSON — a shared, cross-device inbox. This is the ONLY place 诗云 talks to a
-// server; everything else (index math, rendering, corpus) stays client-side. The POST never blocks or fails
-// the submit: localStorage is the source of truth, the network is best-effort. Leave the env var unset to
-// keep the build fully static. See docs/DEPLOY.md §feedback for a ~30-line Cloudflare Worker / Formspree.
+// OPTIONAL server collection: if VITE_FEEDBACK_ENDPOINT is set at BUILD time, only {message} is POSTed to
+// the self-hosted inbox. The server creates its own receivedAt time and stores no client timestamp, source,
+// IP or User-Agent. LocalStorage remains the source of truth and the upload is best-effort.
 const KEY = "shiyun_feedback_v1";
 const MAX_HAN = 5000;
 const HAN = /\p{Script=Han}/gu;
@@ -18,7 +17,7 @@ const ENDPOINT = (import.meta.env.VITE_FEEDBACK_ENDPOINT || "").trim();
 export const hasCloudInbox = ENDPOINT !== "";
 
 /** Best-effort upload to the optional server endpoint. Never throws; never blocks the caller. */
-function uploadFeedback(text: string, ts: number): void {
+function uploadFeedback(text: string): void {
   if (!ENDPOINT) return;
   try {
     void fetch(ENDPOINT, {
@@ -26,7 +25,7 @@ function uploadFeedback(text: string, ts: number): void {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       // keepalive lets the POST survive a navigation/tab-close right after submit
       keepalive: true,
-      body: JSON.stringify({ source: "shiyun", message: text, ts }),
+      body: JSON.stringify({ message: text }),
     }).catch(() => {
       /* offline / CORS / server down — the local copy already holds it */
     });
@@ -68,7 +67,7 @@ export function submitFeedback(text: string): boolean {
   } catch {
     /* private mode / quota — feedback just isn't persisted */
   }
-  uploadFeedback(msg, ts); // optional, best-effort; no-op unless VITE_FEEDBACK_ENDPOINT is set
+  uploadFeedback(msg); // optional, best-effort; no-op unless VITE_FEEDBACK_ENDPOINT is set
   return true;
 }
 

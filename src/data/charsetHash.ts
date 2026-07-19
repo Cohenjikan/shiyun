@@ -2,7 +2,7 @@
 // CHARSET HASH — runtime data↔code version guard.
 // ----------------------------------------------------------------------------
 // The 字库 (charset.json) is a FROZEN bijection: each character's index IS its
-// base-N digit, so every shared 编号 permalink (?p= / #p=) decodes to a poem ONLY
+// base-N digit, so every shared 编号 permalink (#p=; legacy ?p= is read-only compatible) decodes to a poem ONLY
 // against the exact same ordered charset this build of the code expects. If a
 // deploy serves a DIFFERENT charset (wrong/mixed deploy, stale CDN, a *_v1_backup
 // folder), the indices silently shift and every shared link points at the WRONG

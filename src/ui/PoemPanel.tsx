@@ -22,7 +22,7 @@ export function PoemPanel() {
   const keep = useStore((s) => s.keepShiyi);
   const drop = useStore((s) => s.dropShiyi);
   const kept = useStore((s) => !!selected && s.shiyi.some((e) => e.index === selected.babelIndex));
-  // 认领: this device's claim on THIS poem (if any), and whether anyone has claimed it (public feed).
+  // 认领: this device's LOCAL claim on THIS poem (if any). The public feed is index-free by design.
   const myClaims = useStore((s) => s.myClaims);
   const claimFeed = useStore((s) => s.claimFeed);
   const setMyClaims = useStore((s) => s.setMyClaims);
@@ -47,7 +47,7 @@ export function PoemPanel() {
   const showTotal = hasClaimServer && displayTotal != null && displayTotal > 0;
   // 认领: record locally (so a static build / offline still works + my meteor shows), locate the poem in
   // the void, launch it as a meteor, and POST for the authoritative 全站唯一 认领编号 (patched back on reply).
-  // Only {index, ts} go to the server — never the poem text (compliance; see state/claims.ts).
+  // The server request has NO body. Poem text + reversible index stay in this browser (state/claims.ts).
   const doClaim = async () => {
     if (!selected || claiming || myClaim) return;
     const { babelIndex: index, pos } = selected;
@@ -58,9 +58,9 @@ export function PoemPanel() {
     setFlyTarget(pos); // 在虚空中定位
     launchClaimCeremony({ index, pos, ts }); // …然后化作流星没入银河
     try {
-      const { no, prizeKey } = await postClaim(index, ts);
+      const { no, prizeKey } = await postClaim();
       if (no != null) {
-        setLocalClaimResult(index, no, prizeKey ?? undefined); // patch 编号 (+ 中奖密钥 on a 里程碑)
+        setLocalClaimResult(index, no, prizeKey); // patch the global claim number (+ 里程碑中奖密钥 if any)
         setMyClaims(listClaims());
       }
     } finally {
@@ -136,7 +136,7 @@ export function PoemPanel() {
             ) : (
               <>
                 <span className="claim-no">你已认领这首诗</span>
-                <span className="claim-id">认领编号 · 待联网确认</span>
+                <span className="claim-id">本次未联网 · 未取得编号</span>
               </>
             )}
             {badge && <span className={`claim-badge ${badge.tier}`}>✦ {badge.label}</span>}
@@ -149,7 +149,7 @@ export function PoemPanel() {
                   <CopyButton text={myClaim.prizeKey} label="复制密钥" />
                 </div>
                 <span className="claim-prize-note">
-                  凭此密钥在抖音 / 小红书 / B站 任一平台私信作者，可领取刘慈欣原著《诗云》一本。密钥仅生成一次，请妥善保存 —— 它已同时存入本机「我的认领」。
+                  凭此密钥在抖音 / 小红书 / B站 任一平台私信作者，可领取刘慈欣原著《诗云》实体书一本。密钥仅生成一次，请妥善保存 —— 它已同时存入本机「我的认领」。
                 </span>
               </div>
             )}
@@ -161,7 +161,11 @@ export function PoemPanel() {
             </button>
             {showTotal && <div className="claim-total">诗云中已有 {displayTotal!.toLocaleString()} 首诗被认领</div>}
             <div className="claim-note">
-              即使这首诗前人已写过，你依然可以认领它 —— 认领后它会成为诗云里又一首被认领的诗，得到一个从 1 起算、全站唯一的认领编号；随即在虚空中定位，化作流星，没入银河。
+              即使这首诗前人已写过，你依然可以认领它 —— 认领只是一枚浪漫印记，不产生著作权、所有权或排他权。它会得到一个从 1 起算、全站唯一的认领编号，随即化作流星，没入银河。
+            </div>
+            <div className="claim-privacy">
+              <strong>诗只留在你手中</strong>
+              <span>诗文、预览和可逆的全集编号仅保存在此浏览器，本站不会自动上传，也不会放进公共流星。服务器只保存认领编号和服务器时间；诗歌链接仅写入浏览器 # 片段，不随网页请求进入服务器。只有你主动复制编号或分享链接时，接收方才会得到它。</span>
             </div>
           </>
         )}

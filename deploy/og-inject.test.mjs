@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { spawn } from "node:child_process";
 import { connect } from "node:net";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -229,6 +229,10 @@ describe.sequential("og-inject — spawn smoke (real feedback-server.mjs with SI
       const body = await og.text();
       expect(body).toContain('<meta property="og:title" content="李白 — 诗云 · Poetry Cloud" />');
 
+      // Reversible poem coordinates are hash-only; this server refuses the old query-card route.
+      const privatePoem = await fetch(`${base}/?p=12345`);
+      expect(privatePoem.status).toBe(404);
+
       // 2) Host-DoS: a malformed Host header (`a b`) makes new URL throw; the inner try must turn
       //    that into 400, NOT an unhandled rejection that kills the process. Raw socket — fetch won't
       //    send an invalid Host. The subsequent POST proves the process survived.
@@ -239,10 +243,13 @@ describe.sequential("og-inject — spawn smoke (real feedback-server.mjs with SI
       const post = await fetch(`${base}/api/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "shiyun", message: "smoke", ts: 1781000000000 }),
+        body: JSON.stringify({ message: "smoke" }),
       });
       expect(post.status).toBe(200);
       expect(await post.json()).toEqual({ ok: true });
+      const stored = JSON.parse(readFileSync(feedbackFile, "utf8").trim());
+      expect(Object.keys(stored).sort()).toEqual(["message", "receivedAt"]);
+      expect(stored.message).toBe("smoke");
 
       // 4) health endpoint unchanged
       const health = await fetch(`${base}/api/feedback/health`);

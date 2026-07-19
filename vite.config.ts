@@ -1,4 +1,5 @@
-import { defineConfig, loadEnv } from "vite";
+import { loadEnv } from "vite";
+import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // 诗云 — static SPA. All index↔poem math runs client-side; the ONLY optional server touchpoint is
@@ -17,6 +18,9 @@ export default defineConfig(({ mode }) => {
         transformIndexHtml: (html: string) => html.replaceAll("__OG_ORIGIN__", origin),
       },
     ],
+    test: {
+      exclude: [...configDefaults.exclude, "**/.claude/**"],
+    },
     // Fixed reference port. strictPort → fail loudly instead of silently hopping to another
     // port (a sibling worktree's stale dev server on a hopped port would serve the WRONG code).
     // Dev-only proxy: forward the 认领 claim API to a locally-run deploy/claim-server.mjs (port 8788) so

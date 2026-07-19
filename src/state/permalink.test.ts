@@ -1,20 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { buildShareUrl, parseTarget, type Target } from "./permalink";
 
-// The pure helpers behind syncHash/applyHash. The query mirror exists ONLY so crawlers/servers can
-// see the share target (the hash is invisible to them); the hash stays the CANONICAL restore path and
-// old pure-hash links must keep working bit-for-bit.
+// Public poet ids may be query-mirrored for crawlers. Reversible poem coordinates are hash-only so they
+// remain outside HTTP requests/access logs; legacy query-only links still restore.
 const loc = (pathname: string, search: string, hash: string) => ({ pathname, search, hash });
 
-describe("permalink — buildShareUrl (query mirror + canonical hash)", () => {
+describe("permalink — public poet mirror + local-only poem hash", () => {
   it("a poet target writes BOTH ?a= (mirror) and #a= (canonical)", () => {
     const t: Target = { kind: "a", value: "82a5851c" };
     expect(buildShareUrl(loc("/", "", ""), t)).toBe("/?a=82a5851c#a=82a5851c");
   });
 
-  it("a poem target writes BOTH ?p= and #p=", () => {
+  it("a poem target writes ONLY #p= (never a server-visible query)", () => {
     const t: Target = { kind: "p", value: "123456789" };
-    expect(buildShareUrl(loc("/", "", ""), t)).toBe("/?p=123456789#p=123456789");
+    expect(buildShareUrl(loc("/", "", ""), t)).toBe("/#p=123456789");
   });
 
   it("nothing selected strips our a/p from BOTH query and hash (no leftover)", () => {
@@ -33,9 +32,9 @@ describe("permalink — buildShareUrl (query mirror + canonical hash)", () => {
     expect(buildShareUrl(loc("/", "?utm_source=weibo&a=abc", "#a=abc"), null)).toBe("/?utm_source=weibo");
   });
 
-  it("switching from a poet to a poem replaces a= with p= (mutually exclusive)", () => {
+  it("switching from a poet to a poem removes the server-visible query", () => {
     const t: Target = { kind: "p", value: "42" };
-    expect(buildShareUrl(loc("/", "?a=old", "#a=old"), t)).toBe("/?p=42#p=42");
+    expect(buildShareUrl(loc("/", "?a=old", "#a=old"), t)).toBe("/#p=42");
   });
 
   it("preserves a non-root pathname", () => {

@@ -38,7 +38,7 @@ export function DevTool() {
       <div className="dev-group">
         <div className="dev-label">立即生成一颗(免等)</div>
         <div className="dev-btns">
-          <button onClick={() => requestMeteor("today")} title="今日认领 · 较亮、可点开看诗">今日·亮</button>
+          <button onClick={() => requestMeteor("today")} title="今日认领 · 较亮、仅作纪念">今日·亮</button>
           <button onClick={() => requestMeteor("past")} title="往日认领 · 暗的旧星星">往日·暗</button>
           <button onClick={() => requestMeteor("ceremony")} title="认领当事人 · 保留奔赴感,冲向银心">当事人·奔赴</button>
         </div>

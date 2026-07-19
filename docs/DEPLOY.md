@@ -1,12 +1,12 @@
-# Deploy — 诗云 / Poetry Cloud (static, with one optional feedback endpoint)
+# Deploy — 诗云 / Poetry Cloud (static-first, with optional minimal endpoints)
 
 The whole app is a static build. **The corpus, all index math, and rendering stay 100% client-side —
 never add a backend for those.** You ship `dist/` to any static host that supports **HTTP Range** on
 `poems/*.json` (nginx, Caddy, most CDNs do).
 
-The **only** optional server touchpoint is **feedback collection** (§5): if you want a shared, cross-device
-inbox instead of per-browser localStorage, point one env var at a write-only endpoint. Leave it unset and the
-build is fully static, exactly as before.
+The optional server touchpoints are a bounded feedback inbox (§5) and a content-free global claim-number
+allocator (§7). Leave their build-time endpoint variables unset and the build is fully static. Neither endpoint
+accepts poem text; the claim endpoint also rejects every request body and never receives a reversible index.
 
 ## ▶ Quickstart for the deploy / 运维 AI
 
@@ -33,7 +33,8 @@ npm run deploy:build                 # tsc + vite build → dist/ (heavy data ba
 > Everything you need is in this repo: run [deploy/feedback-server.mjs](../deploy/feedback-server.mjs)
 > (zero-dep node, JSONL file, no IPs stored) behind an nginx `location /api/feedback`, then build with
 > `VITE_FEEDBACK_ENDPOINT="/api/feedback"`. Complete copy-paste steps (systemd unit + nginx block + verify)
-> in **§5**. This is the ONLY backend 诗云 has — the corpus/index/render stack stays fully static.
+> in **§5**. 诗云 has **two optional backends** — this feedback collector (§5) and the 认领 number
+> allocator (§7); both are opt-in and the corpus/index/render stack stays fully static without them.
 
 ## 1. Build
 
@@ -169,11 +170,12 @@ curl -s -D- -o /dev/null -H 'Range: bytes=0-99' https://shiyun.example.com/data/
 confirm a `206` in the network panel, and that a shared `#a=<poetId>` / `#p=<form>.<index>` link
 restores the right poem on load.
 
-## 5. Optional: collect feedback on a server (the one allowed backend)
+## 5. Optional: collect feedback on a server
 
-In-page feedback (设置 → 更多 → 💬 反馈) is **always** saved to the visitor's `localStorage`; the owner reads it
-on-device via the hidden gesture (5 taps on the 诗云 logo within 10 s → FeedbackViewer). That's per-browser
-only. To gather feedback across all visitors/devices, set **one build-time env var** to a write-only endpoint;
+In-page feedback (设置 → 更多 → 💬 反馈) is **always** saved to the visitor's `localStorage`, but note there is
+currently **no on-device reader UI** — the old FeedbackViewer behind the 5-taps-on-logo gesture was replaced
+by the 流星 DevTool, so a pure-static build keeps feedback per-browser with no way to read it back. To gather
+(and actually read) feedback across all visitors/devices, set **one build-time env var** to a write-only endpoint;
 each submission is then **also** POSTed there as fire-and-forget JSON. The POST never blocks or fails the
 submit — `localStorage` stays the source of truth, the network is best-effort
 ([src/state/feedback.ts](../src/state/feedback.ts)).
@@ -184,7 +186,7 @@ submit — `localStorage` stays the source of truth, the network is best-effort
 POST <VITE_FEEDBACK_ENDPOINT>
 Content-Type: application/json
 
-{ "source": "shiyun", "message": "<the feedback text>", "ts": 1781000000000 }
+{ "message": "<the feedback text>" }
 ```
 
 The endpoint URL is inlined into the client bundle by Vite → it is **public**. Point it at a *write-only*
@@ -193,15 +195,15 @@ collector, never anything needing a secret.
 ### 5a. RECOMMENDED — self-hosted collector on your own server (无第三方)
 
 **Owner's explicit direction: store feedback on OUR backend, not a third-party service.** The complete,
-zero-dependency collector ships in this repo: [deploy/feedback-server.mjs](../deploy/feedback-server.mjs)
-(~100 lines, `node:http` only — tested). It appends each message as one JSON line to a JSONL file, stores
-**no IP address** (privacy by design), has a coarse built-in rate limit, and offers a token-protected GET
-for the owner to read the inbox.
+zero-dependency collector ships in this repo: [deploy/feedback-server.mjs](../deploy/feedback-server.mjs).
+It stores exactly **`{message, receivedAt}`**, never persists IP or User-Agent, sanitizes legacy rows at boot,
+caps the inbox at 5,000 rows, has a coarse in-memory rate limit, and offers a token-protected GET for the
+owner to read the inbox.
 
 On the server (same box that runs nginx):
 
 ```bash
-sudo mkdir -p /opt/shiyun /var/lib/shiyun
+sudo mkdir -p /opt/shiyun
 sudo cp deploy/feedback-server.mjs /opt/shiyun/
 # generate the owner token once:  openssl rand -hex 24
 sudo tee /etc/systemd/system/shiyun-feedback.service >/dev/null <<'EOF'
@@ -213,11 +215,12 @@ After=network.target
 ExecStart=/usr/bin/node /opt/shiyun/feedback-server.mjs
 Environment=PORT=8787
 Environment=HOST=127.0.0.1
-Environment=FEEDBACK_FILE=/var/lib/shiyun/feedback.jsonl
+Environment=FEEDBACK_FILE=/var/lib/private/shiyun-feedback/feedback.jsonl
 Environment=FEEDBACK_TOKEN=<paste the openssl token here>
+Environment=FEEDBACK_MAX_ROWS=5000
 Restart=on-failure
 DynamicUser=yes
-StateDirectory=shiyun
+StateDirectory=shiyun-feedback
 NoNewPrivileges=yes
 
 [Install]
@@ -231,11 +234,9 @@ Then add ONE location to the existing nginx server block ([deploy/nginx.conf](..
 same-origin, so **no CORS is needed at all**:
 
 ```nginx
-location /api/feedback {
+location = /api/feedback {
     proxy_pass http://127.0.0.1:8787;
     proxy_set_header Host $host;
-    # optional belt-and-braces rate limit (define the zone in the http{} block):
-    # limit_req zone=fb burst=5 nodelay;
 }
 ```
 
@@ -244,7 +245,7 @@ strings land in nginx access logs):
 
 ```bash
 curl -s -H "Authorization: Bearer <FEEDBACK_TOKEN>" "https://你的域名/api/feedback"   # one JSON per line
-# or directly on the server:  tail -n 50 /var/lib/shiyun/feedback.jsonl
+# or directly on the server:  sudo tail -n 50 /var/lib/private/shiyun-feedback/feedback.jsonl
 ```
 
 ### 5b. Wire the client
@@ -261,8 +262,8 @@ npm run deploy:build      # baked into dist/ at build time
 
 ```bash
 curl -s -X POST "https://你的域名/api/feedback" -H 'Content-Type: application/json' \
-  -d '{"source":"shiyun","message":"部署冒烟测试","ts":1781000000000}'
-# want: {"ok":true}, and the line shows up in /var/lib/shiyun/feedback.jsonl
+  -d '{"message":"部署冒烟测试"}'
+# want: {"ok":true}, and the line shows up in /var/lib/private/shiyun-feedback/feedback.jsonl
 ```
 
 In the live app, submit a test message and confirm a `POST /api/feedback → 200` in the browser Network
@@ -278,16 +279,14 @@ panel (a failure is silently tolerated and the message still lands in localStora
 **不部署 / 不改 nginx 时,纯静态行为与今天完全一致** — this whole section is opt-in and touches nothing
 when off.
 
-**The problem.** A shared link is hash-based (`#a=<poetId>` / `#p=<index>`). Crawlers (WeChat / Twitter /
-Telegram) and servers **never see the fragment**, so every shared link previews the same generic `og.jpg`.
+**Privacy boundary.** Crawlers and servers never see URL fragments. Public poet ids may therefore be mirrored
+for a custom card, but reversible poem coordinates must stay in `#p=<index>` and never enter a query/access log.
 
 **The fix (two halves, both already in the build):**
-1. `src/state/permalink.ts` now **mirrors** the target into the query string: the address bar reads
-   `/?a=<poetId>#a=<poetId>` (resp. `?p=…#p=…`). The **hash stays canonical** (old pure-hash links restore
-   bit-for-bit); the query exists only so a server/crawler can see the target. All 分享/复制 buttons read
-   `location.href`, which now carries both. Nothing here needs a server — it ships in the static bundle.
+1. `src/state/permalink.ts` mirrors only a public poet target: `/?a=<poetId>#a=<poetId>`. Poem links remain
+   hash-only: `/#p=<index>`. Old `?p=` links still restore client-side, but the app no longer creates them.
 2. The **existing** feedback collector ([deploy/feedback-server.mjs](../deploy/feedback-server.mjs)) gains
-   ONE optional route: with `SITE_ROOT` set, `GET /?a=…` / `GET /?p=…` returns `index.html` with
+   ONE optional route: with `SITE_ROOT` set, `GET /?a=…` returns `index.html` with
    `og:title` / `og:description` / `twitter:*` (+ `og:url`) swapped **per target** (`og:image` stays as
    built). `SITE_ROOT` unset → that route 404s exactly as before; **the `/api/feedback` POST/GET behavior is
    byte-for-byte unchanged**. The injector ([deploy/og-inject.mjs](../deploy/og-inject.mjs), zero-dep, unit
@@ -312,18 +311,17 @@ sudo systemctl daemon-reload && sudo systemctl restart shiyun-feedback
 ONCE at boot, into memory — never per request). If either file is missing the server logs a warning and the
 OG route simply 404s (feedback unaffected).
 
-### 6b. nginx — route only `/` WITH `?a=`/`?p=` to the backend
+### 6b. nginx — route only `/` WITH public `?a=` to the backend
 
 In the site `server {}` block ([deploy/nginx.conf](../deploy/nginx.conf)), the `location = /` already
-proxies to the node backend **only** when `$arg_a` or `$arg_p` is present, else serves the static
+proxies to the node backend **only** when `$arg_a` is present, else serves the static
 `index.html`:
 
 ```nginx
 location = / {
     if ($arg_a) { proxy_pass http://127.0.0.1:8787; }
-    if ($arg_p) { proxy_pass http://127.0.0.1:8787; }
     proxy_set_header Host $host;
-    try_files /index.html =404;   # no a/p (and no proxy) → static index.html, exactly as today
+    try_files /index.html =404;   # no public poet query (and no proxy) → static index.html
 }
 ```
 
@@ -336,9 +334,7 @@ location = / {
 # on the box (bypassing nginx) — want the poet's name in og:title:
 curl -s 'http://127.0.0.1:8787/?a=82a5851c' | grep 'og:title'
 #   <meta property="og:title" content="李白 — 诗云 · Poetry Cloud" />
-curl -s 'http://127.0.0.1:8787/?p=12345' | grep 'og:title'
-#   <meta property="og:title" content="诗云 · 一首可能的诗" />
-# a plain GET / (no a/p) still 404s on the backend (nginx serves it statically):
+# a plain GET / (or ?p=) still 404s on the backend; nginx serves it statically:
 curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:8787/'        # 404
 # unknown id → UNMODIFIED index.html (the generic card), 200:
 curl -s 'http://127.0.0.1:8787/?a=ffffffff' | grep 'og:title'            # the generic title
@@ -355,7 +351,7 @@ SPA at every other path is never affected either way.)
 ## 7. Optional: 认领 (poem-claim) backend — the GLOBAL 认领编号
 
 **不部署时,纯静态行为不变** — without this, the 认领 button still works (the poem becomes a meteor, recorded
-in the visitor's localStorage), but its 认领编号 reads **"待联网确认"** instead of a number, and other
+in the visitor's localStorage), but its status reads **"本次未联网 · 未取得编号"**, and other
 visitors don't see each other's meteors. This is the **one** feature a static client genuinely cannot do
 alone: hand out a **globally monotonic 认领编号 (claim number, from 1, shared across ALL users)**.
 
@@ -365,21 +361,19 @@ to draw meteors) whereas the feedback inbox is token-gated. The global counter i
 promise-chain mutex (atomic under concurrent POSTs) and recovered from the JSONL at boot (a restart never
 reuses or skips a number).
 
-> ⚖️ **COMPLIANCE — store only numbers (+ a server-random prize key on milestone rows), never text/identity.**
-> Each claim appends **`{no, index, ts}`** (claim number · poem's 全集编号 · timestamp). A **里程碑 prize row**
-> (see §7d) ALSO carries one field, **`key`** — a server-random 中奖密钥, nothing else. It **NEVER stores the
-> poem text or any 文字内容, user identity, IP, or User-Agent** — the poem is recomputed client-side from
-> `index` (`pulledFromIndex`) and never touches the server; the client sends only `{index, ts}` and the server
-> ignores any other field. Rationale: persisting poem text would make this user-generated content (论坛性质)
-> → ICP 备案 / 内容审核 obligations in 中国; storing only numbers (+ a random token) is a set of mathematical
-> coordinates, not a content service. Back up `claims.jsonl` — it contains no text, **but a prize row's `key`
-> is the ONLY copy the owner has for verifying a winner, so the backup is now load-bearing for redemption.**
-> (UA is used only for the in-memory rate limiter, never written to disk.)
+> ⚖️ **PRIVACY RED LINE — the cloud stores no poem and no reversible poem coordinate.** Each claim request
+> has an **empty body**. The allocator creates exactly **`{no, ts}`** — plus, on a **里程碑 prize row** (see
+> §7d), one extra field **`key`**: a server-random 中奖密钥 with **zero user content** (not derived from any
+> poem, identity or IP). The public feed exposes only `{no, ts}` and **never a key**. Poem text, previews and
+> the reversible 全集编号 stay in that visitor's browser. A request carrying any body is rejected, not ignored.
+> IP/User-Agent is not persisted; a bounded process-memory IP bucket is only a backstop behind nginx. At boot,
+> the collector normalizes valid legacy rows but **never discards a malformed/torn row**: original bytes stay
+> in the ledger, recoverable `no` values still advance the counter, and a copy goes to `claims.jsonl.rejected`.
+> A well-formed prize `key` is always preserved (destroying it would void a winner's redemption).
 
 ```
-POST /api/claim        {index:"<全集编号>", ts?}  (any other field is ignored)
-                       → {ok, no, index, ts}   (+ "prizeKey":"SY<no>-…" on a 里程碑 row ONLY — see §7d)
-GET  /api/claim/feed   ?limit=<n>   (PUBLIC) → {total, serverNow, claims:[{no,index,ts}…]}  (newest-first,
+POST /api/claim        empty body → {ok, no, ts}   (+ "prizeKey":"SY<no>-…" on a 里程碑 row ONLY — see §7d)
+GET  /api/claim/feed   ?limit=<n>   (PUBLIC) → {total, serverNow, claims:[{no,ts}…]}  (newest-first,
                        NEVER carries a prize key)
 GET  /api/claim/health → {ok:true}
 ```
@@ -390,7 +384,7 @@ The app shows the visitor two numbers at claim time: **「已有 X 人认领」*
 ### 7a. Stand up the collector (same box as nginx)
 
 ```bash
-sudo mkdir -p /opt/shiyun /var/lib/shiyun
+sudo mkdir -p /opt/shiyun
 sudo cp deploy/claim-server.mjs /opt/shiyun/
 sudo tee /etc/systemd/system/shiyun-claim.service >/dev/null <<'EOF'
 [Unit]
@@ -401,13 +395,15 @@ After=network.target
 ExecStart=/usr/bin/node /opt/shiyun/claim-server.mjs
 Environment=PORT=8788
 Environment=HOST=127.0.0.1
-Environment=CLAIM_FILE=/var/lib/shiyun/claims.jsonl
+Environment=CLAIM_FILE=/var/lib/private/shiyun-claim/claims.jsonl
+Environment=MAX_CLAIMS=1000000
+Environment=FEED_MAX=500
 # 里程碑中奖号 (认领编号 that mint a 中奖密钥). Default is the 1/100/500/1000/5000/10000th claim; override to
-# retune. Removing a number that has ALREADY been allocated does nothing retroactively (the key is on disk).
+# retune. Changing it only affects FUTURE allocations — a key already on disk is permanent (see §7d).
 Environment=PRIZE_NOS=1,100,500,1000,5000,10000
 Restart=on-failure
 DynamicUser=yes
-StateDirectory=shiyun
+StateDirectory=shiyun-claim
 NoNewPrivileges=yes
 
 [Install]
@@ -417,24 +413,44 @@ sudo systemctl daemon-reload && sudo systemctl enable --now shiyun-claim
 curl -s localhost:8788/api/claim/health   # → {"ok":true}
 ```
 
-> Note: `claims.jsonl` is the **only durable state** — it IS the global counter. Back it up like
-> `feedback.jsonl`. (`DynamicUser=yes` + `StateDirectory=shiyun` already place it under `/var/lib/private/shiyun`.)
+> Note: `claims.jsonl` is the **only durable state** — it IS the global counter **and the sole record of
+> 里程碑中奖密钥** (§7d), so its backup is load-bearing for redemption. Back it up like `feedback.jsonl` (it
+> still contains **no** text/identity). `StateDirectory=shiyun-claim` isolates it at
+> `/var/lib/private/shiyun-claim`; the feedback service independently owns `/var/lib/private/shiyun-feedback`,
+> so restarting either DynamicUser service cannot chown the other's ledger.
 
-### 7b. nginx — one same-origin location (no CORS)
+### 7b. nginx — mandatory per-IP limits + same-origin routes (no CORS)
 
-Add to the site `server {}` block ([deploy/nginx.conf](../deploy/nginx.conf)). `/api/claim` covers the POST,
-`/feed`, and `/health` (prefix match):
+The limits are a **required production control**: rotating User-Agent strings must not bypass prize allocation
+throttling. Define both zones once in nginx's `http {}` context (outside every `server {}`):
 
 ```nginx
-location /api/claim {
+limit_req_zone $binary_remote_addr zone=claim:10m     rate=6r/m;
+limit_req_zone $binary_remote_addr zone=claimfeed:10m rate=30r/m;
+```
+
+Then add the exact same-origin routes to the site `server {}` block ([deploy/nginx.conf](../deploy/nginx.conf)):
+
+```nginx
+location = /api/claim {
+    limit_req zone=claim burst=5 nodelay;
+    client_max_body_size 1k;
     proxy_pass http://127.0.0.1:8788;
     proxy_set_header Host $host;
-    # optional: cap the public feed read so a scraper can't hammer it (define zone in http{}):
-    # limit_req zone=claim burst=10 nodelay;
+}
+location = /api/claim/feed {
+    limit_req zone=claimfeed burst=20 nodelay;
+    proxy_pass http://127.0.0.1:8788;
+    proxy_set_header Host $host;
+}
+location = /api/claim/health {
+    proxy_pass http://127.0.0.1:8788;
+    proxy_set_header Host $host;
 }
 ```
 
-`sudo nginx -t && sudo systemctl reload nginx`.
+`sudo nginx -t && sudo systemctl reload nginx`. From one public IP, the first burst is admitted and subsequent
+rapid POSTs must return `429`; changing `User-Agent` must not change that result.
 
 ### 7c. Wire the client + verify
 
@@ -444,16 +460,17 @@ npm run deploy:build       # baked into dist/ at build time; unset ⇒ claims st
 ```
 
 ```bash
-# POST a claim → a number, then it shows in the feed:
-curl -s -X POST "https://你的域名/api/claim" -H 'Content-Type: application/json' \
-  -d '{"source":"shiyun","index":"123456789","ts":1781000000000}'
-#   → {"ok":true,"no":1,"index":"123456789","ts":1781000000000}
+# POST a bodyless claim → a number, then it shows in the index-free feed:
+curl -s -X POST "https://你的域名/api/claim"
+#   → {"ok":true,"no":1,"ts":1781000000000,"prizeKey":"SY1-…"}   ← no=1 is a 里程碑, so a key rides ALONG
+#     (an ordinary 认领编号 replies without prizeKey)
 curl -s "https://你的域名/api/claim/feed?limit=5"
-#   → {"total":1,"serverNow":…,"claims":[{"no":1,"index":"123456789","ts":1781000000000}]}
+#   → {"total":1,"serverNow":…,"claims":[{"no":1,"ts":1781000000000}]}   ← feed NEVER carries the key
 ```
 
 In the live app: open a void poem → **认领这首诗** → the panel shows **认领编号 #N** and the poem streaks off
-as a meteor. Today's claims render as bright, clickable meteors; older ones as faint glints. 更多 → 流星
+as a meteor. Today's claims render as bright meteors and older ones as faint glints; all are non-interactive
+and carry no poem address. 更多 → 流星
 toggles the whole layer off.
 
 ### 7d. 里程碑中奖密钥 (milestone prize keys) + owner verification
@@ -462,19 +479,62 @@ When an allocated `no` is a milestone (`PRIZE_NOS`, default the 1st / 100th / 50
 10000th claim), the server mints a **random, time-bound 中奖密钥** — impossible to guess or pre-compute
 (31-symbol Crockford alphabet, `SY<no>-XXXXX-XXXXX-XXXXX-XXXXX`, ≈99 bits). The winning claimer sees a
 **「🎉 你中奖了」** block with the key + a copy button, and is told to **DM the author on 抖音 / 小红书 / B站** to
-redeem 刘慈欣《诗云》原著. The key is also saved into the visitor's **我的认领** so it survives a page reload.
+redeem **刘慈欣原著《诗云》实体书一本**. The key is also saved into the visitor's **我的认领** so it survives a
+page reload.
 
-- **Where the key lives:** ONLY in `claims.jsonl` (on the winning row) **and** the single POST reply that
-  minted it. It is **NEVER** in the public `/feed`, never in the boot-recovered in-memory window, never in
-  any later reply. So the public interface stays a set of numbers; only the owner's disk holds the secret.
+- **Where the key lives:** ONLY in `claims.jsonl` (on the winning row, as `{no, ts, key}`) **and** the single
+  POST reply that minted it. It is **NEVER** in the public `/feed`, never in the boot-recovered in-memory
+  window, never in any later reply. The public interface stays a set of numbers; only the owner's disk holds
+  the secret. The empty-body POST means no poem/index is ever involved either.
 - **Owner verification (a claimer DMs you a key):** SSH to the box and grep the ledger —
   ```bash
-  grep '"key":"SY42-' /var/lib/shiyun/claims.jsonl    # or grep the exact 认领编号 they claim
-  #  → {"no":42,"index":"…","ts":1781…,"key":"SY42-…"}   verify BOTH the key string AND the ts match
+  sudo grep '"key":"SY42-' /var/lib/private/shiyun-claim/claims.jsonl    # or grep the exact 认领编号
+  #  → {"no":42,"ts":1781…,"key":"SY42-…"}   verify BOTH the key string AND the ts match
   ```
   A genuine winner's key is on exactly one line, bound to that `no` + `ts`. No matching line ⇒ not a real
   winner (fabricated or mistyped key).
-- **Backups are now load-bearing for redemption.** `claims.jsonl` was always the global counter; it is now
-  also the sole record of prize keys. Back it up like `feedback.jsonl` (it still contains **no** text/identity).
+- **Backups are load-bearing for redemption.** `claims.jsonl` was always the global counter; it is also the
+  sole record of prize keys. Back it up like `feedback.jsonl` (it still contains **no** text/identity).
 - **Retuning:** change `PRIZE_NOS` and restart. It only affects **future** allocations — a key already
-  written to disk is permanent regardless of the current `PRIZE_NOS`.
+  written to disk is permanent regardless of the current `PRIZE_NOS`, and boot migration deliberately
+  preserves it.
+
+### 7e. Mandatory operations: backups, restart checks, and orphan-prize reconciliation
+
+Run these before launch and after every service/unit change:
+
+```bash
+# StateDirectory ownership isolation: both units must keep writing after alternating restarts.
+sudo systemctl restart shiyun-feedback shiyun-claim shiyun-feedback shiyun-claim
+curl -fsS localhost:8787/api/feedback/health
+curl -fsS localhost:8788/api/claim/health
+# Exercise an actual append in each service after the alternating restarts (not merely a root permission check).
+curl -fsS -X POST localhost:8787/api/feedback -H 'Content-Type: application/json' \
+  -d '{"message":"StateDirectory restart smoke test"}'
+curl -fsS -X POST localhost:8788/api/claim   # record this operator-owned smoke-test number/key in the register
+sudo tail -n 1 /var/lib/private/shiyun-feedback/feedback.jsonl
+sudo tail -n 1 /var/lib/private/shiyun-claim/claims.jsonl
+
+# Back up each independent state directory. Keep these snapshots encrypted and access-controlled.
+sudo install -d -m 0700 /var/backups/shiyun
+sudo rsync -a /var/lib/private/shiyun-feedback/ /var/backups/shiyun/shiyun-feedback/
+sudo rsync -a /var/lib/private/shiyun-claim/ /var/backups/shiyun/shiyun-claim/
+```
+
+The POST reply is intentionally one-shot. A network failure can therefore leave a **durable orphan prize row**
+(a key exists on the server, but no visitor received it). Keep an owner-only, one-key-per-line redemption
+register at `/var/backups/shiyun/redeemed-keys.txt`, then reconcile it regularly:
+
+```bash
+sudo touch /var/backups/shiyun/redeemed-keys.txt
+sudo chmod 0600 /var/backups/shiyun/redeemed-keys.txt
+sudo sed -n 's/.*"key":"\([^"]*\)".*/\1/p' /var/lib/private/shiyun-claim/claims.jsonl \
+  | sudo sort -u > /tmp/shiyun-minted-keys.txt
+sudo sort -u /var/backups/shiyun/redeemed-keys.txt > /tmp/shiyun-redeemed-keys.txt
+comm -23 /tmp/shiyun-minted-keys.txt /tmp/shiyun-redeemed-keys.txt   # minted but not recorded as redeemed
+```
+
+Investigate each long-lived entry against owner messages and its ledger timestamp. **Never delete, rewrite, or
+reissue its ledger line/key**; record the final disposition (redeemed, expired by published rules, or still
+unclaimed) in the owner register and retain both the ledger and its backups. Also inspect
+`claims.jsonl.rejected`: any row containing `"key":"SY` is a credential incident requiring manual review.

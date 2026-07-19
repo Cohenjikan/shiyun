@@ -1,4 +1,4 @@
-// Shared mutable singleton for the CEREMONY camera hand-off — mirrors three/meteorPick.ts's pattern: the
+// Shared mutable singleton for the CEREMONY camera hand-off: the
 // render layer (three/Meteors.tsx) writes the live ceremony streak's WORLD geometry here each frame, and
 // FlyControls reads it in useFrame to fly a hero-frame that plunges WITH the claimer's own streak toward the
 // heart (fixes 根因①: the camera used to lock onto the streak's START and never followed the plunge).

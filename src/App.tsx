@@ -63,14 +63,29 @@ export default function App() {
       });
   }, [setLoaded]);
 
-  // H = hide / show ALL overlay UI (screenshot mode). Ignored while typing in a field.
+  // H = hide / show ALL overlay UI (screenshot mode); F = 进入/退出浏览器全屏(Esc 也能退出,
+  // 全屏切换必须发生在按键手势内,故不走 store)。Ignored while typing in a field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const a = document.activeElement;
       if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return; // 组合键(Ctrl/Cmd+F 页内查找等)与长按连发不劫持
       if (e.code === "KeyH") {
         e.preventDefault();
         useStore.getState().toggleUI();
+      }
+      if (e.code === "KeyF") {
+        e.preventDefault();
+        // 旧 Safari 只有 webkit 前缀版(且不返回 Promise);iOS 无键盘全屏诉求,不做触屏入口
+        const doc = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void };
+        const root = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+        if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+          if (doc.exitFullscreen) doc.exitFullscreen().catch(() => {});
+          else doc.webkitExitFullscreen?.();
+        } else {
+          if (root.requestFullscreen) root.requestFullscreen().catch(() => {});
+          else root.webkitRequestFullscreen?.();
+        }
       }
     };
     window.addEventListener("keydown", onKey);
