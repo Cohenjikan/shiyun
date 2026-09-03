@@ -84,6 +84,8 @@ export function FlyControls() {
   // analog fly thrust from a two-finger drag, in WASD convention (z<0 forward, x>0 right); {0,0} when
   // no touch-fly is active. Read in useFrame and ADDED on top of the keyboard fly vector.
   const touchThrust = useRef({ z: 0, x: 0 });
+  const gestureView = useRef({ orbitYaw: 0, orbitPitch: 0, zoomLog: 0, lookYaw: 0, lookPitch: 0 });
+  const gestureThrust = useRef({ targetX: 0, targetY: 0, targetZ: 0, currentX: 0, currentY: 0, currentZ: 0, until: 0 });
 
   useEffect(() => {
     ray.current.params.Points = { threshold: 80 };
@@ -99,9 +101,9 @@ export function FlyControls() {
     // offscreen buffer and reads the pixel under the cursor → the poet there. Replaces the old
     // O(29,808)/hover CPU scan + apparent-size heuristic. null = void (caller pulls a random poem);
     // also null until PoetStars mounts the picker. Coords are converted client → canvas-relative CSS.
-    const screenPick = (cx: number, cy: number, includePoems = false) => {
+    const screenPick = (cx: number, cy: number, includePoems = false, radiusCss?: number) => {
       const r = el.getBoundingClientRect();
-      return pickTargets.pick?.(cx - r.left, cy - r.top, includePoems) ?? null;
+      return pickTargets.pick?.(cx - r.left, cy - r.top, includePoems, radiusCss) ?? null;
     };
 
     // 赠诗线 3D pick: with 赠诗 on + a poet selected, test the cursor against THAT poet's ego-net arcs
@@ -150,6 +152,50 @@ export function FlyControls() {
     const isTyping = () => {
       const a = document.activeElement;
       return a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA");
+    };
+
+    // One shared click command for mouse/touch and the opt-in exhibition gesture input. Gesture input
+    // asks for a wider GPU pick window, but every semantic branch below remains byte-for-byte the same:
+    // poet/planet/赠诗/void all enter through the existing store and loader paths.
+    const pullVoidAt = (clientX: number, clientY: number) => {
+      if (!st().allowRandomPoem) {
+        if (st().lockPoetId) st().unlock();
+        return;
+      }
+      const v = ndc(clientX, clientY);
+      ray.current.setFromCamera(v, camera);
+      const pt = ray.current.ray.origin.clone().addScaledVector(ray.current.ray.direction, 260);
+      const [lx, lz] = unspinXZ(pt.x, pt.z);
+      const s = st();
+      s.selectPoem(
+        pullAt(s.form, [lx, pt.y, lz], {
+          lushiOnly: s.lushiFilter,
+          commonK: s.commonOnly ? COMMON_K : POEM_PULL_K,
+        }),
+      );
+    };
+
+    const commitSelectionAt = (clientX: number, clientY: number, radiusCss?: number) => {
+      ceremonyCam.cancelled = true;
+      const hit = screenPick(clientX, clientY, true, radiusCss);
+      const hov = useStore.getState().giftHoverId;
+      const giftHop = hit ? null : ((hov ? getPoet(hov) ?? null : null) ?? pickGiftEdge(clientX, clientY));
+      if (hit?.kind === "poet") {
+        st().selectPoet(hit.poet);
+        st().lockPoet(hit.poet.id);
+        fetchPoetPoems(hit.poet.id);
+      } else if (hit?.kind === "poem") {
+        const { poet, poemIdx } = hit;
+        st().selectPoet(poet, { poemIdx, title: "", firstLine: "" });
+        st().lockPoem(poet.id, poemIdx);
+        fetchPoetPoems(poet.id);
+        st().pulseAt(poemPosition(poet, poemIdx), true);
+      } else if (giftHop) {
+        st().hopToPoet(giftHop);
+        fetchPoetPoems(giftHop.id);
+      } else {
+        pullVoidAt(clientX, clientY);
+      }
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTyping()) return;
@@ -301,51 +347,7 @@ export function FlyControls() {
       const wasClick = had && drag.current.active && drag.current.moved < slop;
       drag.current.active = false;
       if (!wasClick) return;
-      const hit = screenPick(e.clientX, e.clientY, true); // click = poets + poem planets
-      // a bright (今日) 认领 meteor under the cursor → open its poem ("耀眼的流星 → 看到诗本身"). Only when
-      // nothing solid was hit; takes priority over a 赠诗 arc / void pull. Weak (往日) meteors aren't registered.
-      // void click → the hovered (already-highlighted) 赠诗 arc if any, else a fresh pick at click range
-      const hov = useStore.getState().giftHoverId;
-      const giftHop = hit ? null : ((hov ? getPoet(hov) ?? null : null) ?? pickGiftEdge(e.clientX, e.clientY));
-      if (hit?.kind === "poet") {
-        st().selectPoet(hit.poet);
-        st().lockPoet(hit.poet.id); // lock the star in the centre + follow it
-        fetchPoetPoems(hit.poet.id);
-      } else if (hit?.kind === "poem") {
-        // clicked a poem-planet → open its poet panel focused on that poem + light + lock the planet.
-        const { poet, poemIdx } = hit;
-        st().selectPoet(poet, { poemIdx, title: "", firstLine: "" });
-        st().lockPoem(poet.id, poemIdx);
-        fetchPoetPoems(poet.id);
-        st().pulseAt(poemPosition(poet, poemIdx), true);
-      } else if (giftHop) {
-        // clicked a 赠诗 arc of the selected poet → fly across it to the other poet (hop + trail)
-        st().hopToPoet(giftHop);
-        fetchPoetPoems(giftHop.id);
-      } else {
-        // 生成随机诗 关闭 → 点虚空不再拉随机诗(只看现存的诗)。锁定模式下顺手解除锁定 → 回到诗云整体。
-        if (!st().allowRandomPoem) {
-          if (st().lockPoetId) st().unlock();
-          return;
-        }
-        const v = ndc(e.clientX, e.clientY);
-        ray.current.setFromCamera(v, camera);
-        const pt = ray.current.ray.origin.clone().addScaledVector(ray.current.ray.direction, 260);
-        // store the void point in the LOCAL galaxy frame so the poem is stable as the galaxy
-        // turns and the marker drifts with it. NO camera move on a void click (the glide-focus
-        // was inaccurate/disorienting) — just light the star where you clicked.
-        const [lx, lz] = unspinXZ(pt.x, pt.z);
-        const s = st();
-        s.selectPoem(
-          pullAt(s.form, [lx, pt.y, lz], {
-            lushiOnly: s.lushiFilter,
-            // default 虚空捞诗 weights (Zipf) over the top POEM_PULL_K common chars → reads like poetry;
-            // the 22k charset's rare tail (锂/镁/… + never-in-poem CJK) stays addressable but out of pulls.
-            // 常用字 narrows further to the top COMMON_K.
-            commonK: s.commonOnly ? COMMON_K : POEM_PULL_K,
-          }),
-        );
-      }
+      commitSelectionAt(e.clientX, e.clientY);
     };
     const onWheel = (e: WheelEvent) => {
       ceremonyCam.cancelled = true; // scroll = user driving → 还政(不回抢)
@@ -374,10 +376,74 @@ export function FlyControls() {
       drag.current.active = false;
     };
 
+    // GestureControls publishes app-local events instead of moving the operating-system pointer.
+    // The same hands switch semantics with freeMove: orbit/zoom while locked, look/thrust while flying.
+    const onGestureSelect = (event: Event) => {
+      const { x, y } = (event as CustomEvent<{ x: number; y: number }>).detail;
+      // Visual magnetism is deliberately light; the slightly wider final GPU pick keeps fist
+      // selection forgiving without pulling the cursor away from the presenter's hand.
+      commitSelectionAt(x, y, 22);
+    };
+    const onGestureOrbit = (event: Event) => {
+      if (st().freeMove) return;
+      const { dx, dy } = (event as CustomEvent<{ dx: number; dy: number }>).detail;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      ceremonyCam.cancelled = true;
+      gestureView.current.orbitYaw -= dx * 0.005;
+      gestureView.current.orbitPitch += dy * 0.005;
+    };
+    const onGestureZoom = (event: Event) => {
+      if (st().freeMove) return;
+      const { ratio } = (event as CustomEvent<{ ratio: number }>).detail;
+      if (!Number.isFinite(ratio) || ratio <= 0) return;
+      ceremonyCam.cancelled = true;
+      // palms spreading (ratio>1) = dolly in; closing (ratio<1) = dolly out.
+      gestureView.current.zoomLog -= Math.log(ratio) * 1.7;
+    };
+    const onGestureLook = (event: Event) => {
+      if (!st().freeMove) return;
+      const { dx, dy } = (event as CustomEvent<{ dx: number; dy: number }>).detail;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      ceremonyCam.cancelled = true;
+      if (st().lockPoetId) st().unlock();
+      gestureView.current.lookYaw -= dx * 0.0022;
+      gestureView.current.lookPitch -= dy * 0.0022;
+    };
+    const onGestureFly = (event: Event) => {
+      if (!st().freeMove) return;
+      const { x, y, z } = (event as CustomEvent<{ x: number; y: number; z: number }>).detail;
+      if (![x, y, z].every(Number.isFinite)) return;
+      ceremonyCam.cancelled = true;
+      if (st().lockPoetId) st().unlock();
+      const thrust = gestureThrust.current;
+      thrust.targetX = Math.max(-1, Math.min(1, x));
+      thrust.targetY = Math.max(-1, Math.min(1, y));
+      thrust.targetZ = Math.max(-1, Math.min(1, z));
+      thrust.until = performance.now() + 240;
+    };
+    const onGestureFlyStop = () => {
+      const thrust = gestureThrust.current;
+      thrust.targetX = 0;
+      thrust.targetY = 0;
+      thrust.targetZ = 0;
+      thrust.until = 0;
+    };
+    const onGestureRandomPoem = () => {
+      const r = el.getBoundingClientRect();
+      pullVoidAt(r.left + r.width / 2, r.top + r.height / 2);
+    };
+
     el.addEventListener("pointerdown", onDown);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
+    window.addEventListener("shiyun:gesture-select", onGestureSelect);
+    window.addEventListener("shiyun:gesture-orbit", onGestureOrbit);
+    window.addEventListener("shiyun:gesture-zoom", onGestureZoom);
+    window.addEventListener("shiyun:gesture-look", onGestureLook);
+    window.addEventListener("shiyun:gesture-fly", onGestureFly);
+    window.addEventListener("shiyun:gesture-fly-stop", onGestureFlyStop);
+    window.addEventListener("shiyun:gesture-random-poem", onGestureRandomPoem);
     el.addEventListener("wheel", onWheel, { passive: true });
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -386,6 +452,13 @@ export function FlyControls() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("shiyun:gesture-select", onGestureSelect);
+      window.removeEventListener("shiyun:gesture-orbit", onGestureOrbit);
+      window.removeEventListener("shiyun:gesture-zoom", onGestureZoom);
+      window.removeEventListener("shiyun:gesture-look", onGestureLook);
+      window.removeEventListener("shiyun:gesture-fly", onGestureFly);
+      window.removeEventListener("shiyun:gesture-fly-stop", onGestureFlyStop);
+      window.removeEventListener("shiyun:gesture-random-poem", onGestureRandomPoem);
       el.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
@@ -405,6 +478,22 @@ export function FlyControls() {
     if (keys.current["KeyQ"]) roll.current += ROLL_RATE * dt; // Q 正向:机身左倾(星空看起来顺时针)
     if (keys.current["KeyE"]) roll.current -= ROLL_RATE * dt; // E 逆向:机身右倾(星空看起来逆时针)
     const rolling = !!(keys.current["KeyQ"] || keys.current["KeyE"]); // 这帧是否正在滚(决定自由飞是否需重提交姿态)
+    // Recognition updates arrive less often than the render loop. Consume their accumulated camera
+    // deltas over several render frames so two-hand drag/zoom and one-hand look remain continuous.
+    const gestureBlend = 1 - Math.exp(-Math.min(dt, 0.05) / 0.055);
+    const freeMoveNow = useStore.getState().freeMove;
+    if (freeMoveNow) {
+      gestureView.current.orbitYaw = 0;
+      gestureView.current.orbitPitch = 0;
+      gestureView.current.zoomLog = 0;
+    } else {
+      gestureView.current.lookYaw = 0;
+      gestureView.current.lookPitch = 0;
+      const thrust = gestureThrust.current;
+      thrust.targetX = thrust.targetY = thrust.targetZ = 0;
+      thrust.currentX = thrust.currentY = thrust.currentZ = 0;
+      thrust.until = 0;
+    }
     // ── CEREMONY CAMERA (highest priority) ── fly a hero-frame that plunges WITH the claimer's own streak
     // toward the heart (fixes 根因①: the camera used to lock onto the streak's START and never follow). The
     // geometry (head/start/end) is published every frame by Meteors in WORLD space — RED LINE: use it RAW, do
@@ -459,6 +548,16 @@ export function FlyControls() {
           if (d > 1) { lock.current.pitch = Math.asin(Math.max(-1, Math.min(1, cur.y / d))); lock.current.yaw = Math.atan2(cur.x, cur.z); }
           else { lock.current.pitch = 0.32; lock.current.yaw = 0; }
         }
+        const gesture = gestureView.current;
+        const yawStep = gesture.orbitYaw * gestureBlend;
+        const pitchStep = gesture.orbitPitch * gestureBlend;
+        const zoomStep = gesture.zoomLog * gestureBlend;
+        gesture.orbitYaw -= yawStep;
+        gesture.orbitPitch -= pitchStep;
+        gesture.zoomLog -= zoomStep;
+        lock.current.yaw += yawStep;
+        lock.current.pitch = Math.max(-1.4, Math.min(1.4, lock.current.pitch + pitchStep));
+        lock.current.dist = Math.min(ORBIT_MAX_POET, Math.max(ORBIT_MIN, lock.current.dist * Math.exp(zoomStep)));
         const { yaw, pitch, dist } = lock.current;
         const cp = Math.cos(pitch);
         // _desired copies _tgt then adds the orbit offset (_off); _desired/_tgt/_off all distinct objects
@@ -518,6 +617,16 @@ export function FlyControls() {
           lock.current.yaw = 0;
         }
       }
+      const gesture = gestureView.current;
+      const yawStep = gesture.orbitYaw * gestureBlend;
+      const pitchStep = gesture.orbitPitch * gestureBlend;
+      const zoomStep = gesture.zoomLog * gestureBlend;
+      gesture.orbitYaw -= yawStep;
+      gesture.orbitPitch -= pitchStep;
+      gesture.zoomLog -= zoomStep;
+      lock.current.yaw += yawStep;
+      lock.current.pitch = Math.max(-1.4, Math.min(1.4, lock.current.pitch + pitchStep));
+      lock.current.dist = Math.min(ORBIT_MAX_GALAXY, Math.max(ORBIT_MIN, lock.current.dist * Math.exp(zoomStep)));
       const { yaw, pitch, dist } = lock.current;
       const cp = Math.cos(pitch);
       const desired = _desired.copy(target).add(_off.set(Math.sin(yaw) * cp * dist, Math.sin(pitch) * dist, Math.cos(yaw) * cp * dist));
@@ -536,6 +645,18 @@ export function FlyControls() {
     // Q/E 滚转(自由飞):当前 roll 写进 euler.z(YXZ 序 z = 绕局部前向轴)。放在引力协转之前 —— 引力只 += euler.y
     // 再 setFromEuler,会读到这里写好的 euler.z → roll 不被吃掉(无需另加偏移)。拖拽(onMove)只改 y/x,z 独立保留。
     euler.current.z = roll.current;
+    const gesture = gestureView.current;
+    const lookYawStep = gesture.lookYaw * gestureBlend;
+    const lookPitchStep = gesture.lookPitch * gestureBlend;
+    gesture.lookYaw -= lookYawStep;
+    gesture.lookPitch -= lookPitchStep;
+    if (lookYawStep || lookPitchStep) {
+      euler.current.y += lookYawStep;
+      euler.current.x += lookPitchStep;
+      const lim = Math.PI / 2 - 0.02;
+      euler.current.x = Math.max(-lim, Math.min(lim, euler.current.x));
+      camera.quaternion.setFromEuler(euler.current);
+    }
     // 引力: once inside the galaxy, orbit the camera WITH the spin (same Δ as the galaxy this
     // frame) so the stars hold still on screen — otherwise close-up stars drift tangentially
     // faster than you can click. Outside the sphere you watch it turn from afar.
@@ -575,6 +696,25 @@ export function FlyControls() {
       v.z += tt.z * tnorm;
       v.x += tt.x * tnorm;
     }
+    const gt = gestureThrust.current;
+    if (gt.until <= performance.now()) {
+      gt.targetX = 0;
+      gt.targetY = 0;
+      gt.targetZ = 0;
+    }
+    const thrustActive = !!(gt.targetX || gt.targetY || gt.targetZ);
+    const thrustBlend = 1 - Math.exp(-Math.min(dt, 0.05) / (thrustActive ? 0.075 : 0.045));
+    gt.currentX += (gt.targetX - gt.currentX) * thrustBlend;
+    gt.currentY += (gt.targetY - gt.currentY) * thrustBlend;
+    gt.currentZ += (gt.targetZ - gt.currentZ) * thrustBlend;
+    if (!thrustActive) {
+      if (Math.abs(gt.currentX) < 0.001) gt.currentX = 0;
+      if (Math.abs(gt.currentY) < 0.001) gt.currentY = 0;
+      if (Math.abs(gt.currentZ) < 0.001) gt.currentZ = 0;
+    }
+    v.x += gt.currentX;
+    v.y += gt.currentY;
+    v.z += gt.currentZ;
     if (v.lengthSq() > 0) {
       v.multiplyScalar(BASE_SPEED * speedMul.current * Math.min(dt, 0.05));
       v.applyQuaternion(camera.quaternion);

@@ -52,13 +52,21 @@ export function poemPickDiscPx(apparentPx: number, maxPx: number, gatePx = 0, bo
 // tap NEAR a planet still lands; a mouse keeps a tighter radius. pr = renderer pixel ratio.
 // Round 2 (2026-07): 6/11 → 8/14 CSS-px — a miss within ~2 more px of the disc still snaps to the nearest
 // planet/star. Cost: readback window grows a few KB; void clicks need to land slightly farther from a star.
-export function pickRadiusPx(pr: number, coarse: boolean): number {
-  return Math.max(2, Math.round((coarse ? 14 : 8) * pr));
+export function pickRadiusPx(pr: number, coarse: boolean, radiusCss?: number): number {
+  const css = Number.isFinite(radiusCss) ? Math.max(2, radiusCss as number) : coarse ? 14 : 8;
+  return Math.max(2, Math.round(css * pr));
 }
 
-// Like nearestPoetIndex but returns the RAW decoded id (0 = miss) so the caller can split poet vs poem.
-export function nearestPickId(buf: Uint8Array, n: number, radius: number): number {
-  let best = 0;
+export interface PickPixel {
+  id: number;
+  x: number;
+  y: number;
+}
+
+// Return the raw id and pixel nearest the cursor. The pixel lets gesture input visibly magnetise its
+// virtual cursor to the same front-most, apparent-size-gated target that a click will resolve.
+export function nearestPickPixel(buf: Uint8Array, n: number, radius: number): PickPixel | null {
+  let best: PickPixel | null = null;
   let bestD = Infinity;
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
@@ -67,10 +75,15 @@ export function nearestPickId(buf: Uint8Array, n: number, radius: number): numbe
       if (id === 0) continue;
       const dx = x - radius, dy = y - radius;
       const d = dx * dx + dy * dy;
-      if (d < bestD) { bestD = d; best = id; }
+      if (d < bestD) { bestD = d; best = { id, x, y }; }
     }
   }
   return best;
+}
+
+// Like nearestPoetIndex but returns the RAW decoded id (0 = miss) so the caller can split poet vs poem.
+export function nearestPickId(buf: Uint8Array, n: number, radius: number): number {
+  return nearestPickPixel(buf, n, radius)?.id ?? 0;
 }
 
 // Scan an N×N RGBA readback for the non-background pixel CLOSEST to the window centre (the cursor),
@@ -95,7 +108,8 @@ export function nearestPoetIndex(buf: Uint8Array, n: number, radius: number): nu
 }
 
 export interface GpuPicker {
-  pick(cssX: number, cssY: number, cameraOverride?: THREE.Camera, includePoems?: boolean): PickResult | null;
+  pick(cssX: number, cssY: number, cameraOverride?: THREE.Camera, includePoems?: boolean, radiusCss?: number): PickResult | null;
+  snap(cssX: number, cssY: number, cameraOverride?: THREE.Camera, includePoems?: boolean, radiusCss?: number): { x: number; y: number; target: PickResult } | null;
   dispose(): void;
 }
 
@@ -192,6 +206,7 @@ export function createGpuPicker(
     stencilBuffer: false,
   });
   let buf = new Uint8Array(4);
+  let lastSnap: { x: number; y: number } | null = null;
   const sizeV = new THREE.Vector2();
   const clearC = new THREE.Color();
 
@@ -200,13 +215,15 @@ export function createGpuPicker(
     cssY: number,
     camera: THREE.Camera = defaultCamera,
     includePoems = false,
+    radiusCss?: number,
   ): PickResult | null {
+    lastSnap = null;
     const pr = gl.getPixelRatio();
     gl.getDrawingBufferSize(sizeV);
     const fullW = sizeV.x, fullH = sizeV.y;
     if (fullW < 1 || fullH < 1) return null;
     const gate = 4.4 * pr; // == old apparent>=2.2 CSS-px gate (diameter), in drawing-buffer px
-    const radius = pickRadiusPx(pr, COARSE); // ~8 CSS-px (mouse) / ~14 (touch) click tolerance, drawing-buffer px
+    const radius = pickRadiusPx(pr, COARSE, radiusCss); // gesture input may request a wider exhibition tolerance
     const n = radius * 2 + 1;
     if (rt.width !== n) {
       rt.setSize(n, n);
@@ -261,14 +278,30 @@ export function createGpuPicker(
     }
 
     gl.readRenderTargetPixels(rt, 0, 0, n, n, buf);
-    const id = nearestPickId(buf, n, radius);
+    const pixel = nearestPickPixel(buf, n, radius);
+    const id = pixel?.id ?? 0;
     if (id <= 0) return null;
+    lastSnap = {
+      x: cssX + ((pixel?.x ?? radius) - radius) / pr,
+      y: cssY + (radius - (pixel?.y ?? radius)) / pr,
+    };
     if (id >= POEM_PICK_BASE) {
       const r = layer?.resolve(id - POEM_PICK_BASE) ?? null; // decode poem-planet → poet + poem index
       return r ? { kind: "poem", poet: r.poet, poemIdx: r.poemIdx } : null;
     }
     const i = id - 1; // poet id = index + 1
     return i >= 0 && i < poets.length ? { kind: "poet", poet: poets[i] } : null;
+  }
+
+  function snap(
+    cssX: number,
+    cssY: number,
+    camera: THREE.Camera = defaultCamera,
+    includePoems = false,
+    radiusCss?: number,
+  ) {
+    const target = pick(cssX, cssY, camera, includePoems, radiusCss);
+    return target && lastSnap ? { ...lastSnap, target } : null;
   }
 
   function dispose() {
@@ -278,5 +311,5 @@ export function createGpuPicker(
     rt.dispose();
   }
 
-  return { pick, dispose };
+  return { pick, snap, dispose };
 }

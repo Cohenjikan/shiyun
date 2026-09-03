@@ -22,6 +22,7 @@ import { Cinema } from "./ui/Cinema";
 import { DevTool } from "./ui/DevTool";
 import { ClaimCounter } from "./ui/ClaimCounter";
 import { ClaimsViewer } from "./ui/ClaimsViewer";
+import { GestureControls } from "./gesture/GestureControls";
 import { useStore } from "./state/store";
 import { applyHash, syncHash } from "./state/permalink";
 import { loadData, getCharsetCheck } from "./data/load";
@@ -143,6 +144,10 @@ export default function App() {
           </EffectComposer>
         )}
       </Canvas>
+
+      {/* Opt-in exhibition controls. Recognition keeps running while the normal HUD is hidden, but its
+          own preview/status is hidden too; cinema suspends actions so a framing session cannot be disturbed. */}
+      <GestureControls visible={!uiHidden && !cinema} suspended={cinema} />
 
       {!uiHidden && !cinema && (
         <>

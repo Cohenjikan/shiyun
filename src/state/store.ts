@@ -60,6 +60,13 @@ interface State {
   quality: "high" | "low";
   // hide ALL overlay UI (screenshot mode) — toggled by a corner button + the H hotkey
   uiHidden: boolean;
+  // exhibition gesture input: opt-in only. The camera/model are started by GestureControls only while
+  // this is true; it never changes freeMove, so gesture input remains a peer of mouse/touch/WASD.
+  gestureEnabled: boolean;
+  gestureFps: "eco" | "balanced" | "smooth";
+  // recognition backend. "cpu" (XNNPACK in a worker) is deterministic and the default; "gpu" is an
+  // opt-in experiment — see public/gesture-worker.js for why.
+  gestureBackend: "cpu" | "gpu";
   // 留影(cinema): freeze ALL auto-animation (galaxy spin, void-pull lifecycle, highlight fades) and
   // show a framed share card over the still scene to guide a clean screenshot. cinemaCopy = which tagline.
   cinema: boolean;
@@ -166,6 +173,9 @@ interface State {
   toggleGravity: () => void;
   setFreeMove: (b: boolean) => void;
   toggleRandomPoem: () => void;
+  setGestureEnabled: (b: boolean) => void;
+  setGestureFps: (mode: "eco" | "balanced" | "smooth") => void;
+  setGestureBackend: (backend: "cpu" | "gpu") => void;
   toggleUI: () => void;
   toggleCinema: () => void;
   openCinemaFor: (poemIdx: number) => void; // open 留影 framing a SPECIFIC poem (its ORIGINAL index)
@@ -233,6 +243,20 @@ export const useStore = create<State>((set) => ({
   // 画质·高 via the HUD toggle. See three/detectQuality.ts.
   quality: WEAK ? "low" : "high",
   uiHidden: false,
+  gestureEnabled: false,
+  gestureFps: (() => {
+    try {
+      if (typeof localStorage === "undefined") return "balanced" as const;
+      const saved = localStorage.getItem("shiyun:gesture-fps");
+      return saved === "eco" || saved === "smooth" ? saved : "balanced";
+    } catch { return "balanced" as const; }
+  })(),
+  gestureBackend: (() => {
+    try {
+      if (typeof localStorage === "undefined") return "cpu" as const;
+      return localStorage.getItem("shiyun:gesture-backend") === "gpu" ? "gpu" : "cpu";
+    } catch { return "cpu" as const; }
+  })(),
   cinema: false,
   cinemaCopy: 0,
   cinemaPoemIdx: null,
@@ -328,6 +352,15 @@ export const useStore = create<State>((set) => ({
   toggleGravity: () => set((s) => ({ gravity: !s.gravity })),
   setFreeMove: (freeMove) => set({ freeMove }),
   toggleRandomPoem: () => set((s) => ({ allowRandomPoem: !s.allowRandomPoem })),
+  setGestureEnabled: (gestureEnabled) => set({ gestureEnabled }),
+  setGestureFps: (gestureFps) => {
+    try { if (typeof localStorage !== "undefined") localStorage.setItem("shiyun:gesture-fps", gestureFps); } catch { /* private mode */ }
+    set({ gestureFps });
+  },
+  setGestureBackend: (gestureBackend) => {
+    try { if (typeof localStorage !== "undefined") localStorage.setItem("shiyun:gesture-backend", gestureBackend); } catch { /* private mode */ }
+    set({ gestureBackend });
+  },
   toggleUI: () => set((s) => ({ uiHidden: !s.uiHidden })),
   // toggling cinema OFF clears the explicit per-poem target so reopening via the panel button (which
   // frames the 搜的这首 focus poem) doesn't leak the last 留影 row's poem.
