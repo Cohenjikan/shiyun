@@ -2339,6 +2339,321 @@ canvas {
   }
 }
 
+/* ── Exhibition gesture controls (opt-in, demo branch only) ───────────────────────────── */
+.gesture-setting > span {
+  display: grid;
+  gap: 3px;
+}
+
+.gesture-setting small {
+  color: rgba(220, 225, 238, 0.52);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.gesture-fps-setting {
+  margin: -2px 0 4px 24px;
+}
+
+.gesture-fps-setting .set-sub {
+  width: 48px;
+}
+
+.gesture-fps-setting .set-val {
+  width: 62px;
+}
+
+.gesture-fps-setting .seg-btn {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.gesture-fps-note {
+  margin: 0 0 8px 24px;
+  color: rgba(220, 225, 238, 0.52);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.gesture-video-source {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  left: -10px;
+  bottom: -10px;
+}
+
+.gesture-hud {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  z-index: 29;
+  display: grid;
+  grid-template-columns: 220px minmax(240px, 1fr);
+  width: min(530px, calc(100vw - 40px));
+  min-height: 124px;
+  overflow: hidden;
+  transform: translateX(-50%);
+  border: 1px solid rgba(237, 197, 109, 0.24);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(10, 12, 21, 0.93), rgba(4, 5, 11, 0.88));
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  color: rgba(248, 245, 236, 0.92);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  backdrop-filter: blur(16px) saturate(1.1);
+  pointer-events: none;
+}
+
+.gesture-hud.warn {
+  border-color: rgba(255, 180, 84, 0.48);
+}
+
+.gesture-hud.error {
+  border-color: rgba(255, 103, 103, 0.48);
+}
+
+.gesture-preview-wrap {
+  position: relative;
+  height: 124px;
+  overflow: hidden;
+  border-right: 1px solid rgba(255, 255, 255, 0.075);
+  background: #070910;
+}
+
+.gesture-preview-wrap canvas,
+.gesture-preview-wrap video {
+  display: block;
+  width: 220px;
+  height: 124px;
+}
+
+/* the live camera is composited straight from the <video> (mirrored, no per-frame canvas copy);
+   the canvas above it only draws the skeleton + frame guides at recognition rate */
+.gesture-preview-wrap video {
+  position: absolute;
+  inset: 0;
+  object-fit: cover;
+  transform: scaleX(-1);
+  opacity: 0.72;
+}
+
+.gesture-preview-wrap canvas {
+  position: relative;
+  z-index: 1;
+}
+
+.gesture-live {
+  position: absolute;
+  top: 8px;
+  left: 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(4, 6, 11, 0.66);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.gesture-live i,
+.gesture-owner i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #e2b85d;
+  box-shadow: 0 0 9px rgba(226, 184, 93, 0.85);
+}
+
+.gesture-hud.error .gesture-live i,
+.gesture-hud.error .gesture-owner i {
+  background: #ff7777;
+  box-shadow: 0 0 9px rgba(255, 119, 119, 0.7);
+}
+
+.gesture-readout {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 13px 15px 10px;
+}
+
+.gesture-owner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(245, 208, 128, 0.86);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gesture-current {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.gesture-current strong {
+  color: #f2d28a;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 17px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gesture-current span {
+  min-width: 0;
+  color: rgba(238, 240, 247, 0.78);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gesture-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  margin-top: auto;
+  color: rgba(205, 211, 225, 0.48);
+  font-size: 9px;
+}
+
+.gesture-meta .ignored {
+  color: rgba(255, 187, 98, 0.78);
+}
+
+.gesture-progress {
+  width: 100%;
+  height: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  opacity: 0.35;
+}
+
+.gesture-progress.active {
+  opacity: 1;
+}
+
+.gesture-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #a7732c, #f5d78e);
+  box-shadow: 0 0 8px rgba(244, 196, 95, 0.7);
+  transition: width 60ms linear;
+}
+
+.gesture-cursor {
+  position: fixed;
+  top: -18px;
+  left: -18px;
+  z-index: 45;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(246, 208, 123, 0.72);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(238, 192, 94, 0.08), 0 0 24px rgba(238, 192, 94, 0.34);
+  pointer-events: none;
+  /* position is animated by a 60 Hz rAF loop (dead-reckoned between recognition frames) — no CSS
+     transition on transform, it would only add lag on top of the interpolation */
+  transition: width 100ms ease, height 100ms ease, top 100ms ease, left 100ms ease, border-color 100ms ease;
+  will-change: transform;
+}
+
+/* pinch feedback: an inner ring closes toward the dot as thumb and index approach (--pinch 0..1),
+   so a visitor sees the "click" forming before it registers */
+.gesture-cursor::before {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(246, 217, 146, 0.55);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(calc(1 - var(--pinch, 0) * 0.72));
+  opacity: calc(0.35 + var(--pinch, 0) * 0.65);
+}
+
+.gesture-cursor.grab {
+  border-style: solid;
+  border-color: #ffe3a0;
+  box-shadow: 0 0 0 6px rgba(238, 192, 94, 0.12), 0 0 28px rgba(246, 211, 129, 0.6);
+}
+
+.gesture-cursor.hidden {
+  opacity: 0;
+}
+
+.gesture-cursor span {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 5px;
+  height: 5px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #f6d992;
+  box-shadow: 0 0 12px rgba(246, 217, 146, 0.95);
+}
+
+.gesture-cursor.selecting {
+  top: -14px;
+  left: -14px;
+  width: 28px;
+  height: 28px;
+  border-color: #fff1bd;
+  box-shadow: 0 0 0 7px rgba(238, 192, 94, 0.14), 0 0 30px rgba(246, 211, 129, 0.7);
+}
+
+.gesture-cursor.snapped {
+  width: 38px;
+  height: 38px;
+  top: -19px;
+  left: -19px;
+  border-color: #ffe3a0;
+  box-shadow: 0 0 0 4px rgba(238, 192, 94, 0.09), 0 0 24px rgba(246, 211, 129, 0.48);
+}
+
+.gesture-cursor.crosshair {
+  border-style: dashed;
+  border-color: rgba(246, 217, 146, 0.9);
+}
+
+@media (max-width: 720px) {
+  .gesture-hud {
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    grid-template-columns: 128px minmax(0, 1fr);
+    width: calc(100vw - 20px);
+    min-height: 88px;
+    border-radius: 12px;
+  }
+  .gesture-preview-wrap,
+  .gesture-preview-wrap canvas {
+    width: 128px;
+    height: 88px;
+  }
+  .gesture-preview-wrap canvas { object-fit: cover; }
+  .gesture-readout { padding: 10px 11px 8px; }
+  .gesture-current { margin-top: 6px; grid-template-columns: 1fr; gap: 1px; }
+  .gesture-current strong { font-size: 14px; }
+  .gesture-current span { font-size: 10px; }
+  .gesture-meta span:nth-child(3) { display: none; }
+}
+
 /* ≥44px touch targets — only on actual touch devices, so desktop stays compact */
 @media (max-width: 600px) and (pointer: coarse) {
   .panel-close,

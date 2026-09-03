@@ -4,6 +4,7 @@ import {
   encodePoemPickColor,
   nearestPoetIndex,
   nearestPickId,
+  nearestPickPixel,
   POEM_PICK_BASE,
   POEM_CLICK_BOOST,
   poemPickDiscPx,
@@ -71,6 +72,20 @@ describe("nearestPickId (raw id for poet/poem split)", () => {
     put(buf, 2, 2, poemBytes(7)); // poem, dead centre → should win
     const id = nearestPickId(buf, n, radius);
     expect(id).toBe(POEM_PICK_BASE + 7);
+  });
+});
+
+describe("nearestPickPixel (gesture snap offset)", () => {
+  it("returns the nearest visible id together with its pixel", () => {
+    const n = 7, radius = 3;
+    const buf = new Uint8Array(n * n * 4);
+    const write = (x: number, y: number, id: number) => {
+      const o = (y * n + x) * 4;
+      buf[o] = id & 255; buf[o + 1] = (id >> 8) & 255; buf[o + 2] = (id >> 16) & 255; buf[o + 3] = 255;
+    };
+    write(0, 0, 12);
+    write(4, 2, 34);
+    expect(nearestPickPixel(buf, n, radius)).toEqual({ id: 34, x: 4, y: 2 });
   });
 });
 

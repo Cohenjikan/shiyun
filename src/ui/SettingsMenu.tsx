@@ -197,6 +197,12 @@ export function SettingsMenu() {
   const toggleGravity = useStore((s) => s.toggleGravity);
   const freeMove = useStore((s) => s.freeMove);
   const setFreeMove = useStore((s) => s.setFreeMove);
+  const gestureEnabled = useStore((s) => s.gestureEnabled);
+  const setGestureEnabled = useStore((s) => s.setGestureEnabled);
+  const gestureFps = useStore((s) => s.gestureFps);
+  const setGestureFps = useStore((s) => s.setGestureFps);
+  const gestureBackend = useStore((s) => s.gestureBackend);
+  const setGestureBackend = useStore((s) => s.setGestureBackend);
   const allowRandomPoem = useStore((s) => s.allowRandomPoem);
   const toggleRandomPoem = useStore((s) => s.toggleRandomPoem);
   const meteorsOn = useStore((s) => s.meteorsOn);
@@ -234,7 +240,7 @@ export function SettingsMenu() {
 
   const guideDefault = guideMode === "flash" && guideCoverage === "optimized" && guideSeconds === 10 && guideBrightness === 0.7 && guideStyle === "plane";
   const freeMoveDefault = !COARSE; // 触屏默认锁定整体,电脑默认自由移动
-  const allDefault = guideDefault && !showAllPoems && !showGifts && gravity && allowRandomPoem && freeMove === freeMoveDefault && meteorsOn;
+  const allDefault = guideDefault && !showAllPoems && !showGifts && gravity && allowRandomPoem && freeMove === freeMoveDefault && meteorsOn && !gestureEnabled && gestureFps === "balanced" && gestureBackend === "cpu";
   const resetAll = () => {
     resetGuide();
     if (showAllPoems) toggleAllPoems();
@@ -242,6 +248,9 @@ export function SettingsMenu() {
     if (!gravity) toggleGravity();
     if (!allowRandomPoem) toggleRandomPoem();
     if (freeMove !== freeMoveDefault) setFreeMove(freeMoveDefault);
+    if (gestureEnabled) setGestureEnabled(false);
+    if (gestureFps !== "balanced") setGestureFps("balanced");
+    if (gestureBackend !== "cpu") setGestureBackend("cpu");
     if (!meteorsOn) toggleMeteors();
   };
 
@@ -353,6 +362,49 @@ export function SettingsMenu() {
           <input type="checkbox" checked={freeMove} onChange={() => setFreeMove(!freeMove)} />
           自由移动 · {COARSE ? "双指飞行漫游" : "WASD 飞行漫游"}（关闭则锁定诗云整体:{COARSE ? "双指缩放 / 单指转角度" : "拖动转角度 / 滚轮缩放"},点诗人或诗歌换锁定目标）
         </label>
+        <label className="set-toggle gesture-setting">
+          <input type="checkbox" checked={gestureEnabled} onChange={() => setGestureEnabled(!gestureEnabled)} />
+          <span>
+            手势控制 · 展会演示（手动开启摄像头）
+            <small>{freeMove
+              ? "WASD:捏合轻点选中准心 · 捏住拖动环顾 · 捏住前后推拉飞行 · ✌️ 随机诗人 · 👍 随机诗"
+              : "中心锁定:张手移动光标 · 捏合轻点选中 · 捏住拖动旋转 · 捏住前后推拉缩放 · ✌️ 随机诗人 · 👍 随机诗"}</small>
+          </span>
+        </label>
+        <div className="set-row gesture-fps-setting">
+          <span className="set-sub">识别负载</span>
+          <div className="seg">
+            {(["eco", "balanced", "smooth"] as const).map((mode) => (
+              <button
+                key={mode}
+                className={gestureFps === mode ? "seg-btn on" : "seg-btn"}
+                onClick={() => setGestureFps(mode)}
+              >{mode === "eco" ? "低占用" : mode === "balanced" ? "均衡" : "高响应"}</button>
+            ))}
+          </div>
+          <span className="set-val">≤ {gestureFps === "eco" ? "15" : gestureFps === "balanced" ? "24" : "30"} FPS</span>
+        </div>
+        <div className="set-row gesture-fps-setting">
+          <span className="set-sub">识别后端</span>
+          <div className="seg">
+            {(["cpu", "gpu"] as const).map((backend) => (
+              <button
+                key={backend}
+                className={gestureBackend === backend ? "seg-btn on" : "seg-btn"}
+                onClick={() => setGestureBackend(backend)}
+              >{backend === "cpu" ? "CPU · 稳定" : "GPU · 实验"}</button>
+            ))}
+          </div>
+          <span className="set-val">{gestureBackend === "cpu" ? "默认" : "自动回退"}</span>
+        </div>
+        <div className="gesture-fps-note">
+          {gestureFps === "eco"
+            ? "摄像头 15 FPS、识别最多 15 FPS;适合弱设备,光标靠 60 Hz 补帧保持平滑。"
+            : gestureFps === "balanced"
+              ? "摄像头 24 FPS、识别尽量跟满;默认档。实际识别帧率受单帧推理耗时限制,显示在手势状态框。"
+              : "摄像头 30 FPS、识别尽量跟满;单帧推理快的机器上更跟手。"}
+          {gestureBackend === "gpu" ? " GPU 后端在部分显卡驱动上检测分数偏低,若状态框长期「未检测到手」请切回 CPU。" : ""}
+        </div>
         <label className="set-toggle">
           <input type="checkbox" checked={allowRandomPoem} onChange={toggleRandomPoem} />
           生成随机诗 · 点虚空拉一首随机诗（关闭后点虚空不再生成,只看现存的诗）

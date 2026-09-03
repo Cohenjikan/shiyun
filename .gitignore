@@ -32,3 +32,8 @@ claims.jsonl
 **/claims.jsonl
 feedback.jsonl
 **/feedback.jsonl
+
+# MediaPipe runtime for the gesture worker — copied from node_modules by deploy/sync-mediapipe.mjs
+# (predev/prebuild). Only the model public/gesture_recognizer.task is tracked.
+public/mediapipe-wasm/
+public/mediapipe-vision.js
