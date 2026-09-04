@@ -156,3 +156,5 @@ ssh user@host 'mv /var/www/shiyun/dist /var/www/shiyun/dist.failed && mv /var/ww
 ## 10. 记录
 
 发布后请在本文件末尾追加一行：日期、发布人、构建 commit、验收结果、nginx 是否加了第 6 节配置。
+
+- **2026-09-04 · Cohenjikan · 构建 commit `82e4dd0`** — 命令行验收全绿：5 个静态资源 HTTP 200 且字节数匹配、线上 `gesture_recognizer.task` sha256 与源一致（`97952348…2b0482`）、wasm `Content-Type: application/wasm`、站点无 CSP 头（§6.3 跳过）。发布只覆盖 `index.html`/`assets/` + 新增手势资源，`data/`（poems/lines/search/poets.index）零改动。浏览器冒烟：站点如常、引导正常、无首访摄像头弹窗、「更多」内「手势控制」入口已上线；摄像头识别实测（§7 步骤 2–8）待在带摄像头的 Chrome/Edge 上完成。nginx **未改动**（Content-Type 已达标、无 CSP，§6 无需变更；§6.2 缓存头优化暂未加）。
