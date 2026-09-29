@@ -49,8 +49,12 @@ export function parseTarget(loc: { search: string; hash: string }): Target | nul
     if (eq < 0) return null;
     const k = s.slice(0, eq);
     if (k !== "a" && k !== "p") return null;
-    const value = decodeURIComponent(s.slice(eq + 1));
-    return value ? { kind: k, value } : null;
+    try {
+      const value = decodeURIComponent(s.slice(eq + 1));
+      return value ? { kind: k, value } : null;
+    } catch {
+      return null; // damaged fragment: still allow the query fallback below
+    }
   };
   const h = fromHash(loc.hash);
   if (h) return h;

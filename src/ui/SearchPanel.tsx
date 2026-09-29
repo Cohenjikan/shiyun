@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { searchByLine, searchPoems, loadPoetPoems, getPoet, type PoetRow, type LineHit } from "../data/load";
 import { searchPoetsSmart } from "../data/poetAliases";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
@@ -115,6 +115,13 @@ export function SearchPanel() {
   const reqRef = useRef(0);
   const madeReqRef = useRef(0);
   const revReqRef = useRef(0);
+  const composingRef = useRef(false);
+
+  useEffect(() => () => {
+    ++reqRef.current;
+    ++madeReqRef.current;
+    ++revReqRef.current;
+  }, []);
 
   // 定位虚空: a known index has ONE fixed canonical point — fly there + light the flare marker.
   function locateInVoid(form: PullForm, indexStr: string) {
@@ -132,6 +139,7 @@ export function SearchPanel() {
   }
   function onChangeLine(v: string) {
     setQ(v);
+    setHits([]); // a new query must never navigate to the previous query's results
     setHalf(halfIndexAuto(v));
     const token = ++reqRef.current;
     // 寻诗: 诗句(整句/中段) + 诗名 + 单字 增量搜索, all merged + ranked. (findReal still uses searchByLine.)
@@ -167,6 +175,7 @@ export function SearchPanel() {
   // Recompute the catalog 编号 from the chars the user typed (fixed grid, or 自由 lines). No number
   // math by the user — they write a poem, the engine reports its address (+ whether it's a real poem).
   function recomputeMake(form: PullForm, gridT: string, free: string) {
+    const token = ++madeReqRef.current; // invalidate old work even when the new input is incomplete
     setMadeReal(null);
     setMadeBad([]);
     if (form === "ziyou") {
@@ -178,7 +187,6 @@ export function SearchPanel() {
       const r = anyTextIndex(lines);
       if (!r) return setMade(null);
       setMade({ lines, index: r.index, digits: r.digits, chars: r.chars });
-      const token = ++madeReqRef.current;
       findReal(lines).then((hit) => madeReqRef.current === token && setMadeReal(hit));
       return;
     }
@@ -194,10 +202,11 @@ export function SearchPanel() {
     const r = anyTextIndex(lines);
     if (!r) return setMade(null); // some char not in 字库
     setMade({ lines, index: r.index, digits: r.digits, chars: use.length });
-    const token = ++madeReqRef.current;
     findReal(lines).then((hit) => madeReqRef.current === token && setMadeReal(hit));
   }
   function pickComposeForm(f: PullForm) {
+    ++madeReqRef.current;
+    ++revReqRef.current;
     setComposeForm(f);
     setMade(null);
     setMadeReal(null);
@@ -205,6 +214,13 @@ export function SearchPanel() {
     setRevReal(null);
     if (composeDir === "make") recomputeMake(f, gridText, freeText);
     else if (idxInput) runReverse(f, idxInput);
+  }
+  function pickComposeDir(dir: "make" | "reverse") {
+    setComposeDir(dir);
+    ++madeReqRef.current;
+    ++revReqRef.current;
+    if (dir === "make") recomputeMake(composeForm, gridText, freeText);
+    else runReverse(composeForm, idxInput);
   }
   function onGridText(v: string) {
     setGridText(v);
@@ -217,11 +233,11 @@ export function SearchPanel() {
 
   // ── 造诗·凭编号 → 诗 (reverse) ────────────────────────────────────────────
   function runReverse(form: PullForm, v: string) {
+    const token = ++revReqRef.current;
     const r = pullByIndex(form, v); // UNIVERSAL: form arg ignored; the number self-describes its poem
     setRev(r);
     setRevReal(null);
     if (r && r.lines.length) {
-      const token = ++revReqRef.current;
       findReal(r.lines).then((hit) => revReqRef.current === token && setRevReal(hit));
     }
   }
@@ -231,6 +247,8 @@ export function SearchPanel() {
   }
 
   function switchTab(t: Tab) {
+    ++reqRef.current; // a response from the previous tab must not repopulate cleared results
+    composingRef.current = false;
     setTab(t);
     setCollapsed(false); // tapping a tab expands the panel (on mobile it starts collapsed to the tab row)
     setQ("");
@@ -259,7 +277,10 @@ export function SearchPanel() {
           value={q}
           placeholder={tab === "poet" ? "搜索诗人…（回车飞到第一个）" : "诗句 / 诗名 / 单字,如 静夜思 或 举头望（回车定位）"}
           onChange={(e) => (tab === "poet" ? onChangePoet(e.target.value) : onChangeLine(e.target.value))}
+          onCompositionStart={() => { composingRef.current = true; }}
+          onCompositionEnd={() => { composingRef.current = false; }}
           onKeyDown={(e) => {
+            if (composingRef.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
             if (e.key !== "Enter") return;
             if (tab === "poet" && results[0]) goPoet(results[0]);
             else if (tab === "line" && hits[0]) goHit(hits[0]);
@@ -331,13 +352,13 @@ export function SearchPanel() {
             <div className="compose-dir">
               <button
                 className={composeDir === "make" ? "seg-btn on" : "seg-btn"}
-                onClick={() => setComposeDir("make")}
+                onClick={() => pickComposeDir("make")}
               >
                 填字 → 编号
               </button>
               <button
                 className={composeDir === "reverse" ? "seg-btn on" : "seg-btn"}
-                onClick={() => setComposeDir("reverse")}
+                onClick={() => pickComposeDir("reverse")}
               >
                 凭编号 → 诗
               </button>

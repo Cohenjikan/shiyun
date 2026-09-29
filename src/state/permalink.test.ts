@@ -44,6 +44,13 @@ describe("permalink — public poet mirror + local-only poem hash", () => {
 });
 
 describe("permalink — parseTarget (hash canonical, query fallback)", () => {
+  it("ignores damaged percent escapes and still restores a valid query target", () => {
+    for (const hash of ["#a=%", "#p=%E0%A4%A"]) {
+      expect(parseTarget({ hash, search: "?a=valid" })).toEqual({ kind: "a", value: "valid" });
+      expect(parseTarget({ hash, search: "" })).toBeNull();
+    }
+    expect(parseTarget({ hash: "#a=%61bc", search: "" })).toEqual({ kind: "a", value: "abc" });
+  });
   it("OLD pure-hash link still parses (hash canonical, no query) — bit-for-bit compatible", () => {
     expect(parseTarget(loc("/", "", "#a=82a5851c"))).toEqual({ kind: "a", value: "82a5851c" });
     expect(parseTarget(loc("/", "", "#p=123"))).toEqual({ kind: "p", value: "123" });

@@ -195,7 +195,7 @@ export function PoemPanel() {
             ) : (
               <>
                 <span className="claim-no">你已认领这首诗</span>
-                <span className="claim-id">本次未联网 · 未取得编号</span>
+                <span className="claim-id">仅本机认领 · 本次未取得编号</span>
               </>
             )}
             {badge && <span className={`claim-badge ${badge.tier}`}>✦ {badge.label}</span>}
