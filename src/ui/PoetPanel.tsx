@@ -5,7 +5,7 @@ import { collectionNotice } from "../data/collectionStatus";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { anyTextIndex } from "../engine/engineApi";
 import { poemPosition } from "../three/positions";
-import { ShareButton } from "./CopyButton";
+import { CopyButton, ShareButton } from "./CopyButton";
 import { useSheet } from "./useSheet";
 
 const FORM_LABEL: Record<string, string> = {
@@ -22,24 +22,7 @@ type IdxInfo = { kind: "full" | "free"; index: string; digits: number; chars?: n
 // A copy button that computes its (possibly huge BigInt) 编号 ONLY on click — keeps the collapsed
 // title list cheap (no upfront rank for every poem).
 function LazyCopy({ compute, label }: { compute: () => string | null; label: string }) {
-  const [done, setDone] = useState(false);
-  return (
-    <button
-      className="copy-btn"
-      title="复制完整编号"
-      onClick={(e) => {
-        e.stopPropagation();
-        const t = compute();
-        if (!t) return;
-        navigator.clipboard?.writeText(t).then(() => {
-          setDone(true);
-          setTimeout(() => setDone(false), 1200);
-        });
-      }}
-    >
-      {done ? "已复制 ✓" : label}
-    </button>
-  );
+  return <CopyButton text={compute} label={label} />;
 }
 
 function fmtBytes(n: number): string {

@@ -937,6 +937,25 @@ canvas {
 .copy-btn:hover {
   background: rgba(255, 210, 122, 0.22);
 }
+.copy-fallback {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12px;
+}
+.copy-fallback input {
+  width: 180px;
+  max-width: 100%;
+  min-width: 0;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 4px 6px;
+}
 .copy-btn.share {
   background: rgba(130, 180, 255, 0.14);
   border-color: rgba(130, 180, 255, 0.42);

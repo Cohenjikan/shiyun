@@ -55,11 +55,11 @@ export function ClaimsViewer() {
                     >
                       <span className="myclaim-row1">
                         <span className="shiyi-preview" lang="zh">{preview}</span>
-                        <span className="myclaim-no">{c.no != null ? `#${c.no}` : "待联网"}</span>
+                        <span className="myclaim-no">{c.no != null ? `#${c.no}` : "仅本机认领"}</span>
                       </span>
                       <span className="myclaim-row2">
                         <span className="shiyi-time">
-                          {c.no != null ? `第 ${c.no.toLocaleString()} 首被认领` : "认领编号待联网确认"} · {fmt(c.ts)}
+                          {c.no != null ? `第 ${c.no.toLocaleString()} 首被认领` : "本次未取得编号"} · {fmt(c.ts)}
                         </span>
                         {badge && <span className={`claim-badge ${badge.tier} mini`}>✦ {badge.label}</span>}
                       </span>
