@@ -16,8 +16,20 @@
     {
       "name": "shiyun-gpupick",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "5199", "--strictPort"],
+      "runtimeArgs": ["run", "dev", "--", "--port", "5199", "--strictPort", "--host"],
       "port": 5199
+    },
+    {
+      "name": "claim-api",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["deploy/claim-server.mjs"],
+      "port": 8788
+    },
+    {
+      "name": "promo-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/Cohen/AppData/Local/Temp/claude/C--Users-Cohen-Desktop-shiyun/e53dcec1-89b7-4916-8abf-30ed7bdbe540/scratchpad/shotserver.mjs"],
+      "port": 5211
     }
   ]
 }
