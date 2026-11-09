@@ -772,6 +772,20 @@ const NAME_END = new Set([
   ..."员中山道学舍补拾司刺太县长参博校正主录评大侍尚给秘著处居上法禅征使明少别判节观转提安经制宣枢翰谏起秀进尉丞簿",
 ]);
 const isHan = (c) => c !== undefined && /[一-鿿]/.test(c);
+// 「姓 + 官衔简称」 guard (UF-15, 2026-11). Titles address people as SURNAME + OFFICE: 周密学 = 周(沆) +
+// 密学(枢密直学士), 李中丞 = 李 + 中丞, 崔尚书 = 崔 + 尚书. A bare 2-char poet name whose 2nd char + the next
+// char spell an office (周密+学, 李中+丞, 崔尚+书) is that surname + title, NOT the poet — the 2026-11 audit
+// found 101 such dedications on 66 edges (司马光→周密, 南唐李中 ← 14 首「李中丞」…), every one false.
+// Aliases (号/字) are exempt (they never reach this check). Keep this list to real office abbreviations.
+const OFFICE_BIGRAM = new Set((
+  "密学 直学 待制 通判 少卿 侍郎 侍御 侍读 侍讲 中丞 秘书 秘校 秘丞 秘监 主簿 寺丞 寺簿 校书 正字 判官 推官 " +
+  "运使 运判 提刑 提举 知府 知州 知县 知军 县令 县丞 县尉 学士 舍人 员外 郎中 司户 司理 司法 司业 节推 签判 " +
+  "教授 博士 都官 职方 屯田 驾部 殿丞 著作 太博 太祝 学正 祭酒 御史 留守 尚书 给事 谏议 拾遗 补阙 秀才 处士 " +
+  "道士 上人 长老 法师 禅师 明府 少府 使君 判院 机宜 宣抚 安抚 转运 制置 观察 防御 团练 都督 刺史 太守 大夫 " +
+  "将军 参军 参议 主管 监丞 府判 法曹 户曹 仓曹 功曹 检法 检详 宫使 宫教 编修 检讨 修撰 学录 直讲 直阁 直院 " +
+  "阁学 龙图 枢密 少监 佥判 运干 帅干 抚干 节使 文学 助教 录事 评事 寺正 少保 少傅 少师 太尉 太保 太傅 太师 " +
+  "相公 丞相 参政 知院 同知 签书"
+).split(" "));
 // greedy-longest known/alias name at cs[start]; a bare 2-char name must be COMPLETE (followed by
 // a name-ending char / punctuation / end) so a longer name or name+role isn't silently truncated.
 function nameAt(cs, start) {
@@ -782,6 +796,7 @@ function nameAt(cs, start) {
     if (len === 2 && !(cand in GIFT_ALIAS)) {
       const next = cs[start + len];
       if (isHan(next) && !NAME_END.has(next)) continue; // looks mid-name → reject
+      if (isHan(next) && OFFICE_BIGRAM.has(cs[start + 1] + next)) continue; // 周密+学 = 周 + 密学 → reject
     }
     return cand;
   }
