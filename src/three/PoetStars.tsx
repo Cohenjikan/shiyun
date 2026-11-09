@@ -30,6 +30,7 @@ export function PoetStars() {
   const hidden = useStore((s) => s.hidden);
   const hoverId = useStore((s) => s.hoverPoetId);
   const selId = useStore((s) => s.selectedPoet?.id ?? null);
+  const hideNames = useStore((s) => s.hidePoetNames);
   const { gl, camera } = useThree();
 
   const built = useMemo(() => {
@@ -166,11 +167,12 @@ export function PoetStars() {
     if (spinRef.current) spinRef.current.rotation.y = galaxySpin.angle;
   });
 
-  // labels ONLY for the hovered + selected poet (no names floating in empty void)
+  // labels ONLY for the hovered + selected poet (no names floating in empty void); none at all when the
+  // visitor turned on 更多 → 隐藏诗人名字 (#88 — guess-the-poet; panels/search still name the author)
   const byId = useMemo(() => new Map(built.poets.map((p) => [p.id, p])), [built]);
   const shown: PoetRow[] = [];
   const seen = new Set<string>();
-  for (const id of [hoverId, selId]) {
+  for (const id of hideNames ? [] : [hoverId, selId]) {
     if (id && !seen.has(id)) {
       const p = byId.get(id);
       if (p) {

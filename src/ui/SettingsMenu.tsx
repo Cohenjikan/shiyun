@@ -207,6 +207,8 @@ export function SettingsMenu() {
   const toggleRandomPoem = useStore((s) => s.toggleRandomPoem);
   const meteorsOn = useStore((s) => s.meteorsOn);
   const toggleMeteors = useStore((s) => s.toggleMeteors);
+  const hidePoetNames = useStore((s) => s.hidePoetNames);
+  const setHidePoetNames = useStore((s) => s.setHidePoetNames);
   const shiyiCount = useStore((s) => s.shiyi.length);
   const openShiyi = useStore((s) => s.setShiyiOpen);
   const myClaimsCount = useStore((s) => s.myClaims.length);
@@ -240,7 +242,7 @@ export function SettingsMenu() {
 
   const guideDefault = guideMode === "flash" && guideCoverage === "optimized" && guideSeconds === 10 && guideBrightness === 0.7 && guideStyle === "plane";
   const freeMoveDefault = !COARSE; // 触屏默认锁定整体,电脑默认自由移动
-  const allDefault = guideDefault && !showAllPoems && !showGifts && gravity && allowRandomPoem && freeMove === freeMoveDefault && meteorsOn && !gestureEnabled && gestureFps === "balanced" && gestureBackend === "cpu";
+  const allDefault = guideDefault && !showAllPoems && !showGifts && gravity && allowRandomPoem && freeMove === freeMoveDefault && meteorsOn && !hidePoetNames && !gestureEnabled && gestureFps === "balanced" && gestureBackend === "cpu";
   const resetAll = () => {
     resetGuide();
     if (showAllPoems) toggleAllPoems();
@@ -252,6 +254,7 @@ export function SettingsMenu() {
     if (gestureFps !== "balanced") setGestureFps("balanced");
     if (gestureBackend !== "cpu") setGestureBackend("cpu");
     if (!meteorsOn) toggleMeteors();
+    if (hidePoetNames) setHidePoetNames(false);
   };
 
   return (
@@ -353,6 +356,10 @@ export function SettingsMenu() {
         <label className="set-toggle">
           <input type="checkbox" checked={meteorsOn} onChange={toggleMeteors} />
           流星 · 认领化作流星划过银河（今日认领更耀眼,仅作纪念、不可反查）
+        </label>
+        <label className="set-toggle">
+          <input type="checkbox" checked={hidePoetNames} onChange={() => setHidePoetNames(!hidePoetNames)} />
+          隐藏诗人名字 · 星图上不显示诗人标签（诗人详情与搜索结果仍显示作者）
         </label>
       </div>
 

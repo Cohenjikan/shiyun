@@ -98,6 +98,10 @@ interface State {
   //   claimCeremony  = a one-shot launch of the just-claimed poem from where it was located (id-gated so
   //                    Meteors fires it exactly once; null = nothing pending)
   meteorsOn: boolean;
+  /** 更多 → 隐藏诗人名字 (#88): hide the poet name labels on the STAR MAP only (hover / selected labels).
+   *  Poem panels and search results still show the author. Persisted per device (localStorage). */
+  hidePoetNames: boolean;
+  setHidePoetNames: (v: boolean) => void;
   claimFeed: ClaimFeed | null;
   myClaims: MyClaim[];
   myClaimsOpen: boolean; // 我的认领 gallery (opened from 更多) — a LOCAL keepsake of this device's claims
@@ -267,6 +271,20 @@ export const useStore = create<State>((set) => ({
   shiyi: listShiyi(), // hydrate the keepsake list from localStorage at boot
   shiyiOpen: false,
   meteorsOn: true,
+  hidePoetNames: (() => {
+    try {
+      return typeof localStorage !== "undefined" && localStorage.getItem("shiyun:hide-poet-names") === "1";
+    } catch { return false; }
+  })(),
+  setHidePoetNames: (hidePoetNames) => {
+    try {
+      if (typeof localStorage !== "undefined") {
+        if (hidePoetNames) localStorage.setItem("shiyun:hide-poet-names", "1");
+        else localStorage.removeItem("shiyun:hide-poet-names");
+      }
+    } catch { /* private mode */ }
+    set({ hidePoetNames });
+  },
   claimFeed: null,
   myClaims: listClaims(), // hydrate this device's claims at boot (so my meteor shows before any fetch)
   myClaimsOpen: false,
