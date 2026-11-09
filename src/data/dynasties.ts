@@ -37,6 +37,22 @@ export const DYNASTY_BY_KEY: Record<string, Dynasty> = Object.fromEntries(
   DYNASTIES.map((d) => [d.key, d]),
 );
 
+/** The dynasty the UI SHOWS for a poet: label, colour and the dynasty filter. `dd` is an optional
+ *  display override (五代十国 poets stored under 唐, see pipeline/wudaiRules.mjs). Star POSITION, poetId
+ *  and every number keep using the stored `dynasty` — never call this from positions/ids. */
+export function displayDynastyKey(p: { dynasty: string; dd?: string }): string {
+  return p.dd && DYNASTY_BY_KEY[p.dd] ? p.dd : p.dynasty;
+}
+export function displayDynasty(p: { dynasty: string; dd?: string }): Dynasty | undefined {
+  return DYNASTY_BY_KEY[displayDynastyKey(p)];
+}
+/** 「唐」/「五代十国·南唐」 — the label shown next to a poet's name. */
+export function displayDynastyLabel(p: { dynasty: string; dd?: string; ds?: string }): string {
+  const d = displayDynasty(p);
+  const base = d?.label ?? p.dynasty;
+  return p.dd && p.ds ? `${base}·${p.ds}` : base;
+}
+
 export const R_MIN = 420;
 export const R_MAX = 3400;
 const SPAN = (R_MAX - R_MIN) / DYNASTIES.length;

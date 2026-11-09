@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { searchByLine, searchPoems, loadPoetPoems, getPoet, type PoetRow, type LineHit } from "../data/load";
 import { searchPoetsSmart } from "../data/poetAliases";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
-import { DYNASTY_BY_KEY, DYNASTIES } from "../data/dynasties";
+import { DYNASTIES, displayDynasty, displayDynastyLabel } from "../data/dynasties";
 import {
   halfIndexAuto,
   pullByIndex,
@@ -297,11 +297,10 @@ export function SearchPanel() {
       {!collapsed && tab === "poet" && results.length > 0 && (
         <div className="search-results">
           {results.map((p) => {
-            const dyn = DYNASTY_BY_KEY[p.dynasty];
             return (
               <button key={p.id} className="search-row" onClick={() => goPoet(p)}>
                 <span className="sr-name">{p.name}</span>
-                <span className="sr-meta">{dyn?.label ?? p.dynasty} · {p.poemCount}首</span>
+                <span className="sr-meta">{displayDynastyLabel(p)} · {p.poemCount}首</span>
               </button>
             );
           })}
@@ -314,13 +313,12 @@ export function SearchPanel() {
             <div className="lr-section">
               <div className="lr-head">真实的诗 · 诗句 / 诗名 / 单字</div>
               {hits.map((h, i) => {
-                const dyn = h.poet ? DYNASTY_BY_KEY[h.poet.dynasty] : undefined;
                 return (
                   <button key={i} className="search-row" onClick={() => goHit(h)} disabled={!h.poet}>
                     <span className="sr-name">
                       {h.poet?.name ?? "佚名"}<span className="sr-title">《{h.title || "无题"}》</span>
                     </span>
-                    <span className="sr-meta">{dyn?.label ?? ""} · {FORM_LABEL[h.form] ?? "古体"}</span>
+                    <span className="sr-meta">{h.poet ? displayDynasty(h.poet)?.label ?? "" : ""} · {FORM_LABEL[h.form] ?? "古体"}</span>
                   </button>
                 );
               })}
@@ -504,16 +502,8 @@ export function SearchPanel() {
             </div>
             <div className="legend-list">
               {DYNASTIES.map((d) => {
-                // 五代十国 shell is EMPTY by data design (语料把五代诗人归入唐,如李煜) — render it as a
-                // non-interactive note instead of a dead toggle.
-                if (d.key === "wudai") {
-                  return (
-                    <div key={d.key} className="legend-row note" title="语料中五代诗人(如李煜)归入唐">
-                      <span className="dot" style={{ background: d.color, opacity: 0.4 }} />
-                      <span className="legend-label">{d.label} · 已并入唐</span>
-                    </div>
-                  );
-                }
+                // 五代十国 is a real toggle since UF-16: poets.index `dd:"wudai"` (李煜/冯延巳/徐铉…) are
+                // filtered + coloured as 五代十国 (displayDynastyKey), while their stars stay in the 唐 band.
                 const off = hidden.has(d.key);
                 return (
                   <button

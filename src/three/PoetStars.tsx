@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
-import { DYNASTY_BY_KEY, DYNASTIES, DYNASTY_COUNT, hashStr } from "../data/dynasties";
+import { DYNASTIES, DYNASTY_COUNT, displayDynasty, hashStr } from "../data/dynasties";
 import { getPoets, type PoetRow } from "../data/load";
 import { FAMOUS_POETS } from "../data/famousPoets";
 import { useStore } from "../state/store";
@@ -45,7 +45,8 @@ export function PoetStars() {
     const tmp = new THREE.Color();
     for (let i = 0; i < n; i++) {
       const p = poets[i];
-      const dyn = DYNASTY_BY_KEY[p.dynasty] ?? DYNASTIES[DYNASTY_COUNT - 1];
+      // display dynasty (五代十国 override) drives colour + the dynasty filter; position stays on p.dynasty
+      const dyn = displayDynasty(p) ?? DYNASTIES[DYNASTY_COUNT - 1];
       dynId[i] = dyn.id;
       const [x, y, z] = poetPosition(p);
       pos[i * 3] = x;
@@ -184,7 +185,7 @@ export function PoetStars() {
       <primitive object={built.points} />
       {shown.map((p) => {
         const isFocus = p.id === hoverId || p.id === selId;
-        const dyn = DYNASTY_BY_KEY[p.dynasty] ?? DYNASTIES[DYNASTY_COUNT - 1];
+        const dyn = displayDynasty(p) ?? DYNASTIES[DYNASTY_COUNT - 1];
         return (
           <Html
             key={p.id}

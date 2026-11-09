@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chooseCanonicalBucket, resolveZone } from "./canonicalRules.mjs";
+import { WUDAI_CURATED, wudaiDisplay } from "./wudaiRules.mjs";
 
 const SRC = process.env.WERNEROR_DIR || "C:/corpus/Werneror-Poetry"; // Werneror/Poetry clone (MIT). Override path via WERNEROR_DIR.
 const OUT = fileURLToPath(new URL("../public/data", import.meta.url)); // this project's data dir
@@ -499,8 +500,16 @@ const index = [...poets.values()]
     if (p.count > 0 && (restrictedCountByPoet.get(p.id) || 0) === p.count) row.restrictedOnly = 1; // 全库仅存目
     const lost = lostByKey.get(key);                            // 零汉字诗存目条目
     if (lost && lost.length) { row.lost = lost; consumedLostKeys.add(key); }
+    const wd = wudaiDisplay(p.name, p.dynasty, p.dynastyRaw);   // 五代十国 显示层(dd/ds,id/星位不变)
+    if (wd) { row.dd = wd.dd; if (wd.ds) row.ds = wd.ds; }
     return row;
   });
+{
+  const wdRows = index.filter((r) => r.dd);
+  console.log(`  五代十国显示层 dd 诗人: ${wdRows.length}(其中带国别 ds ${wdRows.filter((r) => r.ds).length})`);
+  const missing = Object.keys(WUDAI_CURATED).filter((n) => !index.some((r) => r.name === n && r.dynasty === "tang"));
+  if (missing.length) console.error(`  ⚠ WUDAI_CURATED 无匹配的 唐 诗人行: ${missing.join(" ")}`);
+}
 
 // canonical 别名诗人行 (G1 merges.jsonl → poets.jsonl mergedInto rows): each is a REDIRECT, not a poet —
 // poemCount:0/clusterSize:0 so it never renders a star (PoetStars/gpuPick gate on aSize<0.001) and never

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../state/store";
-import { DYNASTY_BY_KEY } from "../data/dynasties";
+import { displayDynasty, displayDynastyLabel } from "../data/dynasties";
 import { collectionNotice } from "../data/collectionStatus";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { anyTextIndex } from "../engine/engineApi";
@@ -96,7 +96,8 @@ export function PoetPanel() {
   const sheet = useSheet(poet?.id ?? null);
 
   if (!poet) return null;
-  const dyn = DYNASTY_BY_KEY[poet.dynasty];
+  const dyn = displayDynasty(poet);
+  const dynLabel = displayDynastyLabel(poet); // 「唐」/「五代十国·南唐」
   // 收录状态:诗人级一行灰字(按类拼装,零人名硬编码);头部计数在「全库仅存目」诗人(叶嘉莹)上改说「存目 N 条」。
   const notice = collectionNotice(poet);
   const countLabel = poet.restrictedOnly ? `存目 ${poet.poemCount} 条` : `${poet.poemCount} 首`; // peek 用
@@ -108,7 +109,7 @@ export function PoetPanel() {
     return (
       <div className="sheet-peek" onClick={sheet.expand}>
         <span className="peek-label" style={{ color: dyn?.color }}>{poet.name}</span>
-        <span className="peek-sub">{dyn?.label ?? poet.dynasty} · {countLabel}</span>
+        <span className="peek-sub">{dynLabel} · {countLabel}</span>
         <span className="peek-cue">▲ 展开</span>
         <button className="peek-x" onClick={(e) => { e.stopPropagation(); close(); }} aria-label="关闭">×</button>
       </div>
@@ -149,7 +150,7 @@ export function PoetPanel() {
       <div className="poet-head">
         <span className="poet-name" style={{ color: dyn?.color }}>{poet.name}</span>
         <span className="poet-sub">
-          {dyn?.label ?? poet.dynasty} · {fullCountLabel} <ShareButton />
+          {dynLabel} · {fullCountLabel} <ShareButton />
           <button className="cinema-btn" onClick={openCinema} title="留影当前搜中的那首（时间暂停）;目录里每一行也有单独的「留影」按钮">
             留影
           </button>

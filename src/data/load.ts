@@ -54,6 +54,11 @@ export interface PoetRow {
   /** 零汉字诗存目:正文经 onlyHan 切分后无汉字句(全 □ 缺字 lacuna / 全外文·数字 nonhan)的诗进不了 p/编号/搜索,
    *  这里保留题目 + 类别,PoetPanel 作品列表末尾渲染为不可展开的「存目」条目,避免静默消失。 */
   lost?: { t: string; k: "lacuna" | "nonhan" }[];
+  /** 五代十国显示层 (UF-16, pipeline/wudaiRules.mjs): 语料把五代诗人存在「唐」桶(id/星位按 dynasty 算,不能动),
+   *  这里给 UI 一个**仅显示用**的朝代键 —— 标签、配色、朝代筛选读它(displayDynasty),星位/编号/id 仍读 dynasty。 */
+  dd?: string;
+  /** 国别(南唐/前蜀…),仅在明确时给出,标签拼成「五代十国·南唐」。 */
+  ds?: string;
 }
 export interface PoemRecord {
   t: string;

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useStore } from "../state/store";
 import { getPoet, loadGifts } from "../data/load";
-import { DYNASTY_BY_KEY, DYNASTIES, DYNASTY_COUNT } from "../data/dynasties";
+import { DYNASTIES, DYNASTY_COUNT, displayDynasty, displayDynastyKey } from "../data/dynasties";
 import { poetPosition } from "./PoetStars";
 import { galaxySpin } from "./galaxyParams";
 import type { GiftEdge } from "../data/contract";
@@ -64,8 +64,8 @@ export function GiftLines() {
       // control points along the chord (⅓, ⅔) then pulled toward the galactic centre → bundling
       _c1.lerpVectors(_a, _b, 0.33).lerp(CENTER, BUNDLE);
       _c2.lerpVectors(_a, _b, 0.67).lerp(CENTER, BUNDLE);
-      _ca.set((DYNASTY_BY_KEY[pf.dynasty] ?? fallback).color);
-      _cb.set((DYNASTY_BY_KEY[pt.dynasty] ?? fallback).color);
+      _ca.set((displayDynasty(pf) ?? fallback).color);
+      _cb.set((displayDynasty(pt) ?? fallback).color);
 
       const pts = new Float32Array((STEPS + 1) * 3);
       const base = new Float32Array((STEPS + 1) * 3);
@@ -88,7 +88,7 @@ export function GiftLines() {
         base[s * 3 + 2] = _cc.b;
       }
       const seed = ((parseInt(from.slice(0, 6), 16) || 0) % 997) / 997;
-      out.push({ pts, base, fromDyn: pf.dynasty, toDyn: pt.dynasty, from, to, w, seed });
+      out.push({ pts, base, fromDyn: displayDynastyKey(pf), toDyn: displayDynastyKey(pt), from, to, w, seed });
     }
     return out;
   }, [raw]);

@@ -22,6 +22,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../state/store";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
+import { displayDynastyKey } from "../data/dynasties";
 import { pickTargets } from "../three/picking";
 import { GestureEngine, type EngineFrame, type Pose } from "./gestureEngine";
 import { ACQUIRE_BOX, buildHandSample, type GestureLandmark } from "./gestureMath";
@@ -276,7 +277,7 @@ export function GestureControls({ visible, suspended }: { visible: boolean; susp
 
     const chooseRandomPoet = () => {
       const st = useStore.getState();
-      const candidates = pickTargets.poets.filter((p) => !p.mergedInto && p.poemCount > 0 && !st.hidden.has(p.dynasty) && p.id !== st.selectedPoet?.id);
+      const candidates = pickTargets.poets.filter((p) => !p.mergedInto && p.poemCount > 0 && !st.hidden.has(displayDynastyKey(p)) && p.id !== st.selectedPoet?.id);
       if (!candidates.length) {
         flashRef.current = { text: "当前筛选下没有可选诗人", until: performance.now() + 1500 };
         return;

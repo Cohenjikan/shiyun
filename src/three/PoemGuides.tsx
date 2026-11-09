@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { DYNASTY_BY_KEY, DYNASTIES, DYNASTY_COUNT } from "../data/dynasties";
+import { DYNASTIES, DYNASTY_COUNT, displayDynasty } from "../data/dynasties";
 import { useStore } from "../state/store";
 import { galaxySpin, poemClock } from "./galaxyParams";
 import { poetPosition, poemOffset, poemOmega, poemSystemRadius } from "./positions";
@@ -66,7 +66,7 @@ export function PoemGuides() {
 
     const [cx, cy, cz] = poetPosition(selectedPoet);
     const omega = poemOmega(selectedPoet);
-    const dyn = DYNASTY_BY_KEY[selectedPoet.dynasty] ?? DYNASTIES[DYNASTY_COUNT - 1];
+    const dyn = displayDynasty(selectedPoet) ?? DYNASTIES[DYNASTY_COUNT - 1];
     const col = new THREE.Color(dyn.color);
 
     const inner = new THREE.Group();

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { DYNASTY_BY_KEY, DYNASTIES, DYNASTY_COUNT, hashStr } from "../data/dynasties";
+import { DYNASTIES, DYNASTY_COUNT, displayDynasty, hashStr } from "../data/dynasties";
 import { getPoets, type PoetRow } from "../data/load";
 import { useStore } from "../state/store";
 import { galaxySpin, poemClock } from "./galaxyParams";
@@ -74,7 +74,7 @@ function buildGeometry(poets: PoetRow[], total: number, withSeed: boolean) {
     const p = poets[pi];
     const P = Math.max(0, p.poemCount);
     if (!P) continue;
-    const dyn = DYNASTY_BY_KEY[p.dynasty] ?? DYNASTIES[DYNASTY_COUNT - 1];
+    const dyn = displayDynasty(p) ?? DYNASTIES[DYNASTY_COUNT - 1];
     const [cx, cy, cz] = poetPosition(p);
     const omega = poemOmega(p);
     tmp.set(dyn.color);
