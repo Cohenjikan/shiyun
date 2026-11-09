@@ -74,11 +74,16 @@ checkout boots the galaxy + author list but **cannot load any poem** until you p
   ```bash
   node --max-old-space-size=4096 pipeline/build-data.mjs            # poems + lines + sidecars
   npm run build:search                                             # 寻诗/诗名 prefix index (search/)
+  npm run build:chars                                              # 含字诗句索引 (chars/)
   # npm run build:fuzzy                                            # optional 异文 fuzzy index (linesf/, ~4.4 GB)
   ```
 
 `linesf/` (fuzzy 异文 search) is an **optional fallback** — `load.ts` no-ops if it's absent, so you can skip
 it. The minimum for "poems load + 诗句/寻诗 search work" is `poems/` + `lines/` + `search/`.
+The optional all-position character index lives in `public/data/chars/`; build it with `npm run build:chars`.
+Deploy both each `{bucket}.json` and its `{bucket}.json.gz` sibling so static servers can serve precompressed
+responses. `chars/` is intentionally git-ignored because it is a generated data asset; include the directory
+in the data artifact/upload step alongside `search/` when publishing a build that enables single-character search.
 
 ### 1.1 Build the static bundle
 

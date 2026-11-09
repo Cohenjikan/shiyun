@@ -834,6 +834,12 @@ canvas {
   font-size: 12px;
   margin-left: 4px;
 }
+/* 含字搜索 (#132): the matched character inside a result line — tinted, not the browser's yellow box */
+.sr-title mark {
+  background: none;
+  color: #ffd27a;
+  font-weight: 600;
+}
 .sr-meta {
   color: var(--muted);
   font-size: 11px;

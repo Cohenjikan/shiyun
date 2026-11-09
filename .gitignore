@@ -17,8 +17,10 @@ public/data/poems/
 public/data/lines/
 public/data/linesf/
 public/data/search/
+public/data/chars/
 public/data/_fztmp/
 public/data/_sxtmp/
+public/data/_chartmp/
 public/data/*_v1_backup/
 
 # Cold-backup tarballs produced by `npm run pack:data` (pipeline/pack-data.mjs) — never commit these;

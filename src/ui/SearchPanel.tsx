@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { searchByLine, searchPoems, loadPoetPoems, getPoet, type PoetRow, type LineHit } from "../data/load";
+import { searchByLine, searchPoems, searchByChars, loadPoetPoems, getPoet, type PoetRow, type LineHit, type CharHit } from "../data/load";
 import { searchPoetsSmart } from "../data/poetAliases";
 import { fetchPoetPoems } from "../data/poetPoemsLoader";
 import { DYNASTIES, displayDynasty, displayDynastyLabel } from "../data/dynasties";
@@ -86,6 +86,8 @@ export function SearchPanel() {
   const [results, setResults] = useState<PoetRow[]>([]);
   const [poetNote, setPoetNote] = useState<string | null>(null); // alias redirect / graceful-miss line
   const [hits, setHits] = useState<LineHit[]>([]);
+  const [charHits, setCharHits] = useState<CharHit[]>([]);
+  const [charShown, setCharShown] = useState(30);
   const [half, setHalf] = useState<HalfIndex | null>(null);
 
   // 造诗 tab: compose (fill chars → 编号) or reverse (编号 → 诗)
@@ -140,10 +142,13 @@ export function SearchPanel() {
   function onChangeLine(v: string) {
     setQ(v);
     setHits([]); // a new query must never navigate to the previous query's results
+    setCharHits([]);
+    setCharShown(30);
     setHalf(halfIndexAuto(v));
     const token = ++reqRef.current;
     // 寻诗: 诗句(整句/中段) + 诗名 + 单字 增量搜索, all merged + ranked. (findReal still uses searchByLine.)
     searchPoems(v).then((h) => reqRef.current === token && setHits(h));
+    searchByChars(v).then((h) => reqRef.current === token && setCharHits(h));
   }
 
   function goPoet(p: PoetRow, focus?: { poemIdx: number; title: string; firstLine: string }) {
@@ -255,10 +260,13 @@ export function SearchPanel() {
     setResults([]);
     setPoetNote(null); // don't carry a stale poet note across tabs (it would flip to .miss styling)
     setHits([]);
+    setCharHits([]);
+    setCharShown(30);
     setHalf(null);
   }
 
   const g = composeForm !== "ziyou" ? GRID[composeForm] : null;
+  const supplementalCharHits = charHits.filter((c) => !hits.some((h) => h.poetId === c.poetId && h.poemIdx === c.poemIdx));
 
   return (
     <div className={collapsed ? "search collapsed" : "search"}>
@@ -307,7 +315,7 @@ export function SearchPanel() {
         </div>
       )}
 
-      {!collapsed && tab === "line" && half && (
+      {!collapsed && tab === "line" && (half || hits.length > 0 || supplementalCharHits.length > 0) && (
         <div className="line-results">
           {hits.length > 0 && (
             <div className="lr-section">
@@ -324,7 +332,31 @@ export function SearchPanel() {
               })}
             </div>
           )}
-          <div className="lr-section">
+          {supplementalCharHits.length > 0 && (
+            <div className="lr-section">
+              <div className="lr-head">{[...q].filter((c) => HAN.test(c)).length === 1 ? `含「${[...q].filter((c) => HAN.test(c))[0]}」的诗句` : `含「${[...q].filter((c) => HAN.test(c)).join("")}」的诗句`}</div>
+              {supplementalCharHits.slice(0, charShown).map((h) => {
+                const chars = [...q].filter((c) => HAN.test(c)).join("");
+                const pieces: JSX.Element[] = [];
+                let offset = 0, matchAt = h.matchedLine.indexOf(chars);
+                while (matchAt >= 0 && chars) {
+                  if (matchAt > offset) pieces.push(<span key={`t${offset}`}>{h.matchedLine.slice(offset, matchAt)}</span>);
+                  pieces.push(<mark key={`m${matchAt}`}>{chars}</mark>);
+                  offset = matchAt + chars.length;
+                  matchAt = h.matchedLine.indexOf(chars, offset);
+                }
+                if (offset < h.matchedLine.length) pieces.push(<span key={`t${offset}`}>{h.matchedLine.slice(offset)}</span>);
+                return (
+                  <button key={`${h.poetId}-${h.poemIdx}`} className="search-row" onClick={() => goHit(h)} disabled={!h.poet}>
+                    <span className="sr-name">{h.poet?.name ?? "佚名"}<span className="sr-title">《{h.title || "无题"}》</span><span className="sr-title">　{pieces.length ? pieces : h.matchedLine}</span></span>
+                    <span className="sr-meta">{h.poet ? displayDynasty(h.poet)?.label ?? "" : ""} · {FORM_LABEL[h.form] ?? "古体"}</span>
+                  </button>
+                );
+              })}
+              {charShown < supplementalCharHits.length && <button className="locate-btn" onClick={() => setCharShown((n) => Math.min(n + 30, supplementalCharHits.length))}>更多（{charShown}/{supplementalCharHits.length}）</button>}
+            </div>
+          )}
+          {half && <div className="lr-section">
             <div className="lr-head">虚空 · 半编号<CopyButton text={half.index} /></div>
             <div className="half-note">
               前 {half.locked} 字锁定了全集编号的高位 —— 任何以此开头的诗都共享这段前缀:
@@ -333,7 +365,7 @@ export function SearchPanel() {
             <button className="locate-btn" onClick={() => locateInVoid("ziyou", half.index)}>
               飞到这条高位街区 · 点亮代表星
             </button>
-          </div>
+          </div>}
         </div>
       )}
 

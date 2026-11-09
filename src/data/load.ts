@@ -8,6 +8,7 @@ import { hydrateLexicon, type LexiconAsset, type FirstLineRef, type GiftEdge, ty
 import { hashStr, DYNASTY_BY_KEY } from "./dynasties";
 import { checkCharset, type CharsetCheck } from "./charsetHash";
 import { FAMOUS_POETS } from "./famousPoets";
+import { charsBucket, decodeCharRecords, filterCharSubstring, rarestCharIndex, shouldLatchCharsUnavailable, type CharRecord } from "./charsSearch";
 
 const FAMOUS_NAMES = new Set(FAMOUS_POETS.map((f) => f.name)); // rank landmark poets first in 诗句 hits
 
@@ -573,6 +574,42 @@ export async function searchByHead(query: string, base = DATA_BASE): Promise<Lin
     }
   }
   return hits;
+}
+
+export interface CharHit extends LineHit { matchedLine: string }
+const _charsShard = new Map<string, Record<string, unknown>>();
+let _charsUnavailable = false;
+async function loadCharsShard(bucket: string, base: string): Promise<Record<string, unknown>> {
+  if (_charsUnavailable) return {};
+  const cached = _charsShard.get(bucket);
+  if (cached) return cached;
+  try {
+    const r = await fetch(`${base}/chars/${bucket}.json`);
+    if (r.ok) {
+      const data = (await r.json()) as Record<string, unknown>;
+      _charsShard.set(bucket, data);
+      return data;
+    }
+    if (shouldLatchCharsUnavailable(r.status)) {
+      _charsShard.set(bucket, {});
+      _charsUnavailable = true;
+    }
+  } catch { /* transient network failure: leave the cache/latch untouched for retry */ }
+  return {};
+}
+
+/** All-position single-character hits; for a two-character query, intersect by filtering the rarer character's list. */
+export async function searchByChars(query: string, base = DATA_BASE): Promise<CharHit[]> {
+  const chars = [...query].filter((c) => HAN.test(c));
+  if (chars.length !== 1 && chars.length !== 2) return [];
+  const unique = [...new Set(chars)];
+  const shards = new Map<string, Record<string, unknown>>();
+  await Promise.all([...new Set(unique.map(charsBucket))].map(async (b) => shards.set(b, await loadCharsShard(b, base))));
+  const lists = new Map<string, CharRecord[]>();
+  for (const ch of unique) lists.set(ch, decodeCharRecords(shards.get(charsBucket(ch))?.[ch]));
+  const candidates = chars.length === 1 ? (lists.get(chars[0]) || []) : rarestCharIndex(unique, lists);
+  const matches = chars.length === 1 ? candidates : filterCharSubstring(candidates, chars.join(""));
+  return matches.map((r) => ({ poetId: r.p, poemIdx: r.i, title: r.t, form: r.f, firstLine: r.line, matchedLine: r.line, poet: _byId.get(r.p) }));
 }
 
 /** The 寻诗 tab search. Merges EXACT-line + fuzzy hits (searchByLine — precise whole-line / 异文) with the

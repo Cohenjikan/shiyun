@@ -88,6 +88,12 @@ const emitExact = (raw, id, i, t, f, sc) => {           // whole TITLE → exact
   strN++;
   pushKey(key, id, i, t, f, sc);
 };
+const emitTitleParts = (raw, id, i, t, f, sc) => { // subtitle / title-part exact keys
+  const parts = raw.split(/[\s·\-—]+/u).map((part) => [...part].filter((c) => HAN.test(c)).join("")).filter((part) =>
+    [...part].length >= 2 && !/^(?:其|第)?[一二三四五六七八九十百千两0-9]+(?:首|阕|其)?$/u.test(part),
+  );
+  for (const part of new Set(parts)) emitExact(part, id, i, t, f, sc);
+};
 const emitPrefixes = (raw, minLen, id, i, t, f, sc) => { // prefixes len 1..PREFIX_MAX (notable poems only)
   const cps = [...raw].filter((c) => HAN.test(c));
   if (cps.length < minLen) return;
@@ -103,6 +109,7 @@ for (const f of files.sort()) {
       const pm = arr[i];
       const t = pm.t || "";
       emitExact(t, id, i, t, pm.f, sc);                 // EXACT full title → 诗名搜索 for ANY poem
+      emitTitleParts(t, id, i, t, pm.f, sc);            // separated title parts, e.g. 副题
       if (!famous) continue;                            // non-famous poets: title-exact only, no prefix keys
       emitPrefixes(t, 1, id, i, t, pm.f, sc);           // notable: title prefixes (incremental 诗名)
       const seen = new Set();                           // dedupe identical lines within one poem

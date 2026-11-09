@@ -11,6 +11,7 @@ import { hashStr } from "./dynasties";
 //   • producer (pipeline): pipeline/build-search.mjs   fnv32
 //                          pipeline/build-lines.mjs    fnv32
 //                          pipeline/build-fuzzy.mjs    fnv32
+//                          pipeline/build-chars.mjs    fnv32
 //   • consumer (frontend): src/data/dynasties.ts       hashStr   (this is `hashStr`)
 //                          consumed by src/data/load.ts as lineBucket/fzBucket/sxBucket
 //
@@ -66,6 +67,8 @@ describe("FNV-1a shard-bucket hash — frozen golden values (hashStr)", () => {
     expect(lineBucket("床前明月光")).toBe("4d"); // 928896077 & 0xff
     expect(sxBucket("举头望")).toBe("7c"); //  59616380 & 0xff
     expect(fzBucket("床前明月光")).toBe("44d"); // 928896077 & 0xfff (4096 shards)
+    const charsBucket = (s: string) => (hashStr(s) & 0xfff).toString(16).padStart(3, "0");
+    expect(charsBucket("青")).toBe("bb5"); // build-chars.mjs uses 4096 shards
   });
 });
 
@@ -75,7 +78,7 @@ describe("FNV-1a shard-bucket hash — frozen golden values (hashStr)", () => {
 //    CI red here — the contract is enforced at the byte level, not just by value. ──
 describe("FNV-1a constants present in every pipeline fnv32 source", () => {
   const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const SOURCES = ["build-search.mjs", "build-lines.mjs", "build-fuzzy.mjs"];
+  const SOURCES = ["build-search.mjs", "build-lines.mjs", "build-fuzzy.mjs", "build-chars.mjs"];
   const OFFSET_BASIS = "0x811c9dc5";
   const PRIME = "0x01000193";
 

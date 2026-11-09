@@ -36,6 +36,7 @@
     "build:sidecars": "node pipeline/build-sidecars.mjs",
     "build:lines": "node --max-old-space-size=4096 pipeline/build-lines.mjs",
     "build:search": "node --max-old-space-size=4096 pipeline/build-search.mjs",
+    "build:chars": "node --max-old-space-size=4096 pipeline/build-chars.mjs",
     "build:fuzzy": "node --max-old-space-size=8192 pipeline/build-fuzzy.mjs",
     "pack:data": "node pipeline/pack-data.mjs",
     "deploy:build": "npm run build && npm run precompress"

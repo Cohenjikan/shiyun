@@ -6,6 +6,11 @@ Output → `public/data/`: the small index files are tracked in git, the heavy `
 `lines/` + `search/` sets are git-ignored (rebuild locally / restore from the GitHub data
 backup). See [Data model](#output-actual).
 
+The all-position single-character index is generated separately from the worktree's `public/data/poems/*.json`
+with `npm run build:chars`. It writes `public/data/chars/{bucket}.json` and matching `.json.gz` sidecars; deploy
+both forms for static gzip serving. `chars/` is git-ignored generated data and belongs in the data artifact, not
+the source checkout.
+
 > Run: clone the corpora to **C: (fast NVMe)**, then
 > `node --max-old-space-size=4096 pipeline/build-data.mjs && npm run build:lines && npm run build:sidecars && npm run build:search`
 
