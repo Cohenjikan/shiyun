@@ -39,6 +39,17 @@ canvas {
   touch-action: none;
 }
 
+/* 界面控件的文字（按钮、顶栏、底栏提示、输入框占位符）不参与文本选择，拖选或全选时不再整片高亮。
+   诗文、编号、诗人信息等内容不受影响，照常可选可复制。 */
+button,
+.hud-top,
+.hud-bottom,
+input::placeholder,
+textarea::placeholder {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* floating poet labels (drei Html) */
 .poet-label {
   font-size: 11px;
